@@ -1,0 +1,29 @@
+{
+    "name": "v-ops",
+    "version": "2.0.0",
+    "description": "JMJ Management System — Attendance, Payroll, Leaves, Expenses, Borewell Operations",
+    "private": true,
+    "scripts": {
+        "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+        "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+        "dev:backend": "cd backend && npm run dev",
+        "dev:frontend": "cd frontend && npm run dev",
+        "start": "cd backend && npm start",
+        "build": "cd frontend && npm run build",
+        "migrate": "cd backend && npm run migrate",
+        "seed": "cd backend && npm run seed",
+        "setup": "npm run install:all && npm run migrate && npm run seed",
+        "docker:up": "docker compose up -d",
+        "docker:up:build": "docker compose up --build -d",
+        "docker:down": "docker compose down",
+        "docker:logs": "docker compose logs -f",
+        "docker:reset": "docker compose down -v && docker compose up -d postgres",
+        "postinstall": "cd backend && npm install && npx prisma generate"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

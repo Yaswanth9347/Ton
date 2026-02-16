@@ -1,0 +1,699 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model attendance {
+  id                  Int       @id @default(autoincrement())
+  user_id             Int
+  attendance_date     DateTime  @db.Date
+  check_in            DateTime? @db.Timestamp(6)
+  check_out           DateTime? @db.Timestamp(6)
+  check_in_latitude   Decimal?  @db.Decimal(10, 8)
+  check_in_longitude  Decimal?  @db.Decimal(11, 8)
+  check_out_latitude  Decimal?  @db.Decimal(10, 8)
+  check_out_longitude Decimal?  @db.Decimal(11, 8)
+  check_in_address    String?
+  check_out_address   String?
+  status              String?   @default("present") @db.VarChar(20)
+  is_complete         Boolean?  @default(false)
+  created_at          DateTime? @default(now()) @db.Timestamp(6)
+  updated_at          DateTime? @default(now()) @db.Timestamp(6)
+  regular_hours       Decimal?  @default(0) @db.Decimal(4, 2)
+  overtime_hours      Decimal?  @default(0) @db.Decimal(4, 2)
+  users               users     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([user_id, attendance_date])
+  @@index([attendance_date], map: "idx_attendance_date")
+  @@index([user_id, attendance_date], map: "idx_attendance_user_date")
+  @@index([user_id], map: "idx_attendance_user_id")
+}
+
+model audit_logs {
+  id          Int       @id @default(autoincrement())
+  admin_id    Int
+  action      String    @db.VarChar(50)
+  entity_type String    @db.VarChar(50)
+  entity_id   Int?
+  old_value   Json?
+  new_value   Json?
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  users       users     @relation(fields: [admin_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([admin_id], map: "idx_audit_logs_admin_id")
+  @@index([created_at], map: "idx_audit_logs_created_at")
+  @@index([entity_type], map: "idx_audit_logs_entity_type")
+}
+
+model borewell_data {
+  id            Int       @id @default(autoincrement())
+  date          DateTime  @db.Date
+  client_name   String    @db.VarChar(255)
+  village       String?   @db.VarChar(255)
+  total_feet    Decimal?  @default(0) @db.Decimal(10, 2)
+  fell_feet     Decimal?  @default(0) @db.Decimal(10, 2)
+  pipes         Int?      @default(0)
+  amount        Decimal?  @default(0) @db.Decimal(10, 2)
+  cash          Decimal?  @default(0) @db.Decimal(10, 2)
+  phone_pe      Decimal?  @default(0) @db.Decimal(10, 2)
+  pending       Decimal?  @default(0) @db.Decimal(10, 2)
+  point_name    String?   @db.VarChar(255)
+  diesel        Decimal?  @default(0) @db.Decimal(10, 2)
+  diesel_amount Decimal?  @default(0) @db.Decimal(10, 2)
+  commission    Decimal?  @default(0) @db.Decimal(10, 2)
+  profit        Decimal?  @default(0) @db.Decimal(10, 2)
+  created_by    Int?
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  updated_at    DateTime? @default(now()) @db.Timestamp(6)
+  users         users?    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([client_name], map: "idx_borewell_data_client")
+  @@index([created_by], map: "idx_borewell_data_created_by")
+  @@index([date], map: "idx_borewell_data_date")
+  @@index([point_name], map: "idx_borewell_data_point")
+  @@index([village], map: "idx_borewell_data_village")
+}
+
+model email_verification_tokens {
+  id         Int       @id @default(autoincrement())
+  user_id    Int       @unique
+  token      String    @db.VarChar(255)
+  expires_at DateTime  @db.Timestamp(6)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  users      users     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([token], map: "idx_email_verification_tokens_token")
+}
+
+model govt_bores {
+  id               Int       @id @default(autoincrement())
+  s_no             String?   @db.VarChar(50)
+  vehicle          String?   @db.VarChar(100)
+  bore_date        DateTime? @db.Date
+  village          String?   @db.VarChar(255)
+  location         String?   @db.VarChar(255)
+  grant_name       String?   @db.VarChar(255)
+  est_cost         Decimal?  @db.Decimal(12, 2)
+  drill_depth      Decimal?  @db.Decimal(10, 2)
+  drill_rate       Decimal?  @db.Decimal(10, 2)
+  drill_amt        Decimal?  @db.Decimal(12, 2)
+  cas180_depth     Decimal?  @db.Decimal(10, 2)
+  cas180_rate      Decimal?  @db.Decimal(10, 2)
+  cas180_amt       Decimal?  @db.Decimal(12, 2)
+  cas140_depth     Decimal?  @db.Decimal(10, 2)
+  cas140_rate      Decimal?  @db.Decimal(10, 2)
+  cas140_amt       Decimal?  @db.Decimal(12, 2)
+  slot_qty         Decimal?  @db.Decimal(10, 2)
+  slot_rate        Decimal?  @db.Decimal(10, 2)
+  slot_amt         Decimal?  @db.Decimal(12, 2)
+  pump_rate        Decimal?  @db.Decimal(10, 2)
+  gi_qty           Decimal?  @db.Decimal(10, 2)
+  gi_rate          Decimal?  @db.Decimal(10, 2)
+  gi_amt           Decimal?  @db.Decimal(12, 2)
+  plot_farm_rate   Decimal?  @db.Decimal(10, 2)
+  erection_rate    Decimal?  @db.Decimal(10, 2)
+  bore_cap_rate    Decimal?  @db.Decimal(10, 2)
+  total_amt        Decimal?  @db.Decimal(12, 2)
+  status           String?   @db.VarChar(100)
+  m_book_no        String?   @db.VarChar(100)
+  total_bill_amt   Decimal?  @db.Decimal(12, 2)
+  first_part       Decimal?  @db.Decimal(12, 2)
+  second_part      Decimal?  @db.Decimal(12, 2)
+  it               Decimal?  @db.Decimal(12, 2)
+  vat              Decimal?  @db.Decimal(12, 2)
+  total_recoveries Decimal?  @db.Decimal(12, 2)
+  net_amount       Decimal?  @db.Decimal(12, 2)
+  voucher_no       String?   @db.VarChar(100)
+  cheque_no_date   String?   @db.VarChar(255)
+  created_at       DateTime? @default(now()) @db.Timestamp(6)
+  updated_at       DateTime? @default(now()) @db.Timestamp(6)
+  custom_data      Json?
+
+  @@index([bore_date], map: "idx_govt_bores_date")
+  @@index([status], map: "idx_govt_bores_status")
+  @@index([village], map: "idx_govt_bores_village")
+}
+
+model holidays {
+  id               Int       @id @default(autoincrement())
+  name             String    @db.VarChar(100)
+  holiday_date     DateTime? @db.Date
+  description      String?
+  is_recurring     Boolean?  @default(false)
+  recurrence_type  String?   @default("none") @db.VarChar(20)
+  recurrence_day   Int?
+  recurrence_month Int?
+  created_at       DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([holiday_date], map: "idx_holidays_date")
+}
+
+model job_assignments {
+  id          Int       @id @default(autoincrement())
+  job_id      Int
+  user_id     Int
+  role        String?   @default("Member") @db.VarChar(50)
+  assigned_at DateTime? @default(now()) @db.Timestamp(6)
+  jobs        jobs      @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users       users     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([job_id, user_id])
+  @@index([job_id], map: "idx_job_assignments_job")
+  @@index([user_id], map: "idx_job_assignments_user")
+}
+
+model jobs {
+  id              Int               @id @default(autoincrement())
+  lead_id         Int?
+  customer_name   String            @db.VarChar(100)
+  phone           String            @db.VarChar(20)
+  village         String            @db.VarChar(100)
+  status          String?           @default("Scheduled") @db.VarChar(50)
+  description     String?
+  start_date      DateTime?         @db.Date
+  end_date        DateTime?         @db.Date
+  created_at      DateTime?         @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?         @default(now()) @db.Timestamp(6)
+  job_assignments job_assignments[]
+  leads           leads?            @relation(fields: [lead_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([status], map: "idx_jobs_status")
+}
+
+model leads {
+  id           Int       @id @default(autoincrement())
+  name         String    @db.VarChar(100)
+  phone        String    @db.VarChar(20)
+  village      String    @db.VarChar(100)
+  service_type String?   @db.VarChar(50)
+  status       String?   @default("New") @db.VarChar(50)
+  notes        String?
+  assigned_to  Int?
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+  updated_at   DateTime? @default(now()) @db.Timestamp(6)
+  source       String?   @default("Manual") @db.VarChar(50)
+  jobs         jobs[]
+  users        users?    @relation(fields: [assigned_to], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  quotes       quotes[]
+
+  @@index([phone], map: "idx_leads_phone")
+  @@index([status], map: "idx_leads_status")
+}
+
+model leave_balances {
+  id              Int         @id @default(autoincrement())
+  user_id         Int
+  leave_type_id   Int
+  year            Int
+  allocated_days  Decimal?    @default(0) @db.Decimal(4, 1)
+  used_days       Decimal?    @default(0) @db.Decimal(4, 1)
+  pending_days    Decimal?    @default(0) @db.Decimal(4, 1)
+  carried_forward Decimal?    @default(0) @db.Decimal(4, 1)
+  created_at      DateTime?   @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?   @default(now()) @db.Timestamp(6)
+  leave_types     leave_types @relation(fields: [leave_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users           users       @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([user_id, leave_type_id, year])
+  @@index([user_id, year], map: "idx_leave_balances_user_year")
+}
+
+model leave_requests {
+  id                                      Int          @id @default(autoincrement())
+  user_id                                 Int
+  leave_type                              String       @db.VarChar(50)
+  start_date                              DateTime     @db.Date
+  end_date                                DateTime     @db.Date
+  reason                                  String?
+  status                                  String?      @default("pending") @db.VarChar(20)
+  reviewed_by                             Int?
+  reviewed_at                             DateTime?    @db.Timestamp(6)
+  review_notes                            String?
+  created_at                              DateTime?    @default(now()) @db.Timestamp(6)
+  updated_at                              DateTime?    @default(now()) @db.Timestamp(6)
+  leave_type_id                           Int?
+  days_count                              Decimal?     @default(1) @db.Decimal(4, 1)
+  leave_types                             leave_types? @relation(fields: [leave_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_leave_requests_reviewed_byTousers users?       @relation("leave_requests_reviewed_byTousers", fields: [reviewed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_leave_requests_user_idTousers     users        @relation("leave_requests_user_idTousers", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([start_date, end_date], map: "idx_leave_requests_dates")
+  @@index([status], map: "idx_leave_requests_status")
+  @@index([user_id], map: "idx_leave_requests_user_id")
+}
+
+model leave_types {
+  id                Int              @id @default(autoincrement())
+  name              String           @unique @db.VarChar(50)
+  code              String           @unique @db.VarChar(10)
+  description       String?
+  default_days      Int?             @default(0)
+  is_paid           Boolean?         @default(true)
+  carry_forward     Boolean?         @default(false)
+  max_carry_forward Int?             @default(0)
+  is_active         Boolean?         @default(true)
+  created_at        DateTime?        @default(now()) @db.Timestamp(6)
+  leave_balances    leave_balances[]
+  leave_requests    leave_requests[]
+
+  @@index([code], map: "idx_leave_types_code")
+}
+
+model lunch_expenses {
+  id                                      Int       @id @default(autoincrement())
+  user_id                                 Int
+  expense_date                            DateTime  @db.Date
+  category                                String?   @default("lunch") @db.VarChar(20)
+  location                                String
+  amount                                  Decimal   @db.Decimal(10, 2)
+  receipt_url                             String?
+  remarks                                 String?
+  status                                  String?   @default("pending") @db.VarChar(20)
+  admin_remarks                           String?
+  reviewed_by                             Int?
+  reviewed_at                             DateTime? @db.Timestamp(6)
+  created_at                              DateTime? @default(now()) @db.Timestamp(6)
+  updated_at                              DateTime? @default(now()) @db.Timestamp(6)
+  users_lunch_expenses_reviewed_byTousers users?    @relation("lunch_expenses_reviewed_byTousers", fields: [reviewed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_lunch_expenses_user_idTousers     users     @relation("lunch_expenses_user_idTousers", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([status], map: "idx_lunch_expenses_status")
+  @@index([user_id, expense_date], map: "idx_lunch_expenses_user_date")
+}
+
+model meal_categories {
+  id            Int       @id @default(autoincrement())
+  name          String    @unique @db.VarChar(50)
+  max_amount    Decimal?  @default(500.00) @db.Decimal(10, 2)
+  daily_limit   Decimal?  @default(500.00) @db.Decimal(10, 2)
+  weekly_limit  Decimal?  @default(2500.00) @db.Decimal(10, 2)
+  monthly_limit Decimal?  @default(10000.00) @db.Decimal(10, 2)
+  is_active     Boolean?  @default(true)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model overtime_rules {
+  id                    Int       @id @default(autoincrement())
+  name                  String    @db.VarChar(100)
+  regular_hours_per_day Decimal?  @default(8.0) @db.Decimal(4, 2)
+  overtime_multiplier   Decimal?  @default(1.5) @db.Decimal(3, 2)
+  weekend_multiplier    Decimal?  @default(2.0) @db.Decimal(3, 2)
+  holiday_multiplier    Decimal?  @default(2.0) @db.Decimal(3, 2)
+  max_overtime_per_day  Decimal?  @default(4.0) @db.Decimal(4, 2)
+  is_active             Boolean?  @default(true)
+  created_at            DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([is_active], map: "idx_overtime_rules_active")
+}
+
+model password_reset_tokens {
+  id         Int       @id @default(autoincrement())
+  user_id    Int       @unique
+  token      String    @db.VarChar(255)
+  expires_at DateTime  @db.Timestamp(6)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  users      users     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([token], map: "idx_password_reset_tokens_token")
+}
+
+model payroll {
+  id            Int             @id @default(autoincrement())
+  month         Int
+  year          Int
+  status        String?         @default("generated") @db.VarChar(20)
+  total_payout  Decimal?        @default(0.00) @db.Decimal(12, 2)
+  generated_by  Int
+  generated_at  DateTime?       @default(now()) @db.Timestamp(6)
+  users         users           @relation(fields: [generated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payroll_items payroll_items[]
+
+  @@unique([month, year])
+  @@index([month, year], map: "idx_payroll_month_year")
+}
+
+model payroll_items {
+  id                         Int      @id @default(autoincrement())
+  payroll_id                 Int
+  user_id                    Int
+  base_salary                Decimal  @db.Decimal(10, 2)
+  present_days               Int
+  total_attendance_deduction Decimal? @default(0.00) @db.Decimal(10, 2)
+  approved_lunch_total       Decimal? @default(0.00) @db.Decimal(10, 2)
+  gross_salary               Decimal  @db.Decimal(10, 2)
+  net_salary                 Decimal  @db.Decimal(10, 2)
+  details                    Json?
+  overtime_hours             Decimal? @default(0) @db.Decimal(6, 2)
+  overtime_amount            Decimal? @default(0) @db.Decimal(10, 2)
+  payroll                    payroll  @relation(fields: [payroll_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                      users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([user_id], map: "idx_payroll_items_user")
+}
+
+model quotes {
+  id           Int       @id @default(autoincrement())
+  lead_id      Int?
+  depth        Int
+  bore_size    String    @db.VarChar(20)
+  casing_depth Int
+  pipe_brand   String    @db.VarChar(50)
+  total_amount Decimal   @db.Decimal(12, 2)
+  breakdown    Json?
+  created_by   Int?
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+  users        users?    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  leads        leads?    @relation(fields: [lead_id], references: [id], onUpdate: NoAction)
+
+  @@index([lead_id], map: "idx_quotes_lead")
+}
+
+model roles {
+  id         Int       @id @default(autoincrement())
+  name       String    @unique @db.VarChar(50)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  users      users[]
+}
+
+model users {
+  id                                               Int                        @id @default(autoincrement())
+  username                                         String                     @unique @db.VarChar(50)
+  email                                            String?                    @db.VarChar(255)
+  password_hash                                    String                     @db.VarChar(255)
+  first_name                                       String                     @db.VarChar(50)
+  last_name                                        String?                    @db.VarChar(50)
+  
+  // ROLE_ID maps to 'roles' table.
+  // 1: ADMIN (Full Access)
+  // 2: SUPERVISOR (Read-Only Bores, Can Download Receipts)
+  // 3: EMPLOYEE (Read-Only Bores, No Dashboard)
+  role_id                                          Int
+  
+  is_active                                        Boolean?                   @default(true)
+  created_at                                       DateTime?                  @default(now()) @db.Timestamp(6)
+  updated_at                                       DateTime?                  @default(now()) @db.Timestamp(6)
+  profile_photo_url                                String?
+  base_salary                                      Decimal?                   @default(0.00) @db.Decimal(10, 2)
+  email_verified                                   Boolean?                   @default(false)
+  attendance                                       attendance[]
+  audit_logs                                       audit_logs[]
+  borewell_data                                    borewell_data[]
+  email_verification_tokens                        email_verification_tokens?
+  job_assignments                                  job_assignments[]
+  leads                                            leads[]
+  leave_balances                                   leave_balances[]
+  leave_requests_leave_requests_reviewed_byTousers leave_requests[]           @relation("leave_requests_reviewed_byTousers")
+  leave_requests_leave_requests_user_idTousers     leave_requests[]           @relation("leave_requests_user_idTousers")
+  lunch_expenses_lunch_expenses_reviewed_byTousers lunch_expenses[]           @relation("lunch_expenses_reviewed_byTousers")
+  lunch_expenses_lunch_expenses_user_idTousers     lunch_expenses[]           @relation("lunch_expenses_user_idTousers")
+  password_reset_tokens                            password_reset_tokens?
+  payroll                                          payroll[]
+  payroll_items                                    payroll_items[]
+  quotes                                           quotes[]
+  roles                                            roles                      @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([email], map: "idx_users_email")
+  @@index([is_active], map: "idx_users_is_active")
+  @@index([role_id], map: "idx_users_role_id")
+  @@index([username], map: "idx_users_username")
+}
+
+// =============================================
+// GOVT BORES SYSTEM - Flattened Excel Model
+// =============================================
+
+model Mandal {
+  id       Int            @id @default(autoincrement())
+  name     String         @unique
+  villages Village[]
+  works    BorewellWork[]
+}
+
+model Village {
+  id       Int            @id @default(autoincrement())
+  name     String
+  mandalId Int
+  mandal   Mandal         @relation(fields: [mandalId], references: [id])
+  works    BorewellWork[]
+}
+
+// =============================================
+// Principal table: mirrors one Excel row exactly
+//
+// DESIGN NOTE: This model is deliberately "flat" to match the client's Excel sheet structure 1:1.
+// Each row in the Excel sheet corresponds to one record here.
+// Relational normalization is minimal (Mandal/Village only) to prioritize data entry speed and export fidelity.
+// =============================================
+
+model BorewellWork {
+  id           Int       @id @default(autoincrement())
+
+  // Administrative / identification columns (Excel)
+  sNo          Int?                      // S.NO
+  vehicle      String?                   // VEHICLE
+  date         DateTime?                 // DATE (drilling date)
+  mandalId     Int?                      // links to Mandal (sheet name)
+  villageId    Int?                      // VILLAGE
+  location     String?                   // LOCATION / location detail
+  grant        String?                   // GRANT (e.g., MPLAD)
+  estCost      Decimal?  @db.Decimal(14,2) // EST. COST (if present)
+
+  // Reference fields
+  mBookNo      String?                   // M BOOK NO (measurement book)
+  status       String?                   // STATUS (e.g., "Bill Paid")
+  remarks      String?                   // any extra remarks
+
+  // ----------------------------
+  // DRILLING (core)
+  // ----------------------------
+  drilling_depth_mtrs    Decimal? @db.Decimal(8,2)  // DRILLING Depth (mtrs)
+  drilling_rate          Decimal? @db.Decimal(10,2) // DRILLING Rate
+  drilling_amount        Decimal? @db.Decimal(14,2) // DRILLING Amount
+
+  // ----------------------------
+  // CASING 180 (columns: QTY / RATE / AMOUNT)
+  // ----------------------------
+  casing180_qty    Int?
+  casing180_rate   Decimal? @db.Decimal(10,2)
+  casing180_amount Decimal? @db.Decimal(14,2)
+
+  // ----------------------------
+  // CASING 140 (columns: QTY / RATE / AMOUNT)
+  // ----------------------------
+  casing140_qty    Int?
+  casing140_rate   Decimal? @db.Decimal(10,2)
+  casing140_amount Decimal? @db.Decimal(14,2)
+
+  // ----------------------------
+  // SLOTTING (qty / rate / amount)
+  // ----------------------------
+  slotting_qty    Int?
+  slotting_rate   Decimal? @db.Decimal(10,2)
+  slotting_amount Decimal? @db.Decimal(14,2)
+
+  // ----------------------------
+  // PUMP SET (qty / rate / amount)
+  // ----------------------------
+  pumpset_qty    Int?
+  pumpset_rate   Decimal? @db.Decimal(10,2)
+  pumpset_amount Decimal? @db.Decimal(14,2)
+
+  // ----------------------------
+  // G.I. PIPES (qty / rate / amount)
+  // ----------------------------
+  gi_pipes_qty    Int?
+  gi_pipes_rate   Decimal? @db.Decimal(10,2)
+  gi_pipes_amount Decimal? @db.Decimal(14,2)
+
+  // ----------------------------
+  // PLOT / FARM (qty / rate / amount)
+  // ----------------------------
+  plotfarm_qty    Int?
+  plotfarm_rate   Decimal? @db.Decimal(10,2)
+  plotfarm_amount Decimal? @db.Decimal(14,2)
+
+  // ----------------------------
+  // ERECTION (qty / rate / amount)
+  // ----------------------------
+  erection_qty    Int?
+  erection_rate   Decimal? @db.Decimal(10,2)
+  erection_amount Decimal? @db.Decimal(14,2)
+
+  // ----------------------------
+  // BORE CAP (qty / rate / amount)
+  // ----------------------------
+  borecap_qty    Int?
+  borecap_rate   Decimal? @db.Decimal(10,2)
+  borecap_amount Decimal? @db.Decimal(14,2)
+
+  // ----------------------------
+  // OTHER totals visible on the Excel row
+  // ----------------------------
+  total_amount        Decimal? @db.Decimal(14,2) // TOTAL AMOUNT (sum of components)
+  total_bill_amount   Decimal? @db.Decimal(14,2) // TOTAL BILL AMOUNT (TVW)
+  first_part_amount   Decimal? @db.Decimal(14,2) // FIRST PART
+  second_part_amount  Decimal? @db.Decimal(14,2) // SECOND PART
+
+  // ----------------------------
+  // Statutory recoveries as shown in sheet
+  // ----------------------------
+  it_percent       Decimal? @db.Decimal(5,2)  // IT percentage
+  it_amount        Decimal? @db.Decimal(14,2) // IT amount
+  vat_percent      Decimal? @db.Decimal(5,2)  // VAT percentage
+  vat_amount       Decimal? @db.Decimal(14,2) // VAT amount
+  total_recoveries Decimal? @db.Decimal(14,2) // Total Recoveries
+
+  // ----------------------------
+  // Net & payment references
+  // ----------------------------
+  net_amount   Decimal? @db.Decimal(14,2) // NET AMOUNT (after recoveries)
+  voucher_no   String?                    // VOUCHER NO
+  cheque_no    String?
+  cheque_date  DateTime?
+
+  // ----------------------------
+  // Relations
+  // ----------------------------
+  mandal    Mandal?            @relation(fields: [mandalId], references: [id])
+  village   Village?           @relation(fields: [villageId], references: [id])
+  bill      BorewellBill?
+  auditLogs BorewellAuditLog[]
+
+  // ----------------------------
+  // Dates
+  // ----------------------------
+  received_date    DateTime?
+  platform_date    DateTime?
+  material_date    DateTime?
+
+  // ----------------------------
+  // Payment Extended
+  // ----------------------------
+  bank_name        String?
+  
+  // ----------------------------
+  // Taxes (Percent & Amount)
+  // ----------------------------
+  cgst_percent     Decimal? @db.Decimal(5,2)
+  cgst_amt         Decimal? @db.Decimal(14,2)
+  sgst_percent     Decimal? @db.Decimal(5,2)
+  sgst_amt         Decimal? @db.Decimal(14,2)
+  igst_percent     Decimal? @db.Decimal(5,2)
+  igst_amt         Decimal? @db.Decimal(14,2)
+  gst_percent      Decimal? @db.Decimal(5,2)
+  gst_amt          Decimal? @db.Decimal(14,2)
+  sas_percent      Decimal? @db.Decimal(5,2)
+  sas_amt          Decimal? @db.Decimal(14,2)
+
+  // ----------------------------
+  // Casing 250 & Type
+  // ----------------------------
+  casing_type      String?   // "Government" | "Private"
+  casing250_qty    Int?
+  casing250_rate   Decimal?  @db.Decimal(10,2)
+  casing250_amount Decimal?  @db.Decimal(14,2)
+
+  // ----------------------------
+  // Materials Extended
+  // ----------------------------
+  cylinders_qty      Int?
+  cylinders_rate     Decimal? @db.Decimal(10,2)
+  cylinders_amount   Decimal? @db.Decimal(14,2)
+
+  stand_qty          Int?
+  stand_rate         Decimal? @db.Decimal(10,2)
+  stand_amount       Decimal? @db.Decimal(14,2)
+
+  head_handle_qty    Int?
+  head_handle_rate   Decimal? @db.Decimal(10,2)
+  head_handle_amount Decimal? @db.Decimal(14,2)
+
+  // ----------------------------
+  // GI Pipes Extended
+  // ----------------------------
+  pipe_company     String?
+
+  // ----------------------------
+  // Labour
+  // ----------------------------
+  labour_type      String?
+  labour_amount    Decimal? @db.Decimal(14,2)
+
+  // ----------------------------
+  // Other
+  // ----------------------------
+  pcs              Decimal? @db.Decimal(10,2)
+  
+  // ----------------------------
+  // Gross Amount (Operational Total)
+  // ----------------------------
+  // ----------------------------
+  // Gross Amount (Operational Total)
+  // ----------------------------
+  gross_amount     Decimal? @db.Decimal(14,2)
+
+  // ----------------------------
+  // Custom / Dynamic Data (JSONB)
+  // ----------------------------
+  custom_data      Json?    // Stores flexible key-value pairs (e.g. {"Soil Type": "Red"})
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// =============================================
+// Optional Separate billing record (if needed)
+// =============================================
+
+model BorewellBill {
+  id                 Int      @id @default(autoincrement())
+  workId             Int      @unique
+  work               BorewellWork @relation(fields: [workId], references: [id])
+
+  tvw_total_amount   Decimal? @db.Decimal(14,2) // TOTAL BILL AMOUNT (TVW)
+  first_part_amount  Decimal? @db.Decimal(14,2)
+  second_part_amount Decimal? @db.Decimal(14,2)
+
+  it_amount        Decimal? @db.Decimal(14,2)
+  vat_amount       Decimal? @db.Decimal(14,2)
+  total_recoveries Decimal? @db.Decimal(14,2)
+
+  net_amount  Decimal? @db.Decimal(14,2)
+
+  bill_date    DateTime?
+  voucher_no   String?
+  cheque_no    String?
+  cheque_date  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// =============================================
+// Audit log for edits
+// =============================================
+
+model BorewellAuditLog {
+  id        Int      @id @default(autoincrement())
+  workId    Int
+  work      BorewellWork @relation(fields: [workId], references: [id])
+  action    String
+  oldValue  String?
+  newValue  String?
+  changedBy String?
+  changedAt DateTime @default(now())
+}
+
+// =============================================
+// Enums
+// =============================================
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}

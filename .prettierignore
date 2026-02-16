@@ -1,0 +1,15 @@
+node_modules/
+**/node_modules/
+
+frontend/dist/
+**/dist/
+**/build/
+
+uploads/
+backend/uploads/
+
+backup/volumes/
+
+package-lock.json
+backend/package-lock.json
+frontend/package-lock.json
