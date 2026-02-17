@@ -4,10 +4,12 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import authRoutes from './routes/auth.js';
-import attendanceRoutes from './routes/attendance.js';
-import employeeRoutes from './routes/employees.js';
-import reportRoutes from './routes/reports.js';
+import authRoutes from './routes/authRoutes.js';
+import attendanceRoutes from './routes/attendanceRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+import boreRoutes from './routes/boreRoutes.js';
+import govtBoreRoutes from './routes/govtBoreRoutes.js';
+import payrollRoutes from './routes/payrollRoutes.js';
 
 dotenv.config();
 
@@ -70,8 +72,10 @@ app.use('/uploads', express.static(uploadsDir));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/attendance', attendanceRoutes);
-app.use('/api/employees', employeeRoutes);
-app.use('/api/reports', reportRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/bores', boreRoutes);
+app.use('/api/govt-bores', govtBoreRoutes);
+app.use('/api/payroll', payrollRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
