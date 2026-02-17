@@ -75,6 +75,27 @@ if ! docker info > /dev/null 2>&1; then
 fi
 echo -e "${GREEN}✓ Docker is running${NC}"
 
+# ─── Load environment variables ────────────────────────────
+if [ -f .env ]; then
+    echo -e "${YELLOW}Loading environment variables...${NC}"
+    set -a  # automatically export all variables
+    source .env
+    set +a
+    echo -e "${GREEN}✓ Environment variables loaded${NC}"
+else
+    echo -e "${YELLOW}Warning: .env file not found. Creating from example...${NC}"
+    if [ -f .env.example ]; then
+        cp .env.example .env
+        set -a
+        source .env
+        set +a
+        echo -e "${GREEN}✓ Created and loaded .env${NC}"
+    else
+        echo -e "${RED}Error: .env.example not found. Cannot proceed.${NC}"
+        exit 1
+    fi
+fi
+
 # ─── Full Docker mode ─────────────────────────────────────
 if [ "$MODE" = "docker" ]; then
     echo -e "${YELLOW}Building and starting all containers...${NC}"
@@ -143,8 +164,29 @@ echo -e "${GREEN}✓ Dependencies installed${NC}"
 
 # Create .env if not exists
 if [ ! -f "backend/.env" ]; then
-    echo -e "${YELLOW}Creating backend .env from example...${NC}"
-    cp backend/.env.example backend/.env
+    echo -e "${YELLOW}Creating backend .env with proper values...${NC}"
+    cat > backend/.env <<EOF
+# Backend Environment Variables
+NODE_ENV=${NODE_ENV}
+PORT=3002
+
+# Database Configuration (used by raw pg pool)
+DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DB_NAME=${DB_NAME}
+DB_USER=${DB_USER}
+DB_PASSWORD=${DB_PASSWORD}
+
+# Prisma Database URL
+DATABASE_URL=${DATABASE_URL}
+
+# JWT Configuration
+JWT_SECRET=${JWT_SECRET}
+JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+
+# Frontend URL (for CORS)
+FRONTEND_URL=${FRONTEND_URL}
+EOF
 fi
 echo -e "${GREEN}✓ Environment configured${NC}"
 

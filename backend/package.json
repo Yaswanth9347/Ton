@@ -10,7 +10,7 @@
     "migrate": "node migrations/run.js",
     "seed": "node seeds/run.js",
     "lint": "eslint src/",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --passWithNoTests"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",
