@@ -25,20 +25,38 @@ const allowedOrigins = [
   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
 ].filter(Boolean);
 
-app.use(cors({
-  origin: function (origin, callback) {
+function isAllowedVercelPreviewOrigin(origin) {
+  try {
+    const { protocol, hostname } = new URL(origin);
+    if (protocol !== 'https:') return false;
+
+    // Allow Vercel preview deployments for the frontend project.
+    // Preview hostnames look like:
+    // ton-frontend-<hash>-yaswanths-projects-<id>.vercel.app
+    return hostname.startsWith('ton-frontend-') && hostname.endsWith('.vercel.app');
+  } catch {
+    return false;
+  }
+}
+
+const corsOptions = {
+  origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.warn('CORS blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
+
+    if (allowedOrigins.includes(origin) || isAllowedVercelPreviewOrigin(origin)) {
+      return callback(null, true);
     }
+
+    console.warn('CORS blocked origin:', origin);
+    return callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Middleware
 app.use(helmet());
