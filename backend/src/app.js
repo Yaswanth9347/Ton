@@ -19,12 +19,16 @@ import requestLogger from './middleware/requestLogger.js';
 // Load environment variables
 dotenv.config();
 
+const resolvedFrontendUrl =
+    process.env.FRONTEND_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+
 const app = express();
 
 // Middleware
 app.use(cors({
     origin: process.env.NODE_ENV === 'production'
-        ? (process.env.FRONTEND_URL || 'http://localhost:5173')
+        ? (resolvedFrontendUrl || 'http://localhost:5173')
         : true, // Allow all origins in development for network access
     credentials: true,
 }));
