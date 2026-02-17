@@ -4,7 +4,7 @@ dotenv.config();
 const isProduction = process.env.NODE_ENV === 'production';
 
 if (isProduction && !process.env.JWT_SECRET) {
-    throw new Error('FATAL: JWT_SECRET environment variable is required in production');
+    console.error('[JWT] FATAL: JWT_SECRET environment variable is required in production');
 }
 
 export default {

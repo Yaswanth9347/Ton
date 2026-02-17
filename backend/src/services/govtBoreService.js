@@ -3,8 +3,7 @@
  * All columns directly on BorewellWork table
  */
 
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../config/prisma.js';
 
 // Helper: Find or create Mandal and Village
 async function findOrCreateLocation(tx, mandalName, villageName) {

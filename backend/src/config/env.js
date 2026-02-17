@@ -1,13 +1,13 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+// Only DATABASE_URL and JWT_SECRET are truly required.
+// PORT is NOT required on Vercel (Vercel manages ports internally).
 const requiredEnvVars = [
     'DATABASE_URL',
-    'JWT_SECRET',
-    'PORT'
+    'JWT_SECRET'
 ];
 
-// Optional but recommended
 const recommendedEnvVars = [
     'FRONTEND_URL',
     'NODE_ENV'
@@ -16,14 +16,16 @@ const recommendedEnvVars = [
 function validateEnv() {
     const missing = requiredEnvVars.filter(key => !process.env[key]);
 
+    // NEVER throw at module scope — it kills the Vercel function before
+    // the handler can register, producing a silent CORS-like error.
+    // Instead, log clearly so it shows up in Vercel Function Logs.
     if (missing.length > 0) {
-        throw new Error(`MISSING REQUIRED ENV VARIABES: ${missing.join(', ')}`);
+        console.error(`[ENV] MISSING REQUIRED ENV VARIABLES: ${missing.join(', ')}`);
     }
 
-    // Warn about recommended
     const missingRecommended = recommendedEnvVars.filter(key => !process.env[key]);
     if (missingRecommended.length > 0) {
-        console.warn(`Warning: Missing recommended env variables: ${missingRecommended.join(', ')}`);
+        console.warn(`[ENV] Missing recommended env variables: ${missingRecommended.join(', ')}`);
     }
 
     return {
@@ -32,7 +34,8 @@ function validateEnv() {
         PORT: process.env.PORT || 3002,
         NODE_ENV: process.env.NODE_ENV || 'development',
         FRONTEND_URL: process.env.FRONTEND_URL,
-        VERCEL_URL: process.env.VERCEL_URL
+        VERCEL_URL: process.env.VERCEL_URL,
+        isValid: missing.length === 0
     };
 }
 

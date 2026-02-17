@@ -18,7 +18,7 @@ export const login = async (req, res, next) => {
         res.cookie('token', result.token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
             maxAge: 24 * 60 * 60 * 1000, // 24 hours
         });
 
@@ -45,7 +45,7 @@ export const logout = async (req, res, next) => {
         res.cookie('token', '', {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
             expires: new Date(0),
         });
 
@@ -159,7 +159,7 @@ export const uploadProfilePhoto = async (req, res, next) => {
 export const deleteProfilePhoto = async (req, res, next) => {
     try {
         const currentUser = await authService.getUserProfile(req.user.id);
-        
+
         if (currentUser.profilePhotoUrl) {
             const photoPath = currentUser.profilePhotoUrl.replace('/uploads/', 'uploads/');
             if (fs.existsSync(photoPath)) {
