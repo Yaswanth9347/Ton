@@ -2,21 +2,27 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-// Ensure uploads directories exist
-const __dirname = path.resolve();
-const uploadDir = path.join(__dirname, 'uploads');
-const profilePhotosDir = path.join(__dirname, 'uploads/profiles');
+const isVercel = !!process.env.VERCEL;
+const projectRoot = path.resolve();
+const uploadsRootDir = isVercel ? path.join('/tmp', 'uploads') : path.join(projectRoot, 'uploads');
+const profilePhotosDir = path.join(uploadsRootDir, 'profiles');
 
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-if (!fs.existsSync(profilePhotosDir)) {
-    fs.mkdirSync(profilePhotosDir, { recursive: true });
-}
+const ensureDirExists = (dirPath) => {
+    try {
+        fs.mkdirSync(dirPath, { recursive: true });
+    } catch (err) {
+        // On serverless, the filesystem outside /tmp can be read-only.
+        // We don't want the entire API to crash just because uploads dir can't be created.
+        if (!isVercel) {
+            throw err;
+        }
+    }
+};
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, uploadDir)
+        ensureDirExists(uploadsRootDir);
+        cb(null, uploadsRootDir);
     },
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
@@ -27,7 +33,8 @@ const storage = multer.diskStorage({
 // Profile photo storage
 const profileStorage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, profilePhotosDir)
+        ensureDirExists(profilePhotosDir);
+        cb(null, profilePhotosDir);
     },
     filename: function (req, file, cb) {
         const userId = req.user?.id || 'unknown';

@@ -51,7 +51,8 @@ app.use('/api', limiter);
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(requestLogger);
-app.use('/uploads', express.static('uploads'));
+const uploadsStaticDir = process.env.VERCEL ? '/tmp/uploads' : 'uploads';
+app.use('/uploads', express.static(uploadsStaticDir));
 
 // Health check
 app.get('/api/health', (req, res) => {
