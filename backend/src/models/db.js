@@ -3,17 +3,31 @@ import dbConfig from '../config/database.js';
 
 const { Pool } = pg;
 
-const pool = new Pool(dbConfig);
+// Use a global variable to store the pool instance across hot reloads and function invocations
+// This prevents "Too Many Connections" errors in serverless environments
+let pool;
 
-// Test connection on startup
-pool.on('connect', () => {
-    console.log('Connected to PostgreSQL database');
-});
+if (process.env.NODE_ENV === 'production') {
+    pool = new Pool(dbConfig);
+} else {
+    if (!global.pgPool) {
+        global.pgPool = new Pool(dbConfig);
+    }
+    pool = global.pgPool;
+}
 
-pool.on('error', (err) => {
-    console.error('Unexpected error on idle client', err);
-    process.exit(-1);
-});
+// Test connection on startup (only once per pool creation)
+const connectListeners = pool.listenerCount('connect');
+if (connectListeners === 0) {
+    pool.on('connect', () => {
+        console.log('Connected to PostgreSQL database');
+    });
+
+    pool.on('error', (err) => {
+        console.error('Unexpected error on idle client', err);
+        process.exit(-1);
+    });
+}
 
 export default {
     query: (text, params) => pool.query(text, params),
