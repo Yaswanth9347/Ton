@@ -1,115 +1,76 @@
 import express from 'express';
 import cors from 'cors';
-import cookieParser from 'cookie-parser';
-import dotenv from 'dotenv';
-
-import authRoutes from './routes/authRoutes.js';
-import attendanceRoutes from './routes/attendanceRoutes.js';
-import adminRoutes from './routes/adminRoutes.js';
-
-import payrollRoutes from './routes/payrollRoutes.js';
-import govtBoreRoutes from './routes/govtBoreRoutes.js';
-import boreRoutes from './routes/boreRoutes.js';
-import { AppError } from './utils/errors.js';
-import path from 'path';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import requestLogger from './middleware/requestLogger.js';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import authRoutes from './routes/auth.js';
+import attendanceRoutes from './routes/attendance.js';
+import employeeRoutes from './routes/employees.js';
+import reportRoutes from './routes/reports.js';
 
-// Load environment variables
 dotenv.config();
 
-const resolvedFrontendUrl =
-    process.env.FRONTEND_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Middleware
+// CORS configuration
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://ton-frontend-kappa.vercel.app',
+  process.env.FRONTEND_URL,
+  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+].filter(Boolean);
+
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production'
-        ? (resolvedFrontendUrl || 'http://localhost:5173')
-        : true, // Allow all origins in development for network access
-    credentials: true,
-}));
-app.use(helmet()); // Security headers
-app.use(express.json({ limit: '10mb' })); // Increased limit for bulk imports
-
-// Rate Limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Higher limit in development
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { success: false, message: 'Too many requests from this IP, please try again after 15 minutes' },
-    skip: (req) => {
-        // Skip rate limiting for health checks (path is relative to mount point /api)
-        return req.path === '/health';
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.warn('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
     }
-});
-app.use('/api', limiter);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Middleware
+app.use(helmet());
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-app.use(requestLogger);
-const uploadsStaticDir = process.env.VERCEL ? '/tmp/uploads' : 'uploads';
-app.use('/uploads', express.static(uploadsStaticDir));
 
-// Health check
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+// Serve uploads from correct directory based on environment
+const uploadsDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, '../uploads');
+app.use('/uploads', express.static(uploadsDir));
 
-// API Routes
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/attendance', attendanceRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/employees', employeeRoutes);
+app.use('/api/reports', reportRoutes);
 
-app.use('/api/payroll', payrollRoutes);
-app.use('/api/govt-bores', govtBoreRoutes);
-app.use('/api/bores', boreRoutes);
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // 404 handler
-app.use((req, res, next) => {
-    next(new AppError(`Cannot find ${req.originalUrl} on this server`, 404));
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
 });
 
-// Global error handler
+// Error handling middleware
 app.use((err, req, res, next) => {
-    console.error('Error:', err);
-
-    // Default error values
-    let statusCode = err.statusCode || 500;
-    let message = err.message || 'Internal server error';
-    let status = err.status || 'error';
-
-    // Handle specific error types
-    if (err.code === '23505') {
-        // PostgreSQL unique constraint violation
-        statusCode = 409;
-        message = 'Resource already exists';
-        status = 'fail';
-    } else if (err.code === '23503') {
-        // PostgreSQL foreign key violation
-        statusCode = 400;
-        message = 'Invalid reference';
-        status = 'fail';
-    }
-
-    // Don't leak error details in production
-    if (process.env.NODE_ENV === 'production' && statusCode === 500) {
-        message = 'Something went wrong';
-    }
-
-    res.status(statusCode).json({
-        success: false,
-        status,
-        message,
-        ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
-    });
+  console.error('Error:', err);
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error'
+  });
 });
-
-// Server startup logic moved to server.js for Vercel compatibility
-// const PORT = process.env.PORT || 3002;
-// app.listen(PORT, ...);
 
 export default app;
