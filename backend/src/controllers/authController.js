@@ -3,6 +3,17 @@ import * as userService from '../services/userService.js';
 import { logAudit } from '../middleware/auditLogger.js';
 import fs from 'fs';
 import path from 'path';
+import { v2 as cloudinary } from 'cloudinary';
+import dotenv from 'dotenv';
+dotenv.config();
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+const isVercel = !!process.env.VERCEL;
 
 /**
  * Login user
@@ -141,10 +152,7 @@ export const uploadProfilePhoto = async (req, res, next) => {
                 const filenameWithExt = urlParts[urlParts.length - 1];
                 const publicId = `v-ops-profiles/${filenameWithExt.split('.')[0]}`;
 
-                // Dynamically import cloudinary to delete (optional cleanup)
-                import('cloudinary').then(({ v2: cloudinary }) => {
-                    cloudinary.uploader.destroy(publicId).catch(console.error);
-                }).catch(() => { });
+                cloudinary.uploader.destroy(publicId).catch(console.error);
             } else {
                 const oldPath = currentUser.profilePhotoUrl.replace('/uploads/', 'uploads/');
                 if (fs.existsSync(oldPath)) {
@@ -153,11 +161,32 @@ export const uploadProfilePhoto = async (req, res, next) => {
             }
         }
 
-        // If uploaded via cloudinary, req.file.path contains the full URL automatically
-        // If uploaded locally, req.file.filename exists
-        const photoUrl = req.file.path && req.file.path.includes('cloudinary.com')
-            ? req.file.path
-            : `/uploads/profiles/${req.file.filename}`;
+        let photoUrl = `/uploads/profiles/${req.file.filename}`;
+
+        if (isVercel) {
+            try {
+                // Upload to cloudinary from the temporary file
+                const result = await cloudinary.uploader.upload(req.file.path, {
+                    folder: 'v-ops-profiles',
+                    public_id: `profile-${req.user.id}-${Date.now()}`
+                });
+                photoUrl = result.secure_url;
+
+                // Cleanup temp file safely
+                if (fs.existsSync(req.file.path)) {
+                    fs.unlinkSync(req.file.path);
+                }
+            } catch (cloudError) {
+                console.error("Cloudinary Upload Error:", cloudError);
+                // Also clean up temp file on failure
+                if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+                return res.status(500).json({
+                    success: false,
+                    message: `Cloud storage upload failed: ${cloudError.message}. Please check Cloudinary credentials in Vercel.`,
+                    error: cloudError.message
+                });
+            }
+        }
 
         const user = await userService.updateProfilePhoto(req.user.id, photoUrl);
 
@@ -185,9 +214,7 @@ export const deleteProfilePhoto = async (req, res, next) => {
                 const filenameWithExt = urlParts[urlParts.length - 1];
                 const publicId = `v-ops-profiles/${filenameWithExt.split('.')[0]}`;
 
-                import('cloudinary').then(({ v2: cloudinary }) => {
-                    cloudinary.uploader.destroy(publicId).catch(console.error);
-                }).catch(() => { });
+                cloudinary.uploader.destroy(publicId).catch(console.error);
             } else {
                 const photoPath = currentUser.profilePhotoUrl.replace('/uploads/', 'uploads/');
                 if (fs.existsSync(photoPath)) {
