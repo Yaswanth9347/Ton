@@ -36,7 +36,7 @@ export function Sidebar() {
         { path: '/admin/employees', label: 'Employees', icon: <Users size={20} /> },
         { path: '/admin/attendance', label: 'Attendance', icon: <CalendarCheck size={20} /> },
         { path: '/admin/govt-bores', label: 'Govt Bores', icon: <Droplets size={20} /> },
-        { path: '/admin/bores', label: 'Bores', icon: <Droplets size={20} /> },
+        { path: '/admin/bores', label: 'Private Bores', icon: <Droplets size={20} /> },
         { path: '/admin/analytics', label: 'Analytics', icon: <BarChart3 size={20} /> },
         { path: '/admin/payroll', label: 'Payroll', icon: <Wallet size={20} /> },
         { path: '/admin/settings', label: 'Settings', icon: <Settings size={20} /> },

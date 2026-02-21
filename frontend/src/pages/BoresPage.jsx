@@ -235,7 +235,7 @@ export default function BoresPage() {
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `Bores_${new Date().toISOString().split('T')[0]}.csv`;
+            link.download = `Private_Bores_${new Date().toISOString().split('T')[0]}.csv`;
             link.click();
             URL.revokeObjectURL(url);
             toast.success('CSV exported successfully');
@@ -376,7 +376,7 @@ export default function BoresPage() {
                             <tr>
                                 <td colSpan={DISPLAY_COLS.length + 2} className="bores__empty">
                                     <Droplets size={40} strokeWidth={1} />
-                                    <p>{search ? 'No records match your search' : 'No bore entries yet'}</p>
+                                    <p>{search ? 'No records match your search' : 'No private bore entries yet'}</p>
                                     {!search && isAdmin && (
                                         <button className="btn btn-primary" onClick={handleAdd}>
                                             Add First Entry

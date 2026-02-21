@@ -921,11 +921,12 @@ textarea.form-input {
   border-radius: var(--radius-md);
   padding: var(--spacing-2);
   cursor: pointer;
+  color: var(--text-primary);
   font-size: var(--font-size-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color var(--transition-fast);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .theme-toggle:hover {

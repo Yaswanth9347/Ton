@@ -161,7 +161,7 @@ export function AnalyticsCharts() {
             </div>
 
             {/* ====== Payment Breakdown ====== */}
-            <h3 className="analytics-section-title"><Wallet size={18} /> Payment Breakdown (Bores)</h3>
+            <h3 className="analytics-section-title"><Wallet size={18} /> Payment Breakdown (Private Bores)</h3>
             <div className="analytics-summary">
                 <Card className="summary-card">
                     <div className="analytics-stat-icon analytics-stat-icon--green"><IndianRupee size={20} /></div>

@@ -282,7 +282,7 @@ export function AdminDashboard({ tab = 'dashboard' }) {
                                 </div>
                                 <div className="dash-stat-body">
                                     <span className="dash-stat-value">₹{boreStats.totalAmount.toLocaleString('en-IN')}</span>
-                                    <span className="dash-stat-label">Bores Revenue</span>
+                                    <span className="dash-stat-label">Private Bores Revenue</span>
                                 </div>
                             </div>
                             <div className="dash-stat-card dash-stat-card--wide">
@@ -291,7 +291,7 @@ export function AdminDashboard({ tab = 'dashboard' }) {
                                 </div>
                                 <div className="dash-stat-body">
                                     <span className="dash-stat-value">₹{boreStats.totalProfit.toLocaleString('en-IN')}</span>
-                                    <span className="dash-stat-label">Bores Profit</span>
+                                    <span className="dash-stat-label">Private Bores Profit</span>
                                 </div>
                             </div>
                             <div className="dash-stat-card dash-stat-card--wide">

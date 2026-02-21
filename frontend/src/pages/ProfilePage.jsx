@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { authApi } from '../services/api';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
-import { Camera, Trash2 } from 'lucide-react';
+import { Camera, Trash2, User, Lock, Mail } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -193,7 +193,7 @@ const ProfilePage = () => {
                         <div className="profile-header-info">
                             <h1 className="profile-name">{user?.firstName} {user?.lastName}</h1>
                             <p className="profile-role">{user?.role === 'ADMIN' ? 'Administrator' : user?.role === 'SUPERVISOR' ? 'Supervisor' : 'Employee'}</p>
-                            <p className="profile-email">📧 {user?.email}</p>
+                            <p className="profile-email"><Mail size={16} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-bottom' }} /> {user?.email}</p>
                         </div>
                     </div>
 
@@ -207,14 +207,14 @@ const ProfilePage = () => {
                                         onClick={() => setActiveTab('details')}
                                         className={`profile-nav-item ${activeTab === 'details' ? 'active' : ''}`}
                                     >
-                                        <span className="profile-nav-icon">👤</span>
+                                        <span className="profile-nav-icon"><User size={18} /></span>
                                         <span>Personal Details</span>
                                     </button>
                                     <button
                                         onClick={() => setActiveTab('security')}
                                         className={`profile-nav-item ${activeTab === 'security' ? 'active' : ''}`}
                                     >
-                                        <span className="profile-nav-icon">🔒</span>
+                                        <span className="profile-nav-icon"><Lock size={18} /></span>
                                         <span>Security</span>
                                     </button>
                                 </nav>
@@ -268,15 +268,15 @@ const ProfilePage = () => {
                                             </div>
                                             <div className="form-group">
                                                 <label className="form-label">
-                                                    Last Name {user?.role !== 'ADMIN' && user?.role !== 'SUPERVISOR' && <span className="text-danger">*</span>}
+                                                    Last Name {user?.role !== 'ADMIN' && <span className="text-danger">*</span>}
                                                 </label>
                                                 <input
                                                     type="text"
                                                     className="form-input"
                                                     value={profileData.lastName}
                                                     onChange={(e) => setProfileData({ ...profileData, lastName: e.target.value })}
-                                                    required={user?.role !== 'ADMIN' && user?.role !== 'SUPERVISOR'}
-                                                    placeholder={user?.role === 'ADMIN' || user?.role === 'SUPERVISOR' ? 'Optional for Admins' : ''}
+                                                    required={user?.role !== 'ADMIN'}
+                                                    placeholder={user?.role === 'ADMIN' ? 'Optional for Admins' : ''}
                                                 />
                                             </div>
                                         </div>
