@@ -133,13 +133,32 @@ export const uploadProfilePhoto = async (req, res, next) => {
         // Get old photo to delete
         const currentUser = await authService.getUserProfile(req.user.id);
         if (currentUser.profilePhotoUrl) {
-            const oldPath = currentUser.profilePhotoUrl.replace('/uploads/', 'uploads/');
-            if (fs.existsSync(oldPath)) {
-                fs.unlinkSync(oldPath);
+            if (currentUser.profilePhotoUrl.includes('cloudinary.com')) {
+                // Deleting from Cloudinary is complex without the exact public_id easily parsed.
+                // For simplicity in this fix, we will just let it be orphaned, or you could parse it:
+                // e.g. v-ops-profiles/profile-1-17000000
+                const urlParts = currentUser.profilePhotoUrl.split('/');
+                const filenameWithExt = urlParts[urlParts.length - 1];
+                const publicId = `v-ops-profiles/${filenameWithExt.split('.')[0]}`;
+
+                // Dynamically import cloudinary to delete (optional cleanup)
+                import('cloudinary').then(({ v2: cloudinary }) => {
+                    cloudinary.uploader.destroy(publicId).catch(console.error);
+                }).catch(() => { });
+            } else {
+                const oldPath = currentUser.profilePhotoUrl.replace('/uploads/', 'uploads/');
+                if (fs.existsSync(oldPath)) {
+                    fs.unlinkSync(oldPath);
+                }
             }
         }
 
-        const photoUrl = `/uploads/profiles/${req.file.filename}`;
+        // If uploaded via cloudinary, req.file.path contains the full URL automatically
+        // If uploaded locally, req.file.filename exists
+        const photoUrl = req.file.path && req.file.path.includes('cloudinary.com')
+            ? req.file.path
+            : `/uploads/profiles/${req.file.filename}`;
+
         const user = await userService.updateProfilePhoto(req.user.id, photoUrl);
 
         res.json({
@@ -161,9 +180,19 @@ export const deleteProfilePhoto = async (req, res, next) => {
         const currentUser = await authService.getUserProfile(req.user.id);
 
         if (currentUser.profilePhotoUrl) {
-            const photoPath = currentUser.profilePhotoUrl.replace('/uploads/', 'uploads/');
-            if (fs.existsSync(photoPath)) {
-                fs.unlinkSync(photoPath);
+            if (currentUser.profilePhotoUrl.includes('cloudinary.com')) {
+                const urlParts = currentUser.profilePhotoUrl.split('/');
+                const filenameWithExt = urlParts[urlParts.length - 1];
+                const publicId = `v-ops-profiles/${filenameWithExt.split('.')[0]}`;
+
+                import('cloudinary').then(({ v2: cloudinary }) => {
+                    cloudinary.uploader.destroy(publicId).catch(console.error);
+                }).catch(() => { });
+            } else {
+                const photoPath = currentUser.profilePhotoUrl.replace('/uploads/', 'uploads/');
+                if (fs.existsSync(photoPath)) {
+                    fs.unlinkSync(photoPath);
+                }
             }
         }
 
