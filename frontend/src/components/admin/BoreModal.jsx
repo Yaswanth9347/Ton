@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save } from 'lucide-react';
+import { X } from 'lucide-react';
 
 const FIELD_GROUPS = {
     'Job Details': [
@@ -118,9 +118,7 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                                 Cancel
                             </button>
                             <button type="submit" className="btn btn-primary" disabled={saving}>
-                                {saving ? 'Saving...' : (
-                                    <><Save size={18} /> {record ? 'Update Record' : 'Save Record'}</>
-                                )}
+                                {saving ? 'Saving...' : (record ? 'Update Record' : 'Save Record')}
                             </button>
                         </div>
                     )}

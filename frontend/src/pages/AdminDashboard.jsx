@@ -1,16 +1,25 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { adminApi, boreApi, govtBoreApi } from '../services/api';
+import { SummaryCards } from '../components/admin/SummaryCards';
+import { EmployeeTable } from '../components/admin/EmployeeTable';
+import { EmployeeForm } from '../components/admin/EmployeeForm';
+import { AttendanceTable } from '../components/admin/AttendanceTable';
+import { AttendanceEditModal } from '../components/admin/AttendanceEditModal';
+import { AnalyticsCharts } from '../components/admin/AnalyticsCharts';
+import { BulkUploadModal } from '../components/admin/BulkUploadModal';
+import { Modal } from '../components/common/Modal';
+import { Button } from '../components/common/Button';
+import { Card } from '../components/common/Card';
+import { toast } from 'react-hot-toast';
+import { OvertimeRulesConfig } from '../components/admin/OvertimeRulesConfig';
+import { AdminPayrollTab } from '../components/admin/AdminPayrollTab';
+import { AttendanceCalendarView } from '../components/admin/AttendanceCalendarView';
 import {
     Users, UserCheck, UserX, Clock,
     Droplets, IndianRupee, TrendingUp, Landmark,
-    UserPlus
+    UserPlus, Upload, Download
 } from 'lucide-react';
-import { adminApi, boreApi, govtBoreApi } from '../services/api';
-import { EmployeeTable } from '../components/admin/EmployeeTable';
-import { EmployeeForm } from '../components/admin/EmployeeForm';
-import { Modal } from '../components/common/Modal';
-import { Button } from '../components/common/Button';
-import { toast } from 'react-hot-toast';
 
 export function AdminDashboard({ tab = 'dashboard' }) {
     const { user, logout } = useAuth();
@@ -28,9 +37,17 @@ export function AdminDashboard({ tab = 'dashboard' }) {
     const [employeeFormError, setEmployeeFormError] = useState(null);
     const [employeeFormLoading, setEmployeeFormLoading] = useState(false);
 
+    // Attendance state
+    const [attendance, setAttendance] = useState([]);
+    const [attendanceLoading, setAttendanceLoading] = useState(false);
+    const [editingAttendance, setEditingAttendance] = useState(null);
+    const [attendanceFormError, setAttendanceFormError] = useState(null);
+    const [attendanceFormLoading, setAttendanceFormLoading] = useState(false);
+    const [showBulkUpload, setShowBulkUpload] = useState(false);
 
-
-
+    // Calendar view state
+    const [showCalendarModal, setShowCalendarModal] = useState(false);
+    const [calendarEmployee, setCalendarEmployee] = useState(null);
 
     // Bore stats for dashboard
     const [boreStats, setBoreStats] = useState({ total: 0, totalAmount: 0, totalProfit: 0 });
@@ -64,16 +81,25 @@ export function AdminDashboard({ tab = 'dashboard' }) {
         }
     }, []);
 
-
-
-
+    // Fetch attendance
+    const fetchAttendance = useCallback(async (filters = {}) => {
+        setAttendanceLoading(true);
+        try {
+            const response = await adminApi.getAllAttendance(filters);
+            setAttendance(response.data.data);
+        } catch (error) {
+            console.error('Failed to fetch attendance:', error);
+        } finally {
+            setAttendanceLoading(false);
+        }
+    }, []);
 
     // Audit logs feature removed
 
     // Initial data fetch
     useEffect(() => {
         fetchStats();
-        fetchStats();
+        fetchEmployees();
         // Fetch bore stats for dashboard
         (async () => {
             try {
@@ -95,14 +121,14 @@ export function AdminDashboard({ tab = 'dashboard' }) {
                 });
             } catch (e) { console.error('Failed to fetch bore stats', e); }
         })();
-    }, [fetchStats]);
+    }, [fetchStats, fetchEmployees]);
 
-    // Initial data fetch - Employees
+    // Fetch data when tab changes
     useEffect(() => {
-        if (activeTab === 'employees') {
-            fetchEmployees();
+        if (activeTab === 'attendance') {
+            fetchAttendance();
         }
-    }, [activeTab, fetchEmployees]);
+    }, [activeTab, fetchAttendance]);
 
     // Employee handlers
     const handleAddEmployee = () => {
@@ -129,7 +155,6 @@ export function AdminDashboard({ tab = 'dashboard' }) {
             setShowEmployeeModal(false);
             fetchEmployees();
             fetchStats();
-            toast.success('Employee saved successfully');
         } catch (error) {
             setEmployeeFormError(error.response?.data?.message || 'Failed to save employee');
         } finally {
@@ -153,11 +178,41 @@ export function AdminDashboard({ tab = 'dashboard' }) {
         }
     };
 
+    // Attendance handlers
+    const handleCorrectAttendance = (record) => {
+        setEditingAttendance(record);
+        setAttendanceFormError(null);
+    };
 
+    const handleAttendanceSubmit = async (data) => {
+        setAttendanceFormLoading(true);
+        setAttendanceFormError(null);
+        try {
+            await adminApi.correctAttendance(editingAttendance.id, data);
+            setEditingAttendance(null);
+            fetchAttendance();
+        } catch (error) {
+            setAttendanceFormError(error.response?.data?.message || 'Failed to correct attendance');
+        } finally {
+            setAttendanceFormLoading(false);
+        }
+    };
 
-
-
-
+    const handleExport = async (filters = {}) => {
+        try {
+            const response = await adminApi.exportAttendance(filters);
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `attendance_report_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error) {
+            console.error('Export failed:', error);
+            toast.error('Failed to export report');
+        }
+    };
 
     const handleLogout = async () => {
         await logout();
@@ -270,15 +325,6 @@ export function AdminDashboard({ tab = 'dashboard' }) {
                     </div>
                 )}
 
-
-
-
-
-
-
-
-
-
                 {/* Employees Tab */}
                 {activeTab === 'employees' && (
                     <div>
@@ -293,7 +339,56 @@ export function AdminDashboard({ tab = 'dashboard' }) {
                             loading={employeesLoading}
                             onEdit={handleEditEmployee}
                             onToggleActive={handleToggleActive}
+                            onViewCalendar={(employee) => {
+                                setCalendarEmployee(employee);
+                                setShowCalendarModal(true);
+                            }}
                         />
+                    </div>
+                )}
+
+                {/* Attendance Tab */}
+                {activeTab === 'attendance' && (
+                    <div>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3>Attendance Records</h3>
+                            <div className="flex gap-2">
+                                <Button variant="primary" onClick={() => setShowBulkUpload(true)} className="flex items-center gap-2">
+                                    <Upload size={18} fill="currentColor" /> Bulk Upload
+                                </Button>
+                                <Button variant="secondary" onClick={() => handleExport()} className="flex items-center gap-2">
+                                    <Download size={18} fill="currentColor" /> Export CSV
+                                </Button>
+                            </div>
+                        </div>
+                        <AttendanceTable
+                            attendance={attendance}
+                            employees={employees}
+                            loading={attendanceLoading}
+                            onCorrect={handleCorrectAttendance}
+                            onFilter={fetchAttendance}
+                        />
+                    </div>
+                )}
+
+                {/* Analytics Tab */}
+                {activeTab === 'analytics' && (
+                    <div>
+                        <AnalyticsCharts />
+                    </div>
+                )}
+
+                {/* Payroll Tab */}
+                {activeTab === 'payroll' && (
+                    <div>
+                        <AdminPayrollTab />
+                    </div>
+                )}
+
+                {/* Settings Tab */}
+                {activeTab === 'settings' && (
+                    <div>
+                        <OvertimeRulesConfig />
                     </div>
                 )}
             </main>
@@ -313,9 +408,41 @@ export function AdminDashboard({ tab = 'dashboard' }) {
                 />
             </Modal>
 
+            {/* Attendance Edit Modal */}
+            <AttendanceEditModal
+                isOpen={!!editingAttendance}
+                onClose={() => setEditingAttendance(null)}
+                attendance={editingAttendance}
+                onSubmit={handleAttendanceSubmit}
+                loading={attendanceFormLoading}
+                error={attendanceFormError}
+            />
 
+            {/* Bulk Upload Modal */}
+            <BulkUploadModal
+                isOpen={showBulkUpload}
+                onClose={() => setShowBulkUpload(false)}
+                onSuccess={() => {
+                    setShowBulkUpload(false);
+                    fetchAttendance();
+                    fetchStats();
+                }}
+            />
 
-
+            {/* Employee Calendar Modal */}
+            <Modal
+                isOpen={showCalendarModal}
+                onClose={() => {
+                    setShowCalendarModal(false);
+                    setCalendarEmployee(null);
+                }}
+                title={calendarEmployee ? `Attendance Calendar - ${calendarEmployee.firstName} ${calendarEmployee.lastName}` : 'Attendance Calendar'}
+                size="md"
+            >
+                {calendarEmployee && (
+                    <AttendanceCalendarView userId={calendarEmployee.id} />
+                )}
+            </Modal>
         </div>
     );
 }

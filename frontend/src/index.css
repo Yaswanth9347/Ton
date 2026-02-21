@@ -2855,9 +2855,9 @@ textarea.form-input {
   color: var(--color-primary);
 }
 
-.govt-bores__stat-icon--villages {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.2));
-  color: var(--color-success);
+.govt-bores__stat-icon--pending {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.2));
+  color: var(--color-danger);
 }
 
 .govt-bores__stat-icon--amount {

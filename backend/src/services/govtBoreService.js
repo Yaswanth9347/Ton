@@ -181,6 +181,7 @@ export const createRecord = async (data) => {
 
         // GI Pipes
         pipe_company: data.pipe_company || null,
+        geologist: data.geologist || null,
 
         // Labour
         labour_type: data.labour_type || null,
@@ -339,6 +340,7 @@ export const updateRecord = async (id, data) => {
 
       // GI Pipes
       pipe_company: data.pipe_company,
+      geologist: data.geologist,
 
       // Labour
       labour_type: data.labour_type,

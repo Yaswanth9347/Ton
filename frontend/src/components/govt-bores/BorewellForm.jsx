@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Plus, Save, Calculator, AlertCircle, Calendar, MapPin } from 'lucide-react';
+import { X, Plus, Calculator, AlertCircle, Calendar, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { govtBoreApi } from '../../services/api';
 import MiniCalendar from '../common/MiniCalendar';
@@ -212,6 +212,7 @@ const initialFormData = {
     gi_pipes_qty: '',
     gi_pipes_rate: '',
     gi_pipes_amount: '',
+    geologist: '',
 
     // Labour
     labour_amount: '',
@@ -561,12 +562,10 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
     };
 
     // --- Totals Calculation ---
+
+    // TBA (Total Bill Amount) = Sum of all standard material amounts + custom material amounts
+    // This is the auto-calculated field (previously was Gross).
     useEffect(() => {
-        // Update Gross Amount (Standard + Custom Materials)
-        // We only update if the user hasn't manually overridden it? 
-        // The requirement says "Materials custom rows must be included in Gross Operational Total".
-        // It implies we should sum them up.
-        // Let's sum standard material amounts
         const stdMaterials = [
             'drilling', 'casing180', 'casing140', 'casing250',
             'slotting', 'pumpset', 'gi_pipes', 'plotfarm',
@@ -579,75 +578,39 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
         });
 
         const customMatTotal = customMaterials.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+        const newTBA = (stdTotal + customMatTotal).toFixed(2);
 
-        // We set Gross Amount to the sum. This makes it "semi-auto" - it respects manual inputs in standard fields
-        // but aggregates them automatically.
-        const newGross = (stdTotal + customMatTotal).toFixed(2);
-
-        // Only update if different to avoid loop
-        if (formData.gross_amount !== newGross) {
-            // We need to be careful not to override if user just typed in Gross Amount manually 
-            // BUT the prompt says "Net Amount must auto-adjust accordingly". 
-            // Attempting to keep it manual but also auto-calculate is contradictory.
-            // Given "Materials custom rows must be included in Gross", and "Existing calculations remain intact" (standard fields manual),
-            // the best interpretation is: Gross = Sum(Standard Manuals) + Sum(Customs).
-            setFormData(prev => ({ ...prev, gross_amount: newGross }));
+        if (formData.total_bill_amount !== newTBA) {
+            setFormData(prev => ({ ...prev, total_bill_amount: newTBA }));
         }
-
     }, [
-        // Standard Material Amounts
         formData.drilling_amount, formData.casing180_amount, formData.casing140_amount, formData.casing250_amount,
         formData.slotting_amount, formData.pumpset_amount, formData.gi_pipes_amount, formData.plotfarm_amount,
         formData.erection_amount, formData.borecap_amount, formData.labour_amount,
         formData.cylinders_amount, formData.stand_amount, formData.head_handle_amount,
-        // Custom Materials
         customMaterials
     ]);
 
+
+
+    // Net Amount: remains manually entered by admin.
+
+    // Re-calculate custom tax amounts if Gross changes (for % based taxes)
+    // Gross is now the manual base value entered by admin.
     useEffect(() => {
-        // Update Total Recoveries (Standard Taxes + Custom Taxes)
-        const stdTaxes = ['it', 'vat', 'cgst', 'sgst', 'igst', 'gst', 'sas'];
-        let stdTaxTotal = 0;
-        stdTaxes.forEach(key => {
-            // check for _amt or _amount suffix mismatch
-            const k = (key === 'it' || key === 'vat') ? `${key}_amount` : `${key}_amt`;
-            stdTaxTotal += parseFloat(formData[k]) || 0;
-        });
-
-        const customTaxTotal = customTaxes.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-        const newRecoveries = (stdTaxTotal + customTaxTotal).toFixed(2);
-
-        if (formData.total_recoveries !== newRecoveries) {
-            setFormData(prev => ({ ...prev, total_recoveries: newRecoveries }));
-        }
-
-    }, [
-        formData.it_amount, formData.vat_amount, formData.cgst_amt, formData.sgst_amt,
-        formData.igst_amt, formData.gst_amt, formData.sas_amt,
-        customTaxes
-    ]);
-
-    // Net Amount Auto-Calculation REMOVED as per requirement.
-    // Net Amount must remain manually entered by the admin.
-
-
-
-    // Re-calculate custom tax amounts if Bill Amount changes (for % based taxes)
-    useEffect(() => {
-        const billAmt = parseFloat(formData.total_bill_amount) || 0;
+        const grossAmt = parseFloat(formData.gross_amount) || 0;
         const updatedTaxes = customTaxes.map(item => {
             if (item.type === 'percent') {
                 const val = parseFloat(item.value) || 0;
-                return { ...item, amount: ((billAmt * val) / 100).toFixed(2) };
+                return { ...item, amount: ((grossAmt * val) / 100).toFixed(2) };
             }
             return item;
         });
 
-        // Deep compare to avoid loop
         if (JSON.stringify(updatedTaxes) !== JSON.stringify(customTaxes)) {
             setCustomTaxes(updatedTaxes);
         }
-    }, [formData.total_bill_amount]);
+    }, [formData.gross_amount]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -929,8 +892,8 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
                                 <InputField label="Amount" name="gi_pipes_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
                             </div>
                             <div className="govt-bore-modal__grid govt-bore-modal__grid--fixed-2" style={{ marginTop: '10px' }}>
+                                <InputField label="Geologist" name="geologist" formData={formData} handleChange={handleChange} viewMode={viewMode} />
                                 <InputField label="Labour Charges" name="labour_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} />
-                                <div /> {/* Spacer to keep it compact and proportionally sized */}
                             </div>
                         </div>
 
@@ -939,29 +902,53 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
 
 
                     <div className="govt-bore-modal__section" style={{ marginTop: '2rem' }}>
-                        <div className="govt-bore-modal__grid govt-bore-modal__grid--2">
+                        {/* Row 1: NET AMOUNT (manual) | TBA - auto-calculated */}
+                        <div className="govt-bore-modal__grid govt-bore-modal__grid--fixed-2">
+                            <InputField
+                                label="NET AMOUNT"
+                                name="net_amount"
+                                type="number"
+                                formData={formData}
+                                handleChange={handleChange}
+                                viewMode={viewMode}
+                                className="form-field--highlight"
+                            />
+                            <InputField
+                                label="TBA (Total Bill Amount)"
+                                name="total_bill_amount"
+                                type="number"
+                                formData={formData}
+                                handleChange={handleChange}
+                                viewMode={true} // Auto-calculated — always read-only
+                                className="form-field--highlight"
+                                inputStyle={{ fontWeight: 'bold' }}
+                            />
+                        </div>
+                        {/* Row 2: Total Recoveries (auto-calc) | Gross (manual) */}
+                        <div className="govt-bore-modal__grid govt-bore-modal__grid--fixed-2" style={{ marginTop: '1rem' }}>
+                            <InputField
+                                label="Total Recoveries"
+                                name="total_recoveries"
+                                type="number"
+                                formData={formData}
+                                handleChange={handleChange}
+                                viewMode={viewMode} // Manually editable by admin
+                            />
                             <InputField
                                 label="Gross"
                                 name="gross_amount"
                                 type="number"
                                 formData={formData}
                                 handleChange={handleChange}
-                                viewMode={true} // Always read-only for auto-calc
+                                viewMode={viewMode} // Manually editable by admin
                                 className="form-field--highlight"
-                                inputStyle={{ fontWeight: 'bold' }}
                             />
-                            <InputField label="Total Recoveries" name="total_recoveries" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} />
                         </div>
                     </div>
 
                     {/* Section 6: Billing & Taxes */}
                     <div className="govt-bore-modal__section" style={{ marginTop: '2rem' }}>
                         <h3 className="govt-bore-modal__section-title">Billing & Taxes</h3>
-
-                        <div className="govt-bore-modal__grid govt-bore-modal__grid--fixed-2" style={{ marginBottom: '1.5rem' }}>
-                            <InputField label="TVW (Total Bill Amount)" name="total_bill_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} className="form-field--highlight" />
-                            <InputField label="NET AMOUNT" name="net_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} className="form-field--highlight" />
-                        </div>
 
                         <div className="govt-bore-modal__grid govt-bore-modal__grid--2">
                             <div>
@@ -1140,7 +1127,7 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
                         <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
                         {!viewMode && (
                             <button type="submit" disabled={saving} className="btn btn-primary">
-                                {saving ? 'Saving...' : <><Save size={18} /> Save Record</>}
+                                {saving ? 'Saving...' : 'Save Record'}
                             </button>
                         )}
                     </div>

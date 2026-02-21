@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Save, Receipt, CreditCard, Calculator } from 'lucide-react';
+import { X, Receipt, CreditCard, Calculator } from 'lucide-react';
 
 const initialBillData = {
     total_bill_amount: '',
@@ -151,7 +151,7 @@ export default function BorewellBillForm({ record, onClose, onSave, saving }) {
                             Cancel
                         </button>
                         <button type="submit" disabled={saving} className="btn btn-primary">
-                            {saving ? 'Saving...' : <><Save size={18} /> Update Bill</>}
+                            {saving ? 'Saving...' : 'Update Bill'}
                         </button>
                     </div>
                 </form>

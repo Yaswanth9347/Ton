@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Search, Plus, Edit2, Trash2, Download, ChevronLeft, ChevronRight, FileText, MapPin, IndianRupee, Droplets, Filter, X, Eye } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Download, ChevronLeft, ChevronRight, FileText, MapPin, IndianRupee, Droplets, Filter, X, Eye, Clock } from 'lucide-react';
 import BorewellForm from '../components/govt-bores/BorewellForm';
 import { govtBoreApi } from '../services/api';
 import toast from 'react-hot-toast';
@@ -7,38 +7,69 @@ import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext';
 
 // Column definitions matching Excel structure
+// Column definitions matching Excel structure
 const DISPLAY_COLS = [
-    // sNo and mandal are handled manually in the table/export
+    // 📌 General Details
     { key: 'village', label: 'Village', width: '120px' },
     { key: 'location', label: 'Point / Supervisor', width: '150px' },
     { key: 'vehicle', label: 'Vehicle', width: '100px' },
     { key: 'grant', label: 'Grant', width: '100px', align: 'center' },
     { key: 'date', label: 'Date', width: '110px', align: 'center' },
     { key: 'platform_date', label: 'Platform Dt', width: '110px', align: 'center' },
-    { key: 'drilling_depth_mtrs', label: 'Total Feet', width: '80px', isNumber: true, align: 'center' },
+
+    // 📌 Drilling Details
+    { key: 'drilling_depth_mtrs', label: 'Total Feet', width: '100px', isNumber: true, noSymbol: true, align: 'center' },
+    { key: 'drilling_rate', label: 'Dril Rate', width: '100px', isNumber: true, align: 'center' },
     { key: 'drilling_amount', label: 'Drilling Amt', width: '110px', isNumber: true, align: 'center' },
+
+    // 📌 Casing Details
     { key: 'casing_type', label: 'Casing Type', width: '110px', align: 'center' },
-    { key: 'casing140_qty', label: 'Cas140 (Feet)', width: '110px', isNumber: true, align: 'center' },
-    { key: 'casing180_qty', label: 'Cas180 (Feet)', width: '110px', isNumber: true, align: 'center' },
-    { key: 'casing250_qty', label: 'Cas250 (Feet)', width: '110px', isNumber: true, align: 'center' },
-    { key: 'total_casing_amount', label: 'Total Casing Amt', width: '130px', isNumber: true, align: 'center' }, // New Calculated
+    // Cas140 Group
+    { key: 'casing140_qty', label: 'Cas140 (Feet)', width: '110px', isNumber: true, noSymbol: true, align: 'center' },
+    { key: 'casing140_rate', label: 'Cas140 Rate', width: '100px', isNumber: true, noSymbol: true, align: 'center' },
+    { key: 'casing140_amount', label: 'Cas140 Amount', width: '120px', isNumber: true, align: 'center' },
+    // Cas180 Group
+    { key: 'casing180_qty', label: 'Cas180 (Feet)', width: '110px', isNumber: true, noSymbol: true, align: 'center' },
+    { key: 'casing180_rate', label: 'Cas180 Rate', width: '100px', isNumber: true, noSymbol: true, align: 'center' },
+    { key: 'casing180_amount', label: 'Cas180 Amount', width: '120px', isNumber: true, align: 'center' },
+    // Cas250 Group
+    { key: 'casing250_qty', label: 'Cas250 (Feet)', width: '110px', isNumber: true, noSymbol: true, align: 'center' },
+    { key: 'casing250_rate', label: 'Cas250 Rate', width: '100px', isNumber: true, noSymbol: true, align: 'center' },
+    { key: 'casing250_amount', label: 'Cas250 Amount', width: '120px', isNumber: true, align: 'center' },
+    { key: 'total_casing_amount', label: 'Total Casing Amt', width: '130px', isNumber: true, align: 'center' },
+
+    // 📌 Materials Section
     { key: 'material_date', label: 'Material Dt', width: '110px', align: 'center' },
     { key: 'pipe_company', label: 'Pipe Company', width: '110px', align: 'center' },
-    { key: 'gi_pipes_amount', label: 'Pipe Amount', width: '100px', isNumber: true, align: 'center' },
-    { key: 'materials_total', label: 'Materials Total', width: '110px', isNumber: true, align: 'center' }, // New Calculated
-    { key: 'labour_amount', label: 'Labour Charges', width: '110px', isNumber: true, align: 'center' },
-    { key: 'gross_amount', label: 'Gross Amount', width: '110px', isNumber: true, align: 'center' },
-    { key: 'estCost', label: 'Est Cost', width: '100px', isNumber: true, align: 'center' },
-    { key: 'total_bill_amount', label: 'Bill Amount (TVW)', width: '120px', isNumber: true, align: 'center' },
-    { key: 'total_recoveries', label: 'Total Recoveries', width: '110px', isNumber: true, align: 'center' },
-    { key: 'net_amount', label: 'Net Amount', width: '110px', isNumber: true, align: 'center' },
-    { key: 'pcs', label: 'PCs', width: '70px', isNumber: true, align: 'center' },
-    { key: 'bank_name', label: 'Bank Name', width: '110px', align: 'center' },
-    { key: 'cheque_no', label: 'Cheque No', width: '100px', align: 'center' },
-    { key: 'cheque_date', label: 'Cheque Date', width: '100px', align: 'center' },
-    { key: 'voucher_no', label: 'Voucher No', width: '100px', align: 'center' },
-    { key: 'mBookNo', label: 'M Book No', width: '100px', align: 'center' },
-    { key: 'status', label: 'Status', width: '100px', align: 'center' },
+    { key: 'gi_pipes_amount', label: 'Pipe Amount', width: '110px', isNumber: true, align: 'center' },
+    { key: 'materials_total', label: 'Materials Total', width: '120px', isNumber: true, align: 'center' },
+    { key: 'geologist', label: 'Geologist', width: '120px', align: 'center' },
+    { key: 'labour_amount', label: 'Labour Charges', width: '120px', isNumber: true, align: 'center' },
+
+    // 📌 Amount Summary
+    { key: 'net_amount', label: 'NET AMOUNT', width: '120px', isNumber: true, align: 'center' },
+    { key: 'total_bill_amount', label: 'TBA (Total Bill Amount)', width: '150px', isNumber: true, align: 'center' },
+    { key: 'total_recoveries', label: 'Total Recoveries', width: '120px', isNumber: true, align: 'center' },
+    { key: 'gross_amount', label: 'Gross Amount', width: '120px', isNumber: true, align: 'center' },
+    { key: 'estCost', label: 'Est Cost', width: '110px', isNumber: true, align: 'center' },
+    { key: 'pcs', label: 'PCs', width: '80px', isNumber: true, align: 'center' },
+
+    // 📌 Tax Details (Amounts Only)
+    { key: 'cgst_amt', label: 'CGST Amount', width: '110px', isNumber: true, align: 'center' },
+    { key: 'sgst_amt', label: 'SGST Amount', width: '110px', isNumber: true, align: 'center' },
+    { key: 'igst_amt', label: 'IGST Amount', width: '110px', isNumber: true, align: 'center' },
+    { key: 'gst_amt', label: 'GST Amount', width: '110px', isNumber: true, align: 'center' },
+    { key: 'sas_amt', label: 'SAS Amount', width: '110px', isNumber: true, align: 'center' },
+    { key: 'it_amount', label: 'IT Amount', width: '110px', isNumber: true, align: 'center' },
+    { key: 'vat_amount', label: 'VAT Amount', width: '110px', isNumber: true, align: 'center' },
+
+    // 📌 Payment Details
+    { key: 'bank_name', label: 'Bank Name', width: '130px', align: 'center' },
+    { key: 'cheque_no', label: 'Cheque No', width: '110px', align: 'center' },
+    { key: 'cheque_date', label: 'Cheque Date', width: '110px', align: 'center' },
+    { key: 'voucher_no', label: 'Voucher No', width: '110px', align: 'center' },
+    { key: 'mBookNo', label: 'M Book No', width: '110px', align: 'center' },
+    { key: 'status', label: 'Status', width: '110px', align: 'center' },
 ];
 
 const ITEMS_PER_PAGE = 25;
@@ -84,6 +115,37 @@ export default function GovtBoresPage() {
         }
     };
 
+    // 🔍 Extract Unique Custom Fields (excluding materials)
+    const dynamicColumns = useMemo(() => {
+        const labels = new Set();
+        records.forEach(rec => {
+            if (rec.custom_data) {
+                let cData = rec.custom_data;
+                if (typeof cData === 'string') {
+                    try { cData = JSON.parse(cData); } catch { cData = {}; }
+                }
+                // Add from payments
+                if (Array.isArray(cData.payments)) {
+                    cData.payments.forEach(p => { if (p.label) labels.add(p.label); });
+                }
+                // Add from taxes
+                if (Array.isArray(cData.taxes)) {
+                    cData.taxes.forEach(t => { if (t.label) labels.add(t.label); });
+                }
+            }
+        });
+
+        return Array.from(labels).map(label => ({
+            key: `custom_${label}`,
+            label: label,
+            width: '120px',
+            align: 'center',
+            isCustom: true
+        }));
+    }, [records]);
+
+    const combinedColumns = useMemo(() => [...DISPLAY_COLS, ...dynamicColumns], [dynamicColumns]);
+
     // Helper to access nested/flat data
     const getValue = (rec, key) => {
         if (key === 'mandal') return rec.mandal?.name || '-';
@@ -94,14 +156,12 @@ export default function GovtBoresPage() {
             if (!val) return '-';
             if (val.toLowerCase() === '4 1/2 tyre') return '4 ½ Tyre';
             if (val.toLowerCase() === '6 1/2 tyre') return '6 ½ Tyre';
-            // If matches 10 tyre or 10 Tyre
             if (val.toLowerCase() === '10 tyre') return '10 Tyre';
-            // Default capitalization of 'Tyre'
             return val.replace(/\btyre\b/gi, 'Tyre');
         }
         if (key === 'date' || key === 'platform_date' || key === 'material_date' || key === 'cheque_date') return formatDate(rec[key]);
 
-        // Calculated Fields
+        // Calculated Fields (Display only)
         if (key === 'total_casing_amount') {
             return (parseFloat(rec.casing180_amount) || 0) +
                 (parseFloat(rec.casing140_amount) || 0) +
@@ -109,8 +169,6 @@ export default function GovtBoresPage() {
         }
 
         if (key === 'materials_total') {
-            // Sum of all materials excluding pipes (since Pipe Amount is separate)
-            // pumpset, cylinders, stand, head_handle, plotfarm, erection, borecap
             let total = (parseFloat(rec.pumpset_amount) || 0) +
                 (parseFloat(rec.cylinders_amount) || 0) +
                 (parseFloat(rec.stand_amount) || 0) +
@@ -119,11 +177,29 @@ export default function GovtBoresPage() {
                 (parseFloat(rec.erection_amount) || 0) +
                 (parseFloat(rec.borecap_amount) || 0);
 
-            // Add Custom Materials from custom_data
             if (rec.custom_data && rec.custom_data.materials && Array.isArray(rec.custom_data.materials)) {
                 total += rec.custom_data.materials.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
             }
             return total;
+        }
+
+        if (key.startsWith('custom_')) {
+            const label = key.replace('custom_', '');
+            let cData = rec.custom_data;
+            if (typeof cData === 'string') {
+                try { cData = JSON.parse(cData); } catch { cData = {}; }
+            }
+            if (!cData) return '-';
+
+            // Check payments
+            const payment = (cData.payments || []).find(p => p.label === label);
+            if (payment) return payment.value || '-';
+
+            // Check taxes
+            const tax = (cData.taxes || []).find(t => t.label === label);
+            if (tax) return tax.amount || '-';
+
+            return '-';
         }
 
         return rec[key];
@@ -133,11 +209,14 @@ export default function GovtBoresPage() {
     const formatValue = (col, val) => {
         if (val === null || val === undefined || val === '') return '-';
         if (col.isDate) return formatDate(val);
-        if (col.isNumber && typeof val === 'number') {
-            return '₹' + val.toLocaleString('en-IN');
-        }
-        if (col.isNumber && !isNaN(parseFloat(val))) {
-            return '₹' + parseFloat(val).toLocaleString('en-IN');
+        if (col.isNumber) {
+            const num = typeof val === 'number' ? val : parseFloat(val);
+            if (!isNaN(num)) {
+                if (col.noSymbol) {
+                    return num;
+                }
+                return '₹' + num.toLocaleString('en-IN');
+            }
         }
         return val;
     };
@@ -158,10 +237,12 @@ export default function GovtBoresPage() {
             const location = rec.location || '';
             const vehicle = rec.vehicle || '';
             const grant = rec.grant || ''; // New
-            const bank = rec.bank_name || ''; // New
-            const cheque = rec.cheque_no || ''; // New
-            const voucher = rec.voucher_no || ''; // New
-            const mBook = rec.mBookNo || ''; // New
+            const bank = rec.bank_name || '';
+            const cheque = rec.cheque_no || '';
+            const voucher = rec.voucher_no || '';
+            const mBook = rec.mBookNo || '';
+            const pipeCo = rec.pipe_company || '';
+            const geologist = rec.geologist || '';
 
             return village.toLowerCase().includes(term) ||
                 mandal.toLowerCase().includes(term) ||
@@ -171,7 +252,9 @@ export default function GovtBoresPage() {
                 bank.toLowerCase().includes(term) ||
                 cheque.toLowerCase().includes(term) ||
                 voucher.toLowerCase().includes(term) ||
-                mBook.toLowerCase().includes(term);
+                mBook.toLowerCase().includes(term) ||
+                pipeCo.toLowerCase().includes(term) ||
+                geologist.toLowerCase().includes(term);
         });
     }, [records, search, statusFilter]);
 
@@ -188,11 +271,12 @@ export default function GovtBoresPage() {
     // Summary stats
     const stats = useMemo(() => {
         const total = records.length;
-        const totalAmount = records.reduce((sum, r) => sum + (parseFloat(r.total_amount) || 0), 0);
+        // Total Work Value = Sum of TBA (Total Bill Amount)
+        const totalAmount = records.reduce((sum, r) => sum + (parseFloat(r.total_bill_amount) || 0), 0);
         const netAmount = records.reduce((sum, r) => sum + (parseFloat(r.net_amount) || 0), 0);
-        const mandals = new Set(records.map((r) => r.mandal?.name).filter(Boolean)).size;
         const billPaid = records.filter(r => r.status === 'Bill Paid').length;
-        return { total, totalAmount, netAmount, mandals, billPaid };
+        const billPending = total - billPaid;
+        return { total, totalAmount, netAmount, billPaid, billPending };
     }, [records]);
 
     // Handlers
@@ -255,7 +339,7 @@ export default function GovtBoresPage() {
                     'Mandal': rec.mandal?.name || '',
                 };
 
-                DISPLAY_COLS.forEach(col => {
+                combinedColumns.forEach(col => {
                     let val = getValue(rec, col.key);
                     // Parse numbers if applicable
                     if (col.isNumber) {
@@ -316,21 +400,21 @@ export default function GovtBoresPage() {
                     </div>
                 </div>
                 <div className="govt-bores__stat-card">
-                    <div className="govt-bores__stat-icon govt-bores__stat-icon--villages">
-                        <MapPin size={20} />
-                    </div>
-                    <div className="govt-bores__stat-info">
-                        <span className="govt-bores__stat-value">{stats.mandals}</span>
-                        <span className="govt-bores__stat-label">Mandals Covered</span>
-                    </div>
-                </div>
-                <div className="govt-bores__stat-card">
                     <div className="govt-bores__stat-icon govt-bores__stat-icon--amount">
                         <IndianRupee size={20} />
                     </div>
                     <div className="govt-bores__stat-info">
                         <span className="govt-bores__stat-value">₹{stats.totalAmount.toLocaleString('en-IN')}</span>
                         <span className="govt-bores__stat-label">Total Work Value</span>
+                    </div>
+                </div>
+                <div className="govt-bores__stat-card">
+                    <div className="govt-bores__stat-icon govt-bores__stat-icon--pending">
+                        <Clock size={20} />
+                    </div>
+                    <div className="govt-bores__stat-info">
+                        <span className="govt-bores__stat-value">{stats.billPending}</span>
+                        <span className="govt-bores__stat-label">Bill Pendings</span>
                     </div>
                 </div>
                 <div className="govt-bores__stat-card">
@@ -394,7 +478,7 @@ export default function GovtBoresPage() {
                         <tr>
                             <th className="govt-bores__th govt-bores__th--sticky-sno">S.No</th>
                             <th className="govt-bores__th" style={{ minWidth: '140px', width: '140px' }}>Mandal</th>
-                            {DISPLAY_COLS.map((col) => (
+                            {combinedColumns.map((col) => (
                                 <th key={col.key} className="govt-bores__th" style={{ minWidth: col.width, width: col.width, textAlign: col.align || 'left' }}>
                                     {col.label}
                                 </th>
@@ -405,14 +489,14 @@ export default function GovtBoresPage() {
                     <tbody>
                         {loading ? (
                             <tr>
-                                <td colSpan={DISPLAY_COLS.length + 3} className="govt-bores__empty">
+                                <td colSpan={combinedColumns.length + 3} className="govt-bores__empty">
                                     <div className="spinner" style={{ margin: '0 auto' }}></div>
                                     <p>Loading records...</p>
                                 </td>
                             </tr>
                         ) : paginatedRecords.length === 0 ? (
                             <tr>
-                                <td colSpan={DISPLAY_COLS.length + 3} className="govt-bores__empty">
+                                <td colSpan={combinedColumns.length + 3} className="govt-bores__empty">
                                     <Droplets size={40} strokeWidth={1} />
                                     <p>No records found</p>
                                     {isAdmin && (
@@ -429,7 +513,7 @@ export default function GovtBoresPage() {
                                         {rec.sNo || (currentPage - 1) * ITEMS_PER_PAGE + idx + 1}
                                     </td>
                                     <td className="govt-bores__td" style={{ minWidth: '140px', width: '140px' }}>{rec.mandal?.name || '-'}</td>
-                                    {DISPLAY_COLS.map((col) => (
+                                    {combinedColumns.map((col) => (
                                         <td key={col.key} className="govt-bores__td" style={{ minWidth: col.width, width: col.width, textAlign: col.align || 'left' }}>
                                             {col.key === 'status' ? (
                                                 <span className={getStatusBadgeClass(rec.status)}>

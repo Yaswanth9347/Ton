@@ -616,6 +616,7 @@ model BorewellWork {
   // GI Pipes Extended
   // ----------------------------
   pipe_company     String?
+  geologist        String?
 
   // ----------------------------
   // Labour

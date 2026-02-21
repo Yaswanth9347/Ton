@@ -31,23 +31,14 @@ function ProtectedRoute({ children, requiredRole }) {
     }
 
     if (requiredRole && user.role !== requiredRole) {
-        // SUPERVISOR can access ADMIN routes for Dashboard
-        if (requiredRole === 'ADMIN' && (user.role === 'ADMIN' || user.role === 'SUPERVISOR')) {
+        // SUPERVISOR can access ADMIN routes
+        if (requiredRole === 'ADMIN' && isAdminRole(user.role)) {
             return children;
         }
-        // EMPLOYEE can access Bores pages even though they are under /admin route prefix
-        if (requiredRole === 'ADMIN' && user.role === 'EMPLOYEE') {
-            // Exception: Employees cannot access Dashboard
-            if (window.location.pathname === '/admin' || window.location.pathname === '/admin/employees') {
-                return <Navigate to="/admin/bores" replace />;
-            }
-            return children;
-        }
-
-        if (user.role === 'ADMIN' || user.role === 'SUPERVISOR') {
+        if (isAdminRole(user.role)) {
             return <Navigate to="/admin" replace />;
         }
-        return <Navigate to="/admin/bores" replace />;
+        return <Navigate to="/dashboard" replace />;
     }
 
     return children;
@@ -66,10 +57,10 @@ function PublicRoute({ children }) {
     }
 
     if (isAuthenticated) {
-        if (user.role === 'ADMIN' || user.role === 'SUPERVISOR') {
+        if (isAdminRole(user.role)) {
             return <Navigate to="/admin" replace />;
         }
-        return <Navigate to="/admin/bores" replace />;
+        return <Navigate to="/dashboard" replace />;
     }
 
     return children;
@@ -131,7 +122,14 @@ function AppRoutes() {
                     </ProtectedRoute>
                 }
             />
-
+            <Route
+                path="/admin/attendance"
+                element={
+                    <ProtectedRoute requiredRole="ADMIN">
+                        <Layout><AdminDashboard tab="attendance" /></Layout>
+                    </ProtectedRoute>
+                }
+            />
             <Route
                 path="/admin/govt-bores"
                 element={
@@ -148,9 +146,30 @@ function AppRoutes() {
                     </ProtectedRoute>
                 }
             />
-
-
-
+            <Route
+                path="/admin/analytics"
+                element={
+                    <ProtectedRoute requiredRole="ADMIN">
+                        <Layout><AdminDashboard tab="analytics" /></Layout>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/settings"
+                element={
+                    <ProtectedRoute requiredRole="ADMIN">
+                        <Layout><AdminDashboard tab="settings" /></Layout>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/payroll"
+                element={
+                    <ProtectedRoute requiredRole="ADMIN">
+                        <Layout><AdminDashboard tab="payroll" /></Layout>
+                    </ProtectedRoute>
+                }
+            />
 
             {/* Default redirect */}
             <Route path="/" element={<Navigate to="/login" replace />} />
