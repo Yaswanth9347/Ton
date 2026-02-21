@@ -12,12 +12,17 @@ import {
     Droplets,
     Wallet,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export function Sidebar() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const [collapsed, setCollapsed] = useState(false);
+    const [imgError, setImgError] = useState(false);
+
+    useEffect(() => {
+        setImgError(false);
+    }, [user?.profilePhotoUrl]);
 
     const handleLogout = async () => {
         await logout();
@@ -116,11 +121,12 @@ export function Sidebar() {
                     title="Edit Profile"
                 >
                     <div className="sidebar__avatar">
-                        {getPhotoUrl() ? (
+                        {getPhotoUrl() && !imgError ? (
                             <img
                                 src={getPhotoUrl()}
                                 alt="Profile"
                                 style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                                onError={() => setImgError(true)}
                             />
                         ) : (
                             <>{user?.firstName?.[0]}{user?.lastName?.[0]}</>

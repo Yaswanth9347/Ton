@@ -29,6 +29,12 @@ const ProfilePage = () => {
         confirmPassword: ''
     });
 
+    const [imgError, setImgError] = useState(false);
+
+    useEffect(() => {
+        setImgError(false);
+    }, [user?.profilePhotoUrl]);
+
     useEffect(() => {
         if (user) {
             setProfileData({
@@ -150,11 +156,12 @@ const ProfilePage = () => {
                     {/* Profile Header */}
                     <div className="profile-header">
                         <div className="profile-avatar-wrapper">
-                            {getPhotoUrl() ? (
+                            {getPhotoUrl() && !imgError ? (
                                 <img
                                     src={getPhotoUrl()}
                                     alt="Profile"
                                     className="profile-avatar-large profile-avatar-image"
+                                    onError={() => setImgError(true)}
                                 />
                             ) : (
                                 <div className="profile-avatar-large">
