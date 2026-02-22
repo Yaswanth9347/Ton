@@ -10,6 +10,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { Toaster } from 'react-hot-toast';
 import { Layout } from './components/layout/Layout';
 import { EmployeePayrollPage } from './pages/EmployeePayrollPage';
+import { InventoryPage } from './pages/admin/inventory/InventoryPage';
 
 // Helper: SUPERVISOR has the same privileges as ADMIN
 const isAdminRole = (role) => role === 'ADMIN' || role === 'SUPERVISOR';
@@ -159,6 +160,14 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute requiredRole="ADMIN">
                         <Layout><AdminDashboard tab="settings" /></Layout>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/inventory"
+                element={
+                    <ProtectedRoute requiredRole="ADMIN">
+                        <Layout><InventoryPage /></Layout>
                     </ProtectedRoute>
                 }
             />

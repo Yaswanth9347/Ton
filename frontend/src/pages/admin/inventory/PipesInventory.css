@@ -1,0 +1,23 @@
+/* PipesInventory.css — imports from InventoryPage.css shared tokens */
+/* All custom overrides specific to the Pipes sub-module */
+
+/* Pipe table row color-coding */
+.pipe-row--good {}
+
+.pipe-row--low {
+    background: rgba(245, 158, 11, 0.04) !important;
+}
+
+.pipe-row--critical {
+    background: rgba(239, 68, 68, 0.05) !important;
+}
+
+/* Responsive tweaks for stock table */
+@media (max-width: 900px) {
+
+    .inv-table thead th:nth-child(4),
+    /* Pieces Detail */
+    .inv-table tbody td:nth-child(4) {
+        display: none;
+    }
+}

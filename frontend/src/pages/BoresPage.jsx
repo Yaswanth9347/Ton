@@ -12,21 +12,43 @@ import toast from 'react-hot-toast';
 
 // Column definitions for the table
 const DISPLAY_COLS = [
-    { key: 'date', label: 'Date', type: 'date' },
-    { key: 'client_name', label: 'Client Name' },
-    { key: 'village', label: 'Village' },
-    { key: 'point_name', label: 'Point / Supervisor' },
-    { key: 'total_feet', label: 'Total Feet', type: 'number' },
-    { key: 'fell_feet', label: 'Fell Feet', type: 'number' },
-    { key: 'pipes', label: 'Pipes', type: 'number' },
-    { key: 'amount', label: 'Amount (₹)', type: 'currency' },
-    { key: 'cash', label: 'Cash (₹)', type: 'currency' },
-    { key: 'phone_pe', label: 'PhonePe (₹)', type: 'currency' },
-    { key: 'pending', label: 'Pending (₹)', type: 'currency' },
-    { key: 'diesel', label: 'Diesel (L)', type: 'number' },
-    { key: 'diesel_amount', label: 'Diesel Amt (₹)', type: 'currency' },
-    { key: 'commission', label: 'Commission (₹)', type: 'currency' },
-    { key: 'profit', label: 'Profit (₹)', type: 'currency' },
+    { key: 'date', label: 'Date', width: '110px', type: 'date', align: 'center' },
+    { key: 'customer_name', label: 'Customer', width: '180px' },
+    { key: 'village', label: 'Village', width: '140px' },
+    { key: 'vehicle_name', label: 'Vehicle', width: '120px' },
+    { key: 'supervisor_name', label: 'Supervisor', width: '150px' },
+    { key: 'bore_type', label: 'Type', width: '80px', align: 'center' },
+    // Drilling Details
+    { key: 'drill_upto_casing_feet', label: 'Upto Cas (Ft)', width: '100px', type: 'number', align: 'center' },
+    { key: 'drill_upto_casing_rate', label: 'Upto Cas (Rate)', width: '100px', type: 'number', align: 'center' },
+    { key: 'empty_drilling_feet', label: 'Empty (Ft)', width: '100px', type: 'number', align: 'center' },
+    { key: 'empty_drilling_rate', label: 'Empty (Rate)', width: '100px', type: 'number', align: 'center' },
+    { key: 'jump_300_feet', label: 'J-300 (Ft)', width: '90px', type: 'number', align: 'center' },
+    { key: 'jump_300_rate', label: 'J-300 (Rate)', width: '90px', type: 'number', align: 'center' },
+    { key: 'jump_400_feet', label: 'J-400 (Ft)', width: '90px', type: 'number', align: 'center' },
+    { key: 'jump_400_rate', label: 'J-400 (Rate)', width: '90px', type: 'number', align: 'center' },
+    { key: 'total_drilling_feet', label: 'Total Feet', width: '90px', type: 'number', align: 'center' },
+    { key: 'total_drilling_amt', label: 'Drill Amt', width: '110px', type: 'currency', align: 'right' },
+    // Casing Details
+    { key: 'cas140_feet', label: 'Cas140 (Ft)', width: '90px', type: 'number', align: 'center' },
+    { key: 'cas140_rate', label: 'Cas140 (Rate)', width: '90px', type: 'number', align: 'center' },
+    { key: 'cas180_4g_feet', label: '180-4G (Ft)', width: '100px', type: 'number', align: 'center' },
+    { key: 'cas180_4g_rate', label: '180-4G (Rate)', width: '100px', type: 'number', align: 'center' },
+    { key: 'cas180_6g_feet', label: '180-6G (Ft)', width: '100px', type: 'number', align: 'center' },
+    { key: 'cas180_6g_rate', label: '180-6G (Rate)', width: '100px', type: 'number', align: 'center' },
+    { key: 'cas250_4g_feet', label: '250-4G (Ft)', width: '100px', type: 'number', align: 'center' },
+    { key: 'cas250_4g_rate', label: '250-4G (Rate)', width: '100px', type: 'number', align: 'center' },
+    // Slotting & Labour
+    { key: 'slotting_pipes', label: 'Slot Pipes', width: '100px', type: 'number', align: 'center' },
+    { key: 'slotting_rate', label: 'Slot Rate', width: '100px', type: 'number', align: 'center' },
+    { key: 'labour_charge', label: 'Labour', width: '100px', type: 'currency', align: 'right' },
+    { key: 'rpm', label: 'RPM', width: '80px', type: 'number', align: 'center' },
+    // Totals & Payments
+    { key: 'total_amount', label: 'Total (₹)', width: '120px', type: 'currency', align: 'right' },
+    { key: 'discount', label: 'Discount', width: '100px', type: 'currency', align: 'right' },
+    { key: 'amount_paid', label: 'Paid (₹)', width: '130px', type: 'currency', align: 'center' },
+    { key: 'balance', label: 'Balance (₹)', width: '130px', type: 'currency', align: 'center' },
+    { key: 'status', label: 'Status', width: '110px', align: 'center' },
 ];
 
 const ITEMS_PER_PAGE = 25;
@@ -135,12 +157,22 @@ export default function BoresPage() {
 
     // Filter records based on search
     const filteredRecords = useMemo(() => {
-        if (!search.trim()) return records;
+        let result = records.map(rec => {
+            const balance = parseFloat(rec.balance) || 0;
+            return {
+                ...rec,
+                status: balance > 0 ? 'Pending' : 'Completed'
+            };
+        });
+
+        if (!search.trim()) return result;
         const term = search.toLowerCase();
-        return records.filter((rec) =>
-            (rec.client_name && rec.client_name.toLowerCase().includes(term)) ||
+        return result.filter((rec) =>
+            (rec.customer_name && rec.customer_name.toLowerCase().includes(term)) ||
             (rec.village && rec.village.toLowerCase().includes(term)) ||
-            (rec.point_name && rec.point_name.toLowerCase().includes(term))
+            (rec.supervisor_name && rec.supervisor_name.toLowerCase().includes(term)) ||
+            (rec.vehicle_name && rec.vehicle_name.toLowerCase().includes(term)) ||
+            (rec.bore_type && rec.bore_type.toLowerCase().includes(term))
         );
     }, [records, search]);
 
@@ -157,11 +189,11 @@ export default function BoresPage() {
     // Summary stats
     const stats = useMemo(() => {
         const total = records.length;
-        const totalFeet = records.reduce((sum, r) => sum + (parseFloat(r.total_feet) || 0), 0);
-        const totalAmount = records.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
-        const totalProfit = records.reduce((sum, r) => sum + (parseFloat(r.profit) || 0), 0);
-        const totalPending = records.reduce((sum, r) => sum + (parseFloat(r.pending) || 0), 0);
-        return { total, totalFeet, totalAmount, totalProfit, totalPending };
+        const totalFeet = records.reduce((sum, r) => sum + (parseFloat(r.total_drilling_feet) || 0), 0);
+        const totalAmount = records.reduce((sum, r) => sum + (parseFloat(r.total_amount) || 0), 0);
+        const totalPaid = records.reduce((sum, r) => sum + (parseFloat(r.amount_paid) || 0), 0);
+        const totalBalance = records.reduce((sum, r) => sum + (parseFloat(r.balance) || 0), 0);
+        return { total, totalFeet, totalAmount, totalPaid, totalBalance };
     }, [records]);
 
     // Handlers
@@ -184,7 +216,7 @@ export default function BoresPage() {
     };
 
     const handleDelete = async (record) => {
-        if (!window.confirm(`Delete entry for "${record.client_name}"?`)) return;
+        if (!window.confirm(`Delete entry for "${record.customer_name}"?`)) return;
         try {
             await boreApi.delete(record.id);
             toast.success('Record deleted');
@@ -235,7 +267,7 @@ export default function BoresPage() {
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `Private_Bores_${new Date().toISOString().split('T')[0]}.csv`;
+            link.download = `Bores_${new Date().toISOString().split('T')[0]}.csv`;
             link.click();
             URL.revokeObjectURL(url);
             toast.success('CSV exported successfully');
@@ -313,8 +345,8 @@ export default function BoresPage() {
                         <TrendingUp size={20} />
                     </div>
                     <div className="bores__stat-info">
-                        <span className="bores__stat-value">₹{stats.totalProfit.toLocaleString('en-IN')}</span>
-                        <span className="bores__stat-label">Total Profit</span>
+                        <span className="bores__stat-value">₹{stats.totalPaid.toLocaleString('en-IN')}</span>
+                        <span className="bores__stat-label">Total Paid</span>
                     </div>
                 </div>
             </div>
@@ -325,7 +357,7 @@ export default function BoresPage() {
                     <Search size={18} className="bores__search-icon" />
                     <input
                         type="text"
-                        placeholder="Search by client, village, point..."
+                        placeholder="Search by customer, village, supervisor, vehicle..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="bores__search-input"
@@ -355,13 +387,13 @@ export default function BoresPage() {
                 <table className="bores__table">
                     <thead>
                         <tr>
-                            <th className="bores__th bores__th--sticky-sno">#</th>
+                            <th className="bores__th bores__th--sticky-sno" style={{ minWidth: '80px', width: '80px', textAlign: 'center' }}>#</th>
                             {DISPLAY_COLS.map((col) => (
-                                <th key={col.key} className="bores__th">
+                                <th key={col.key} className="bores__th" style={{ minWidth: col.width, width: col.width, textAlign: col.align || 'left' }}>
                                     {col.label}
                                 </th>
                             ))}
-                            <th className="bores__th bores__th--actions-right">Actions</th>
+                            <th className="bores__th bores__th--actions-right" style={{ minWidth: '160px', width: '160px' }}>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -375,74 +407,83 @@ export default function BoresPage() {
                         ) : paginatedRecords.length === 0 ? (
                             <tr>
                                 <td colSpan={DISPLAY_COLS.length + 2} className="bores__empty">
-                                    <Droplets size={40} strokeWidth={1} />
-                                    <p>{search ? 'No records match your search' : 'No private bore entries yet'}</p>
-                                    {!search && isAdmin && (
-                                        <button className="btn btn-primary" onClick={handleAdd}>
-                                            Add First Entry
-                                        </button>
-                                    )}
-                                    {search && (
-                                        <button className="btn btn-secondary" onClick={() => setSearch('')}>
-                                            Clear Search
-                                        </button>
-                                    )}
+                                    <div className="bores__empty-content">
+                                        <Droplets size={40} strokeWidth={1} />
+                                        <p>{search ? 'No records match your search' : 'No bore entries yet'}</p>
+                                        {!search && isAdmin && (
+                                            <button className="btn btn-primary" onClick={handleAdd}>
+                                                Add First Entry
+                                            </button>
+                                        )}
+                                        {search && (
+                                            <button className="btn btn-secondary" onClick={() => setSearch('')}>
+                                                Clear Search
+                                            </button>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         ) : (
                             paginatedRecords.map((rec, idx) => (
                                 <tr key={rec.id} className={idx % 2 === 1 ? 'bores__row--alt' : ''}>
-                                    <td className="bores__td bores__td--sticky-sno">
+                                    <td className="bores__td bores__td--sticky-sno" style={{ minWidth: '80px', width: '80px', textAlign: 'center' }}>
                                         {(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}
                                     </td>
-                                    {DISPLAY_COLS.map((col) => (
-                                        <td key={col.key} className={`bores__td ${col.key === 'pending' && parseFloat(rec[col.key]) > 0 ? 'bores__td--pending' : ''} ${col.key === 'profit' ? 'bores__td--profit' : ''}`}>
-                                            {formatValue(col, rec[col.key])}
-                                        </td>
-                                    ))}
-                                    <td className="bores__td bores__td--actions-right">
+                                    {DISPLAY_COLS.map((col) => {
+                                        let cellContent = formatValue(col, rec[col.key]);
+                                        let cellClass = `bores__td ${col.key === 'profit' ? 'bores__td--profit' : ''}`;
+
+                                        if (col.key === 'amount_paid') {
+                                            cellContent = <span className="bores__badge bores__badge--paid">{cellContent}</span>;
+                                        } else if (col.key === 'balance') {
+                                            cellContent = <span className={`bores__badge ${parseFloat(rec.balance) > 0 ? 'bores__badge--pending' : 'bores__badge--paid'}`}>{cellContent}</span>;
+                                        } else if (col.key === 'status') {
+                                            cellContent = <span className={`bores__status-tag ${rec.status === 'Pending' ? 'bores__status-tag--pending' : 'bores__status-tag--completed'}`}>{rec.status}</span>;
+                                        }
+
+                                        return (
+                                            <td key={col.key} className={cellClass} style={{ minWidth: col.width, width: col.width, textAlign: col.align || 'left' }}>
+                                                {cellContent}
+                                            </td>
+                                        );
+                                    })}
+                                    <td className="bores__td bores__td--actions-right" style={{ minWidth: '160px', width: '160px' }}>
                                         <div className="bores__action-btns">
-                                            <div className="bores__action-btns">
-                                                {(isAdmin || isSupervisor) && (
+                                            {(isAdmin || isSupervisor) && (
+                                                <button
+                                                    className="bores__action-btn bores__action-btn--download"
+                                                    onClick={() => handleDownloadReceipt(rec)}
+                                                    title="Download Receipt"
+                                                >
+                                                    <FileDown size={18} />
+                                                </button>
+                                            )}
+                                            {isAdmin ? (
+                                                <>
                                                     <button
-                                                        className={`bores__action-btn bores__action-btn--download ${parseFloat(rec.pending) > 0 ? 'bores__action-btn--disabled' : ''}`}
-                                                        onClick={() => handleDownloadReceipt(rec)}
-                                                        title={parseFloat(rec.pending) > 0 ? 'Receipt available only when fully paid' : 'Download Receipt'}
-                                                        disabled={parseFloat(rec.pending) > 0}
-                                                    >
-                                                        <FileDown size={18} />
-                                                    </button>
-                                                )}
-                                                {isAdmin ? (
-                                                    <>
-                                                        <button
-                                                            className="bores__action-btn bores__action-btn--edit"
-                                                            onClick={() => handleEdit(rec)}
-                                                            title="Edit"
-                                                        >
-                                                            <Edit2 size={18} />
-                                                        </button>
-                                                        <button
-                                                            className="bores__action-btn bores__action-btn--delete"
-                                                            onClick={() => handleDelete(rec)}
-                                                            title="Delete"
-                                                        >
-                                                            <Trash2 size={18} />
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    // View button for non-admins (reuses Edit modal in view mode if supported or just opens it)
-                                                    // Assuming we can re-use existing Edit modal but we will eventually need to make it ReadOnly if not admin
-                                                    // For now, let's allow opening it - I will address Modal ReadOnly state next
-                                                    <button
-                                                        className="bores__action-btn bores__action-btn--view"
-                                                        onClick={() => handleView(rec)}
-                                                        title="View Details"
+                                                        className="bores__action-btn bores__action-btn--edit"
+                                                        onClick={() => handleEdit(rec)}
+                                                        title="Edit"
                                                     >
                                                         <Edit2 size={18} />
                                                     </button>
-                                                )}
-                                            </div>
+                                                    <button
+                                                        className="bores__action-btn bores__action-btn--delete"
+                                                        onClick={() => handleDelete(rec)}
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <button
+                                                    className="bores__action-btn bores__action-btn--view"
+                                                    onClick={() => handleView(rec)}
+                                                    title="View Details"
+                                                >
+                                                    <Edit2 size={18} />
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>

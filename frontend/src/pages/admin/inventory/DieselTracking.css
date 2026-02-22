@@ -1,0 +1,11 @@
+/* DieselTracking.css — module-specific styles */
+/* Core design tokens come from InventoryPage.css */
+
+/* Responsive: hide price/L on very small screens */
+@media (max-width: 700px) {
+
+    .inv-table thead th:nth-child(6),
+    .inv-table tbody td:nth-child(6) {
+        display: none;
+    }
+}

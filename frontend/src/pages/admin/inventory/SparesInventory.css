@@ -1,0 +1,10 @@
+/* SparesInventory.css — module-specific overrides */
+/* Core design comes from InventoryPage.css */
+
+.spare-type-ob {
+    color: var(--color-primary);
+}
+
+.spare-type-bit {
+    color: var(--color-warning);
+}

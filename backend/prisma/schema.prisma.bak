@@ -50,83 +50,31 @@ model audit_logs {
 }
 
 model borewell_data {
-  id                      Int       @id @default(autoincrement())
-  date                    DateTime  @db.Date
-  vehicle_name            String?   @db.VarChar(100)
-  supervisor_name         String?   @db.VarChar(100)
-  customer_name           String    @db.VarChar(255)
-  village                 String?   @db.VarChar(255)
-  phone_number            String?   @db.VarChar(20)
-  bore_type               String?   @db.VarChar(20)
+  id            Int       @id @default(autoincrement())
+  date          DateTime  @db.Date
+  client_name   String    @db.VarChar(255)
+  village       String?   @db.VarChar(255)
+  total_feet    Decimal?  @default(0) @db.Decimal(10, 2)
+  fell_feet     Decimal?  @default(0) @db.Decimal(10, 2)
+  pipes         Int?      @default(0)
+  amount        Decimal?  @default(0) @db.Decimal(10, 2)
+  cash          Decimal?  @default(0) @db.Decimal(10, 2)
+  phone_pe      Decimal?  @default(0) @db.Decimal(10, 2)
+  pending       Decimal?  @default(0) @db.Decimal(10, 2)
+  point_name    String?   @db.VarChar(255)
+  diesel        Decimal?  @default(0) @db.Decimal(10, 2)
+  diesel_amount Decimal?  @default(0) @db.Decimal(10, 2)
+  commission    Decimal?  @default(0) @db.Decimal(10, 2)
+  profit        Decimal?  @default(0) @db.Decimal(10, 2)
+  created_by    Int?
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  updated_at    DateTime? @default(now()) @db.Timestamp(6)
+  users         users?    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  // Drilling
-  drill_upto_casing_feet  Decimal?  @default(0) @db.Decimal(10, 2)
-  drill_upto_casing_rate  Decimal?  @default(0) @db.Decimal(10, 2)
-  drill_upto_casing_amt   Decimal?  @default(0) @db.Decimal(10, 2)
-  empty_drilling_feet     Decimal?  @default(0) @db.Decimal(10, 2)
-  empty_drilling_rate     Decimal?  @default(0) @db.Decimal(10, 2)
-  empty_drilling_amt      Decimal?  @default(0) @db.Decimal(10, 2)
-  jump_300_feet           Decimal?  @default(0) @db.Decimal(10, 2)
-  jump_300_rate           Decimal?  @default(0) @db.Decimal(10, 2)
-  jump_300_amt            Decimal?  @default(0) @db.Decimal(10, 2)
-  jump_400_feet           Decimal?  @default(0) @db.Decimal(10, 2)
-  jump_400_rate           Decimal?  @default(0) @db.Decimal(10, 2)
-  jump_400_amt            Decimal?  @default(0) @db.Decimal(10, 2)
-  total_drilling_feet     Decimal?  @default(0) @db.Decimal(10, 2)
-  total_drilling_amt      Decimal?  @default(0) @db.Decimal(10, 2)
-
-  // Casing
-  cas140_feet             Decimal?  @default(0) @db.Decimal(10, 2)
-  cas140_rate             Decimal?  @default(0) @db.Decimal(10, 2)
-  cas140_amt              Decimal?  @default(0) @db.Decimal(10, 2)
-  cas180_4g_feet          Decimal?  @default(0) @db.Decimal(10, 2)
-  cas180_4g_rate          Decimal?  @default(0) @db.Decimal(10, 2)
-  cas180_4g_amt           Decimal?  @default(0) @db.Decimal(10, 2)
-  cas180_6g_feet          Decimal?  @default(0) @db.Decimal(10, 2)
-  cas180_6g_rate          Decimal?  @default(0) @db.Decimal(10, 2)
-  cas180_6g_amt           Decimal?  @default(0) @db.Decimal(10, 2)
-  cas250_4g_feet          Decimal?  @default(0) @db.Decimal(10, 2)
-  cas250_4g_rate          Decimal?  @default(0) @db.Decimal(10, 2)
-  cas250_4g_amt           Decimal?  @default(0) @db.Decimal(10, 2)
-
-  // Slotting
-  slotting_pipes          Int?      @default(0)
-  slotting_rate           Decimal?  @default(0) @db.Decimal(10, 2)
-  slotting_amt            Decimal?  @default(0) @db.Decimal(10, 2)
-
-  // Pipes
-  pipes_on_vehicle_before Int?      @default(0)
-  pipes_used_qty          Int?      @default(0)
-  pipes_used_pieces_ft    Decimal?  @default(0) @db.Decimal(10, 2)
-  pipes_left_on_vehicle   Int?      @default(0)
-  pipe_details            Json?
-
-  // Misc
-  labour_charge           Decimal?  @default(0) @db.Decimal(10, 2)
-  rpm                     Decimal?  @default(0) @db.Decimal(10, 2)
-
-  // Time Tracking
-  start_time              String?   @db.VarChar(20)
-  end_time                String?   @db.VarChar(20)
-  total_hrs               Decimal?  @default(0) @db.Decimal(10, 2)
-
-  // Payment Details
-  phone_pe_received       Decimal?  @default(0) @db.Decimal(10, 2)
-  phone_pe_receiver_name  String?   @db.VarChar(100)
-  cash_paid               Decimal?  @default(0) @db.Decimal(10, 2)
-  total_amount            Decimal?  @default(0) @db.Decimal(10, 2)
-  amount_paid             Decimal?  @default(0) @db.Decimal(10, 2)
-  balance                 Decimal?  @default(0) @db.Decimal(10, 2)
-  discount                Decimal?  @default(0) @db.Decimal(10, 2)
-
-  created_by              Int?
-  created_at              DateTime? @default(now()) @db.Timestamp(6)
-  updated_at              DateTime? @default(now()) @db.Timestamp(6)
-  users                   users?    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  @@index([customer_name], map: "idx_borewell_data_customer")
+  @@index([client_name], map: "idx_borewell_data_client")
   @@index([created_by], map: "idx_borewell_data_created_by")
   @@index([date], map: "idx_borewell_data_date")
+  @@index([point_name], map: "idx_borewell_data_point")
   @@index([village], map: "idx_borewell_data_village")
 }
 
@@ -668,6 +616,7 @@ model BorewellWork {
   // GI Pipes Extended
   // ----------------------------
   pipe_company     String?
+  geologist        String?
 
   // ----------------------------
   // Labour

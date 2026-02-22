@@ -45,6 +45,7 @@ export function Sidebar() {
         { path: '/admin/analytics', label: 'Analytics', icon: <BarChart3 size={20} /> },
         { path: '/admin/payroll', label: 'Payroll', icon: <Wallet size={20} /> },
         { path: '/admin/settings', label: 'Settings', icon: <Settings size={20} /> },
+        { path: '/admin/inventory', label: 'Inventory', icon: <Droplets size={20} /> },
     ];
 
     const links = isAdmin ? adminLinks : employeeLinks;

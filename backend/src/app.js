@@ -11,6 +11,7 @@ import adminRoutes from './routes/adminRoutes.js';
 import boreRoutes from './routes/boreRoutes.js';
 import govtBoreRoutes from './routes/govtBoreRoutes.js';
 import payrollRoutes from './routes/payrollRoutes.js';
+import inventoryRoutes from './routes/inventory.js';
 
 dotenv.config();
 
@@ -78,6 +79,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/bores', boreRoutes);
 app.use('/api/govt-bores', govtBoreRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/inventory', inventoryRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
