@@ -1,0 +1,40 @@
+name: Auto Version Bump
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  version_bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Run Auto-Version Script
+        run: node .scripts/bump-version.js
+        
+      - name: Commit and Push Version Bump
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Only commit/push if there are actually changes to package.json
+          if ! git diff --quiet; then
+            git add frontend/package.json backend/package.json
+            git commit -m "chore: auto-bump version [skip ci]"
+            git push
+          else
+            echo "No version changes detected (likely a skipped commit)."
+          fi

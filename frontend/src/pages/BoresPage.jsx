@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
-    Search, Plus, Download, Upload,
+    Search, Plus, Download,
     Droplets, ChevronLeft, ChevronRight,
-    IndianRupee, Layers, TrendingUp,
+    Banknote, Layers, TrendingUp,
     Edit2, Trash2, FileDown
 } from 'lucide-react';
 import BoreModal from '../components/admin/BoreModal';
@@ -44,10 +44,10 @@ const DISPLAY_COLS = [
     { key: 'labour_charge', label: 'Labour', width: '100px', type: 'currency', align: 'right' },
     { key: 'rpm', label: 'RPM', width: '80px', type: 'number', align: 'center' },
     // Totals & Payments
-    { key: 'total_amount', label: 'Total (₹)', width: '120px', type: 'currency', align: 'right' },
+    { key: 'total_amount', label: 'Total', width: '120px', type: 'currency', align: 'right' },
     { key: 'discount', label: 'Discount', width: '100px', type: 'currency', align: 'right' },
-    { key: 'amount_paid', label: 'Paid (₹)', width: '130px', type: 'currency', align: 'center' },
-    { key: 'balance', label: 'Balance (₹)', width: '130px', type: 'currency', align: 'center' },
+    { key: 'amount_paid', label: 'Paid', width: '130px', type: 'currency', align: 'center' },
+    { key: 'balance', label: 'Balance', width: '130px', type: 'currency', align: 'center' },
     { key: 'status', label: 'Status', width: '110px', align: 'center' },
 ];
 
@@ -150,7 +150,7 @@ export default function BoresPage() {
     const formatValue = (col, val) => {
         if (val === null || val === undefined || val === '') return '-';
         if (col.type === 'date') return formatDate(val);
-        if (col.type === 'currency') return `₹${parseFloat(val).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+        if (col.type === 'currency') return `${parseFloat(val).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
         if (col.type === 'number') return parseFloat(val).toLocaleString('en-IN');
         return val;
     };
@@ -252,7 +252,7 @@ export default function BoresPage() {
 
     const handleExportCSV = () => {
         try {
-            const headers = ['#', ...DISPLAY_COLS.map((c) => c.label)];
+            const headers = ['S.No.', ...DISPLAY_COLS.map((c) => c.label)];
             const rows = filteredRecords.map((rec, i) => [
                 i + 1,
                 ...DISPLAY_COLS.map((c) => rec[c.key] ?? ''),
@@ -276,38 +276,7 @@ export default function BoresPage() {
         }
     };
 
-    const handleImportCSV = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (ev) => {
-            try {
-                const text = ev.target.result;
-                const lines = text.split('\n').filter(l => l.trim());
-                if (lines.length < 2) { toast.error('CSV is empty'); return; }
-                const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
-                let imported = 0;
-                for (let i = 1; i < lines.length; i++) {
-                    const vals = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
-                    const row = {};
-                    headers.forEach((h, idx) => {
-                        const col = DISPLAY_COLS.find(c => c.label.toLowerCase() === h.toLowerCase());
-                        if (col) row[col.key] = vals[idx] || null;
-                    });
-                    if (Object.keys(row).length > 0) {
-                        await boreApi.create(row);
-                        imported++;
-                    }
-                }
-                toast.success(`Imported ${imported} records`);
-                fetchRecords();
-            } catch {
-                toast.error('Failed to import CSV');
-            }
-        };
-        reader.readAsText(file);
-        e.target.value = '';
-    };
+
 
     return (
         <div className="bores">
@@ -333,10 +302,10 @@ export default function BoresPage() {
                 </div>
                 <div className="bores__stat-card">
                     <div className="bores__stat-icon bores__stat-icon--amount">
-                        <IndianRupee size={20} />
+                        <Banknote size={20} />
                     </div>
                     <div className="bores__stat-info">
-                        <span className="bores__stat-value">₹{stats.totalAmount.toLocaleString('en-IN')}</span>
+                        <span className="bores__stat-value">{stats.totalAmount.toLocaleString('en-IN')}</span>
                         <span className="bores__stat-label">Total Amount</span>
                     </div>
                 </div>
@@ -345,7 +314,7 @@ export default function BoresPage() {
                         <TrendingUp size={20} />
                     </div>
                     <div className="bores__stat-info">
-                        <span className="bores__stat-value">₹{stats.totalPaid.toLocaleString('en-IN')}</span>
+                        <span className="bores__stat-value">{stats.totalPaid.toLocaleString('en-IN')}</span>
                         <span className="bores__stat-label">Total Paid</span>
                     </div>
                 </div>
@@ -364,11 +333,6 @@ export default function BoresPage() {
                     />
                 </div>
                 <div className="bores__toolbar-actions">
-                    <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
-                        <Upload size={16} />
-                        <span>Import CSV</span>
-                        <input type="file" accept=".csv" onChange={handleImportCSV} style={{ display: 'none' }} />
-                    </label>
                     <button className="btn btn-secondary" onClick={handleExportCSV}>
                         <Download size={16} />
                         <span>Export CSV</span>
@@ -387,7 +351,7 @@ export default function BoresPage() {
                 <table className="bores__table">
                     <thead>
                         <tr>
-                            <th className="bores__th bores__th--sticky-sno" style={{ minWidth: '80px', width: '80px', textAlign: 'center' }}>#</th>
+                            <th className="bores__th bores__th--sticky-sno" style={{ minWidth: '80px', width: '80px', textAlign: 'center' }}>S.No.</th>
                             {DISPLAY_COLS.map((col) => (
                                 <th key={col.key} className="bores__th" style={{ minWidth: col.width, width: col.width, textAlign: col.align || 'left' }}>
                                     {col.label}

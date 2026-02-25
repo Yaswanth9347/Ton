@@ -32,7 +32,7 @@ export const createPipe = async (req, res, next) => {
             company,
             quantity: quantity || 0,
             unit: unit || 'pieces'
-        });
+        }, req.user.id);
 
         res.status(201).json({
             status: 'success',
@@ -119,10 +119,12 @@ export const returnPipes = async (req, res, next) => {
 };
 
 export const deletePipe = async (req, res, next) => {
-    try {
-        const { id } = req.params;
+    const { id } = req.params;
+    console.log(`[Inventory - Pipes] Attempting to delete pipe ID: ${id}`);
 
+    try {
         if (!id) {
+            console.error(`[Inventory - Pipes] Delete failed. Reason: ID is required`);
             return res.status(400).json({
                 status: 'fail',
                 message: 'ID is required'
@@ -132,18 +134,24 @@ export const deletePipe = async (req, res, next) => {
         const pipe = await inventoryService.deletePipe(id);
 
         if (!pipe) {
+            console.error(`[Inventory - Pipes] Delete failed. Reason: Pipe type not found`);
             return res.status(404).json({
                 status: 'fail',
                 message: 'Pipe type not found'
             });
         }
 
+        console.log(`[Inventory - Pipes] Pipe deleted successfully.`);
         res.json({
             status: 'success',
             message: 'Pipe type deleted successfully'
         });
     } catch (error) {
-        next(error);
+        console.error(`[Inventory - Pipes] Delete failed. Reason: ${error.message}`);
+        res.status(400).json({
+            status: 'fail',
+            message: error.message || 'Error deleting pipe type'
+        });
     }
 };
 
@@ -200,7 +208,7 @@ export const createSpare = async (req, res, next) => {
             });
         }
 
-        const spare = await inventoryService.addNewSpare(req.body);
+        const spare = await inventoryService.addNewSpare(req.body, req.user.id);
 
         res.status(201).json({
             status: 'success',
@@ -286,17 +294,31 @@ export const updateSpareStatus = async (req, res, next) => {
 };
 
 export const deleteSpare = async (req, res, next) => {
+    const { id } = req.params;
+    console.log(`[Inventory - Spares] Attempting to delete spare ID: ${id}`);
+
     try {
-        const { id } = req.params;
+        if (!id) {
+            console.error(`[Inventory - Spares] Delete failed. Reason: ID is required`);
+            return res.status(400).json({
+                status: 'fail',
+                message: 'ID is required'
+            });
+        }
 
         await inventoryService.deleteSpare(parseInt(id));
 
+        console.log(`[Inventory - Spares] Spare deleted successfully.`);
         res.json({
             status: 'success',
             message: 'Spare deleted successfully'
         });
     } catch (error) {
-        next(error);
+        console.error(`[Inventory - Spares] Delete failed. Reason: ${error.message}`);
+        res.status(400).json({
+            status: 'fail',
+            message: error.message || 'Error deleting spare'
+        });
     }
 };
 
@@ -378,17 +400,31 @@ export const updateDieselRecord = async (req, res, next) => {
 };
 
 export const deleteDieselRecord = async (req, res, next) => {
+    const { id } = req.params;
+    console.log(`[Inventory - Diesel] Attempting to delete diesel record ID: ${id}`);
+
     try {
-        const { id } = req.params;
+        if (!id) {
+            console.error(`[Inventory - Diesel] Delete failed. Reason: ID is required`);
+            return res.status(400).json({
+                status: 'fail',
+                message: 'ID is required'
+            });
+        }
 
         await inventoryService.deleteDieselRecord(parseInt(id));
 
+        console.log(`[Inventory - Diesel] Diesel record deleted successfully.`);
         res.json({
             status: 'success',
             message: 'Diesel record deleted successfully'
         });
     } catch (error) {
-        next(error);
+        console.error(`[Inventory - Diesel] Delete failed. Reason: ${error.message}`);
+        res.status(400).json({
+            status: 'fail',
+            message: error.message || 'Error deleting diesel record'
+        });
     }
 };
 

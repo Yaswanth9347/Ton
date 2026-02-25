@@ -153,17 +153,23 @@ export function PipesInventory() {
                 }, { headers });
                 showToast('success', 'Pipes returned successfully');
             } else if (modalType === 'new-pipe') {
-                await axios.post(`${API_URL}/inventory/pipes`, {
+                const payload = {
                     size: formData.size, company: formData.company,
                     quantity: formData.quantity ? parseInt(formData.quantity) : 0,
                     unit: formData.unit
-                }, { headers });
+                };
+                console.log(`[Inventory - Pipes] Creating new pipe record...\nPayload:`, JSON.stringify(payload, null, 2));
+
+                const res = await axios.post(`${API_URL}/inventory/pipes`, payload, { headers });
+                console.log(`[Inventory - Pipes] Pipe created successfully. ID: ${res.data?.data?.id || 'Unknown'}`);
                 showToast('success', 'New pipe type created');
             }
             await Promise.all([fetchPipes(), fetchTxns()]);
             closeModal();
         } catch (err) {
-            showToast('error', err.response?.data?.message || 'An error occurred');
+            const backendMsg = err.response?.data?.message || err.message;
+            console.error(`[Inventory - Pipes] Creation/Modification failed.\nStatus: ${err.response?.status || 'Unknown'}\nError: ${backendMsg}`);
+            showToast('error', `Pipe creation failed: ${backendMsg}`);
         } finally {
             setSubmitting(false);
         }

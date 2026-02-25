@@ -50,79 +50,79 @@ model audit_logs {
 }
 
 model borewell_data {
-  id                      Int       @id @default(autoincrement())
-  date                    DateTime  @db.Date
-  vehicle_name            String?   @db.VarChar(100)
-  supervisor_name         String?   @db.VarChar(100)
-  customer_name           String    @db.VarChar(255)
-  village                 String?   @db.VarChar(255)
-  phone_number            String?   @db.VarChar(20)
-  bore_type               String?   @db.VarChar(20)
+  id              Int      @id @default(autoincrement())
+  date            DateTime @db.Date
+  vehicle_name    String?  @db.VarChar(100)
+  supervisor_name String?  @db.VarChar(100)
+  customer_name   String   @db.VarChar(255)
+  village         String?  @db.VarChar(255)
+  phone_number    String?  @db.VarChar(20)
+  bore_type       String?  @db.VarChar(20)
 
   // Drilling
-  drill_upto_casing_feet  Decimal?  @default(0) @db.Decimal(10, 2)
-  drill_upto_casing_rate  Decimal?  @default(0) @db.Decimal(10, 2)
-  drill_upto_casing_amt   Decimal?  @default(0) @db.Decimal(10, 2)
-  empty_drilling_feet     Decimal?  @default(0) @db.Decimal(10, 2)
-  empty_drilling_rate     Decimal?  @default(0) @db.Decimal(10, 2)
-  empty_drilling_amt      Decimal?  @default(0) @db.Decimal(10, 2)
-  jump_300_feet           Decimal?  @default(0) @db.Decimal(10, 2)
-  jump_300_rate           Decimal?  @default(0) @db.Decimal(10, 2)
-  jump_300_amt            Decimal?  @default(0) @db.Decimal(10, 2)
-  jump_400_feet           Decimal?  @default(0) @db.Decimal(10, 2)
-  jump_400_rate           Decimal?  @default(0) @db.Decimal(10, 2)
-  jump_400_amt            Decimal?  @default(0) @db.Decimal(10, 2)
-  total_drilling_feet     Decimal?  @default(0) @db.Decimal(10, 2)
-  total_drilling_amt      Decimal?  @default(0) @db.Decimal(10, 2)
+  drill_upto_casing_feet Decimal? @default(0) @db.Decimal(10, 2)
+  drill_upto_casing_rate Decimal? @default(0) @db.Decimal(10, 2)
+  drill_upto_casing_amt  Decimal? @default(0) @db.Decimal(10, 2)
+  empty_drilling_feet    Decimal? @default(0) @db.Decimal(10, 2)
+  empty_drilling_rate    Decimal? @default(0) @db.Decimal(10, 2)
+  empty_drilling_amt     Decimal? @default(0) @db.Decimal(10, 2)
+  jump_300_feet          Decimal? @default(0) @db.Decimal(10, 2)
+  jump_300_rate          Decimal? @default(0) @db.Decimal(10, 2)
+  jump_300_amt           Decimal? @default(0) @db.Decimal(10, 2)
+  jump_400_feet          Decimal? @default(0) @db.Decimal(10, 2)
+  jump_400_rate          Decimal? @default(0) @db.Decimal(10, 2)
+  jump_400_amt           Decimal? @default(0) @db.Decimal(10, 2)
+  total_drilling_feet    Decimal? @default(0) @db.Decimal(10, 2)
+  total_drilling_amt     Decimal? @default(0) @db.Decimal(10, 2)
 
   // Casing
-  cas140_feet             Decimal?  @default(0) @db.Decimal(10, 2)
-  cas140_rate             Decimal?  @default(0) @db.Decimal(10, 2)
-  cas140_amt              Decimal?  @default(0) @db.Decimal(10, 2)
-  cas180_4g_feet          Decimal?  @default(0) @db.Decimal(10, 2)
-  cas180_4g_rate          Decimal?  @default(0) @db.Decimal(10, 2)
-  cas180_4g_amt           Decimal?  @default(0) @db.Decimal(10, 2)
-  cas180_6g_feet          Decimal?  @default(0) @db.Decimal(10, 2)
-  cas180_6g_rate          Decimal?  @default(0) @db.Decimal(10, 2)
-  cas180_6g_amt           Decimal?  @default(0) @db.Decimal(10, 2)
-  cas250_4g_feet          Decimal?  @default(0) @db.Decimal(10, 2)
-  cas250_4g_rate          Decimal?  @default(0) @db.Decimal(10, 2)
-  cas250_4g_amt           Decimal?  @default(0) @db.Decimal(10, 2)
+  cas140_feet    Decimal? @default(0) @db.Decimal(10, 2)
+  cas140_rate    Decimal? @default(0) @db.Decimal(10, 2)
+  cas140_amt     Decimal? @default(0) @db.Decimal(10, 2)
+  cas180_4g_feet Decimal? @default(0) @db.Decimal(10, 2)
+  cas180_4g_rate Decimal? @default(0) @db.Decimal(10, 2)
+  cas180_4g_amt  Decimal? @default(0) @db.Decimal(10, 2)
+  cas180_6g_feet Decimal? @default(0) @db.Decimal(10, 2)
+  cas180_6g_rate Decimal? @default(0) @db.Decimal(10, 2)
+  cas180_6g_amt  Decimal? @default(0) @db.Decimal(10, 2)
+  cas250_4g_feet Decimal? @default(0) @db.Decimal(10, 2)
+  cas250_4g_rate Decimal? @default(0) @db.Decimal(10, 2)
+  cas250_4g_amt  Decimal? @default(0) @db.Decimal(10, 2)
 
   // Slotting
-  slotting_pipes          Int?      @default(0)
-  slotting_rate           Decimal?  @default(0) @db.Decimal(10, 2)
-  slotting_amt            Decimal?  @default(0) @db.Decimal(10, 2)
+  slotting_pipes Int?     @default(0)
+  slotting_rate  Decimal? @default(0) @db.Decimal(10, 2)
+  slotting_amt   Decimal? @default(0) @db.Decimal(10, 2)
 
   // Pipes
-  pipes_on_vehicle_before Int?      @default(0)
-  pipes_used_qty          Int?      @default(0)
-  pipes_used_pieces_ft    Decimal?  @default(0) @db.Decimal(10, 2)
-  pipes_left_on_vehicle   Int?      @default(0)
+  pipes_on_vehicle_before Int?     @default(0)
+  pipes_used_qty          Int?     @default(0)
+  pipes_used_pieces_ft    Decimal? @default(0) @db.Decimal(10, 2)
+  pipes_left_on_vehicle   Int?     @default(0)
   pipe_details            Json?
 
   // Misc
-  labour_charge           Decimal?  @default(0) @db.Decimal(10, 2)
-  rpm                     Decimal?  @default(0) @db.Decimal(10, 2)
+  labour_charge Decimal? @default(0) @db.Decimal(10, 2)
+  rpm           Decimal? @default(0) @db.Decimal(10, 2)
 
   // Time Tracking
-  start_time              String?   @db.VarChar(20)
-  end_time                String?   @db.VarChar(20)
-  total_hrs               Decimal?  @default(0) @db.Decimal(10, 2)
+  start_time String?  @db.VarChar(20)
+  end_time   String?  @db.VarChar(20)
+  total_hrs  Decimal? @default(0) @db.Decimal(10, 2)
 
   // Payment Details
-  phone_pe_received       Decimal?  @default(0) @db.Decimal(10, 2)
-  phone_pe_receiver_name  String?   @db.VarChar(100)
-  cash_paid               Decimal?  @default(0) @db.Decimal(10, 2)
-  total_amount            Decimal?  @default(0) @db.Decimal(10, 2)
-  amount_paid             Decimal?  @default(0) @db.Decimal(10, 2)
-  balance                 Decimal?  @default(0) @db.Decimal(10, 2)
-  discount                Decimal?  @default(0) @db.Decimal(10, 2)
+  phone_pe_received      Decimal? @default(0) @db.Decimal(10, 2)
+  phone_pe_receiver_name String?  @db.VarChar(100)
+  cash_paid              Decimal? @default(0) @db.Decimal(10, 2)
+  total_amount           Decimal? @default(0) @db.Decimal(10, 2)
+  amount_paid            Decimal? @default(0) @db.Decimal(10, 2)
+  balance                Decimal? @default(0) @db.Decimal(10, 2)
+  discount               Decimal? @default(0) @db.Decimal(10, 2)
 
-  created_by              Int?
-  created_at              DateTime? @default(now()) @db.Timestamp(6)
-  updated_at              DateTime? @default(now()) @db.Timestamp(6)
-  users                   users?    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  created_by Int?
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @default(now()) @db.Timestamp(6)
+  users      users?    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([customer_name], map: "idx_borewell_data_customer")
   @@index([created_by], map: "idx_borewell_data_created_by")
@@ -432,25 +432,25 @@ model roles {
 }
 
 model users {
-  id                                               Int                        @id @default(autoincrement())
-  username                                         String                     @unique @db.VarChar(50)
-  email                                            String?                    @db.VarChar(255)
-  password_hash                                    String                     @db.VarChar(255)
-  first_name                                       String                     @db.VarChar(50)
-  last_name                                        String?                    @db.VarChar(50)
-  
+  id            Int     @id @default(autoincrement())
+  username      String  @unique @db.VarChar(50)
+  email         String? @db.VarChar(255)
+  password_hash String  @db.VarChar(255)
+  first_name    String  @db.VarChar(50)
+  last_name     String? @db.VarChar(50)
+
   // ROLE_ID maps to 'roles' table.
   // 1: ADMIN (Full Access)
   // 2: SUPERVISOR (Read-Only Bores, Can Download Receipts)
   // 3: EMPLOYEE (Read-Only Bores, No Dashboard)
-  role_id                                          Int
-  
-  is_active                                        Boolean?                   @default(true)
-  created_at                                       DateTime?                  @default(now()) @db.Timestamp(6)
-  updated_at                                       DateTime?                  @default(now()) @db.Timestamp(6)
+  role_id Int
+
+  is_active                                        Boolean?                    @default(true)
+  created_at                                       DateTime?                   @default(now()) @db.Timestamp(6)
+  updated_at                                       DateTime?                   @default(now()) @db.Timestamp(6)
   profile_photo_url                                String?
-  base_salary                                      Decimal?                   @default(0.00) @db.Decimal(10, 2)
-  email_verified                                   Boolean?                   @default(false)
+  base_salary                                      Decimal?                    @default(0.00) @db.Decimal(10, 2)
+  email_verified                                   Boolean?                    @default(false)
   attendance                                       attendance[]
   audit_logs                                       audit_logs[]
   borewell_data                                    borewell_data[]
@@ -458,15 +458,18 @@ model users {
   job_assignments                                  job_assignments[]
   leads                                            leads[]
   leave_balances                                   leave_balances[]
-  leave_requests_leave_requests_reviewed_byTousers leave_requests[]           @relation("leave_requests_reviewed_byTousers")
-  leave_requests_leave_requests_user_idTousers     leave_requests[]           @relation("leave_requests_user_idTousers")
-  lunch_expenses_lunch_expenses_reviewed_byTousers lunch_expenses[]           @relation("lunch_expenses_reviewed_byTousers")
-  lunch_expenses_lunch_expenses_user_idTousers     lunch_expenses[]           @relation("lunch_expenses_user_idTousers")
+  leave_requests_leave_requests_reviewed_byTousers leave_requests[]            @relation("leave_requests_reviewed_byTousers")
+  leave_requests_leave_requests_user_idTousers     leave_requests[]            @relation("leave_requests_user_idTousers")
+  lunch_expenses_lunch_expenses_reviewed_byTousers lunch_expenses[]            @relation("lunch_expenses_reviewed_byTousers")
+  lunch_expenses_lunch_expenses_user_idTousers     lunch_expenses[]            @relation("lunch_expenses_user_idTousers")
   password_reset_tokens                            password_reset_tokens?
   payroll                                          payroll[]
   payroll_items                                    payroll_items[]
   quotes                                           quotes[]
-  roles                                            roles                      @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  roles                                            roles                       @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pipes_stock_transactions                         pipes_stock_transactions[]
+  spares_stock_transactions                        spares_stock_transactions[]
+  diesel_stock_transactions                        diesel_stock_transactions[]
 
   @@index([email], map: "idx_users_email")
   @@index([is_active], map: "idx_users_is_active")
@@ -502,110 +505,110 @@ model Village {
 // =============================================
 
 model BorewellWork {
-  id           Int       @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
   // Administrative / identification columns (Excel)
-  sNo          Int?                      // S.NO
-  vehicle      String?                   // VEHICLE
-  date         DateTime?                 // DATE (drilling date)
-  mandalId     Int?                      // links to Mandal (sheet name)
-  villageId    Int?                      // VILLAGE
-  location     String?                   // LOCATION / location detail
-  grant        String?                   // GRANT (e.g., MPLAD)
-  estCost      Decimal?  @db.Decimal(14,2) // EST. COST (if present)
+  sNo       Int? // S.NO
+  vehicle   String? // VEHICLE
+  date      DateTime? // DATE (drilling date)
+  mandalId  Int? // links to Mandal (sheet name)
+  villageId Int? // VILLAGE
+  location  String? // LOCATION / location detail
+  grant     String? // GRANT (e.g., MPLAD)
+  estCost   Decimal?  @db.Decimal(14, 2) // EST. COST (if present)
 
   // Reference fields
-  mBookNo      String?                   // M BOOK NO (measurement book)
-  status       String?                   // STATUS (e.g., "Bill Paid")
-  remarks      String?                   // any extra remarks
+  mBookNo String? // M BOOK NO (measurement book)
+  status  String? // STATUS (e.g., "Bill Paid")
+  remarks String? // any extra remarks
 
   // ----------------------------
   // DRILLING (core)
   // ----------------------------
-  drilling_depth_mtrs    Decimal? @db.Decimal(8,2)  // DRILLING Depth (mtrs)
-  drilling_rate          Decimal? @db.Decimal(10,2) // DRILLING Rate
-  drilling_amount        Decimal? @db.Decimal(14,2) // DRILLING Amount
+  drilling_depth_mtrs Decimal? @db.Decimal(8, 2) // DRILLING Depth (mtrs)
+  drilling_rate       Decimal? @db.Decimal(10, 2) // DRILLING Rate
+  drilling_amount     Decimal? @db.Decimal(14, 2) // DRILLING Amount
 
   // ----------------------------
   // CASING 180 (columns: QTY / RATE / AMOUNT)
   // ----------------------------
   casing180_qty    Int?
-  casing180_rate   Decimal? @db.Decimal(10,2)
-  casing180_amount Decimal? @db.Decimal(14,2)
+  casing180_rate   Decimal? @db.Decimal(10, 2)
+  casing180_amount Decimal? @db.Decimal(14, 2)
 
   // ----------------------------
   // CASING 140 (columns: QTY / RATE / AMOUNT)
   // ----------------------------
   casing140_qty    Int?
-  casing140_rate   Decimal? @db.Decimal(10,2)
-  casing140_amount Decimal? @db.Decimal(14,2)
+  casing140_rate   Decimal? @db.Decimal(10, 2)
+  casing140_amount Decimal? @db.Decimal(14, 2)
 
   // ----------------------------
   // SLOTTING (qty / rate / amount)
   // ----------------------------
   slotting_qty    Int?
-  slotting_rate   Decimal? @db.Decimal(10,2)
-  slotting_amount Decimal? @db.Decimal(14,2)
+  slotting_rate   Decimal? @db.Decimal(10, 2)
+  slotting_amount Decimal? @db.Decimal(14, 2)
 
   // ----------------------------
   // PUMP SET (qty / rate / amount)
   // ----------------------------
   pumpset_qty    Int?
-  pumpset_rate   Decimal? @db.Decimal(10,2)
-  pumpset_amount Decimal? @db.Decimal(14,2)
+  pumpset_rate   Decimal? @db.Decimal(10, 2)
+  pumpset_amount Decimal? @db.Decimal(14, 2)
 
   // ----------------------------
   // G.I. PIPES (qty / rate / amount)
   // ----------------------------
   gi_pipes_qty    Int?
-  gi_pipes_rate   Decimal? @db.Decimal(10,2)
-  gi_pipes_amount Decimal? @db.Decimal(14,2)
+  gi_pipes_rate   Decimal? @db.Decimal(10, 2)
+  gi_pipes_amount Decimal? @db.Decimal(14, 2)
 
   // ----------------------------
   // PLOT / FARM (qty / rate / amount)
   // ----------------------------
   plotfarm_qty    Int?
-  plotfarm_rate   Decimal? @db.Decimal(10,2)
-  plotfarm_amount Decimal? @db.Decimal(14,2)
+  plotfarm_rate   Decimal? @db.Decimal(10, 2)
+  plotfarm_amount Decimal? @db.Decimal(14, 2)
 
   // ----------------------------
   // ERECTION (qty / rate / amount)
   // ----------------------------
   erection_qty    Int?
-  erection_rate   Decimal? @db.Decimal(10,2)
-  erection_amount Decimal? @db.Decimal(14,2)
+  erection_rate   Decimal? @db.Decimal(10, 2)
+  erection_amount Decimal? @db.Decimal(14, 2)
 
   // ----------------------------
   // BORE CAP (qty / rate / amount)
   // ----------------------------
   borecap_qty    Int?
-  borecap_rate   Decimal? @db.Decimal(10,2)
-  borecap_amount Decimal? @db.Decimal(14,2)
+  borecap_rate   Decimal? @db.Decimal(10, 2)
+  borecap_amount Decimal? @db.Decimal(14, 2)
 
   // ----------------------------
   // OTHER totals visible on the Excel row
   // ----------------------------
-  total_amount        Decimal? @db.Decimal(14,2) // TOTAL AMOUNT (sum of components)
-  total_bill_amount   Decimal? @db.Decimal(14,2) // TOTAL BILL AMOUNT (TVW)
-  first_part_amount   Decimal? @db.Decimal(14,2) // FIRST PART
-  second_part_amount  Decimal? @db.Decimal(14,2) // SECOND PART
+  total_amount       Decimal? @db.Decimal(14, 2) // TOTAL AMOUNT (sum of components)
+  total_bill_amount  Decimal? @db.Decimal(14, 2) // TOTAL BILL AMOUNT (TVW)
+  first_part_amount  Decimal? @db.Decimal(14, 2) // FIRST PART
+  second_part_amount Decimal? @db.Decimal(14, 2) // SECOND PART
 
   // ----------------------------
   // Statutory recoveries as shown in sheet
   // ----------------------------
-  it_percent       Decimal? @db.Decimal(5,2)  // IT percentage
-  it_amount        Decimal? @db.Decimal(14,2) // IT amount
-  vat_percent      Decimal? @db.Decimal(5,2)  // VAT percentage
-  vat_amount       Decimal? @db.Decimal(14,2) // VAT amount
-  total_recoveries Decimal? @db.Decimal(14,2) // Total Recoveries
+  it_percent       Decimal? @db.Decimal(5, 2) // IT percentage
+  it_amount        Decimal? @db.Decimal(14, 2) // IT amount
+  vat_percent      Decimal? @db.Decimal(5, 2) // VAT percentage
+  vat_amount       Decimal? @db.Decimal(14, 2) // VAT amount
+  total_recoveries Decimal? @db.Decimal(14, 2) // Total Recoveries
 
   // ----------------------------
   // Net & payment references
   // ----------------------------
-  net_amount   Decimal? @db.Decimal(14,2) // NET AMOUNT (after recoveries)
-  voucher_no   String?                    // VOUCHER NO
-  cheque_no    String?
-  cheque_date  DateTime?
+  net_amount  Decimal?  @db.Decimal(14, 2) // NET AMOUNT (after recoveries)
+  voucher_no  String? // VOUCHER NO
+  cheque_no   String?
+  cheque_date DateTime?
 
   // ----------------------------
   // Relations
@@ -618,80 +621,80 @@ model BorewellWork {
   // ----------------------------
   // Dates
   // ----------------------------
-  received_date    DateTime?
-  platform_date    DateTime?
-  material_date    DateTime?
+  received_date DateTime?
+  platform_date DateTime?
+  material_date DateTime?
 
   // ----------------------------
   // Payment Extended
   // ----------------------------
-  bank_name        String?
-  
+  bank_name String?
+
   // ----------------------------
   // Taxes (Percent & Amount)
   // ----------------------------
-  cgst_percent     Decimal? @db.Decimal(5,2)
-  cgst_amt         Decimal? @db.Decimal(14,2)
-  sgst_percent     Decimal? @db.Decimal(5,2)
-  sgst_amt         Decimal? @db.Decimal(14,2)
-  igst_percent     Decimal? @db.Decimal(5,2)
-  igst_amt         Decimal? @db.Decimal(14,2)
-  gst_percent      Decimal? @db.Decimal(5,2)
-  gst_amt          Decimal? @db.Decimal(14,2)
-  sas_percent      Decimal? @db.Decimal(5,2)
-  sas_amt          Decimal? @db.Decimal(14,2)
+  cgst_percent Decimal? @db.Decimal(5, 2)
+  cgst_amt     Decimal? @db.Decimal(14, 2)
+  sgst_percent Decimal? @db.Decimal(5, 2)
+  sgst_amt     Decimal? @db.Decimal(14, 2)
+  igst_percent Decimal? @db.Decimal(5, 2)
+  igst_amt     Decimal? @db.Decimal(14, 2)
+  gst_percent  Decimal? @db.Decimal(5, 2)
+  gst_amt      Decimal? @db.Decimal(14, 2)
+  sas_percent  Decimal? @db.Decimal(5, 2)
+  sas_amt      Decimal? @db.Decimal(14, 2)
 
   // ----------------------------
   // Casing 250 & Type
   // ----------------------------
-  casing_type      String?   // "Government" | "Private"
+  casing_type      String? // "Government" | "Private"
   casing250_qty    Int?
-  casing250_rate   Decimal?  @db.Decimal(10,2)
-  casing250_amount Decimal?  @db.Decimal(14,2)
+  casing250_rate   Decimal? @db.Decimal(10, 2)
+  casing250_amount Decimal? @db.Decimal(14, 2)
 
   // ----------------------------
   // Materials Extended
   // ----------------------------
-  cylinders_qty      Int?
-  cylinders_rate     Decimal? @db.Decimal(10,2)
-  cylinders_amount   Decimal? @db.Decimal(14,2)
+  cylinders_qty    Int?
+  cylinders_rate   Decimal? @db.Decimal(10, 2)
+  cylinders_amount Decimal? @db.Decimal(14, 2)
 
-  stand_qty          Int?
-  stand_rate         Decimal? @db.Decimal(10,2)
-  stand_amount       Decimal? @db.Decimal(14,2)
+  stand_qty    Int?
+  stand_rate   Decimal? @db.Decimal(10, 2)
+  stand_amount Decimal? @db.Decimal(14, 2)
 
   head_handle_qty    Int?
-  head_handle_rate   Decimal? @db.Decimal(10,2)
-  head_handle_amount Decimal? @db.Decimal(14,2)
+  head_handle_rate   Decimal? @db.Decimal(10, 2)
+  head_handle_amount Decimal? @db.Decimal(14, 2)
 
   // ----------------------------
   // GI Pipes Extended
   // ----------------------------
-  pipe_company     String?
+  pipe_company String?
 
   // ----------------------------
   // Labour
   // ----------------------------
-  labour_type      String?
-  labour_amount    Decimal? @db.Decimal(14,2)
+  labour_type   String?
+  labour_amount Decimal? @db.Decimal(14, 2)
 
   // ----------------------------
   // Other
   // ----------------------------
-  pcs              Decimal? @db.Decimal(10,2)
-  
+  pcs Decimal? @db.Decimal(10, 2)
+
   // ----------------------------
   // Gross Amount (Operational Total)
   // ----------------------------
   // ----------------------------
   // Gross Amount (Operational Total)
   // ----------------------------
-  gross_amount     Decimal? @db.Decimal(14,2)
+  gross_amount Decimal? @db.Decimal(14, 2)
 
   // ----------------------------
   // Custom / Dynamic Data (JSONB)
   // ----------------------------
-  custom_data      Json?    // Stores flexible key-value pairs (e.g. {"Soil Type": "Red"})
+  custom_data Json? // Stores flexible key-value pairs (e.g. {"Soil Type": "Red"})
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -702,24 +705,24 @@ model BorewellWork {
 // =============================================
 
 model BorewellBill {
-  id                 Int      @id @default(autoincrement())
-  workId             Int      @unique
-  work               BorewellWork @relation(fields: [workId], references: [id])
+  id     Int          @id @default(autoincrement())
+  workId Int          @unique
+  work   BorewellWork @relation(fields: [workId], references: [id])
 
-  tvw_total_amount   Decimal? @db.Decimal(14,2) // TOTAL BILL AMOUNT (TVW)
-  first_part_amount  Decimal? @db.Decimal(14,2)
-  second_part_amount Decimal? @db.Decimal(14,2)
+  tvw_total_amount   Decimal? @db.Decimal(14, 2) // TOTAL BILL AMOUNT (TVW)
+  first_part_amount  Decimal? @db.Decimal(14, 2)
+  second_part_amount Decimal? @db.Decimal(14, 2)
 
-  it_amount        Decimal? @db.Decimal(14,2)
-  vat_amount       Decimal? @db.Decimal(14,2)
-  total_recoveries Decimal? @db.Decimal(14,2)
+  it_amount        Decimal? @db.Decimal(14, 2)
+  vat_amount       Decimal? @db.Decimal(14, 2)
+  total_recoveries Decimal? @db.Decimal(14, 2)
 
-  net_amount  Decimal? @db.Decimal(14,2)
+  net_amount Decimal? @db.Decimal(14, 2)
 
-  bill_date    DateTime?
-  voucher_no   String?
-  cheque_no    String?
-  cheque_date  DateTime?
+  bill_date   DateTime?
+  voucher_no  String?
+  cheque_no   String?
+  cheque_date DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -730,14 +733,14 @@ model BorewellBill {
 // =============================================
 
 model BorewellAuditLog {
-  id        Int      @id @default(autoincrement())
+  id        Int          @id @default(autoincrement())
   workId    Int
   work      BorewellWork @relation(fields: [workId], references: [id])
   action    String
   oldValue  String?
   newValue  String?
   changedBy String?
-  changedAt DateTime @default(now())
+  changedAt DateTime     @default(now())
 }
 
 // =============================================
@@ -748,4 +751,139 @@ enum PaymentStatus {
   PENDING
   PAID
   CANCELLED
+}
+
+// =============================================
+// ERP PIPES INVENTORY SCHEMA
+// =============================================
+
+model pipes_master {
+  id             Int      @id @default(autoincrement())
+  pipe_type_name String   @db.VarChar(100)
+  pipe_size      String   @db.VarChar(50)
+  unit           String   @db.VarChar(50)
+  description    String?  @db.Text
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  stock        pipes_stock?
+  transactions pipes_stock_transactions[]
+
+  @@unique([pipe_type_name, pipe_size])
+}
+
+model pipes_stock {
+  id                 Int      @id @default(autoincrement())
+  pipe_master_id     Int      @unique
+  available_quantity Decimal  @default(0) @db.Decimal(10, 2)
+  last_updated_at    DateTime @updatedAt
+
+  pipe_master pipes_master @relation(fields: [pipe_master_id], references: [id])
+}
+
+model pipes_stock_transactions {
+  id               Int      @id @default(autoincrement())
+  pipe_master_id   Int
+  transaction_type String   @db.VarChar(20)
+  quantity         Decimal  @db.Decimal(10, 2)
+  reference_type   String   @db.VarChar(50)
+  reference_id     Int?
+  created_by       Int
+  created_at       DateTime @default(now())
+  remarks          String?  @db.Text
+
+  pipe_master pipes_master @relation(fields: [pipe_master_id], references: [id])
+  user        users        @relation(fields: [created_by], references: [id])
+}
+
+// =============================================
+// ERP SPARES INVENTORY SCHEMA
+// =============================================
+
+model spares_master {
+  id          Int      @id @default(autoincrement())
+  spare_name  String   @db.VarChar(100)
+  category    String   @db.VarChar(50)
+  unit        String   @db.VarChar(50)
+  description String?  @db.Text
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  stock        spares_stock?
+  transactions spares_stock_transactions[]
+
+  @@unique([spare_name, category])
+}
+
+model spares_stock {
+  id                 Int      @id @default(autoincrement())
+  spare_master_id    Int      @unique
+  available_quantity Decimal  @default(0) @db.Decimal(10, 2)
+  last_updated_at    DateTime @updatedAt
+
+  spare_master spares_master @relation(fields: [spare_master_id], references: [id])
+}
+
+model spares_stock_transactions {
+  id               Int      @id @default(autoincrement())
+  spare_master_id  Int
+  transaction_type String   @db.VarChar(20)
+  quantity         Decimal  @db.Decimal(10, 2)
+  reference_type   String   @db.VarChar(50)
+  reference_id     Int?
+  created_by       Int
+  created_at       DateTime @default(now())
+  remarks          String?  @db.Text
+
+  spare_master spares_master @relation(fields: [spare_master_id], references: [id])
+  user         users         @relation(fields: [created_by], references: [id])
+}
+
+// =============================================
+// ERP DIESEL INVENTORY SCHEMA
+// =============================================
+
+model diesel_master {
+  id               Int      @id @default(autoincrement())
+  storage_location String   @default("Main Tank") @db.VarChar(100)
+  unit             String   @default("liters") @db.VarChar(50)
+  is_active        Boolean  @default(true)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  stock        diesel_stock?
+  transactions diesel_stock_transactions[]
+
+  @@unique([storage_location])
+}
+
+model diesel_stock {
+  id                 Int      @id @default(autoincrement())
+  diesel_master_id   Int      @unique
+  available_quantity Decimal  @default(0) @db.Decimal(10, 2)
+  last_updated_at    DateTime @updatedAt
+
+  diesel_master diesel_master @relation(fields: [diesel_master_id], references: [id])
+}
+
+model diesel_stock_transactions {
+  id               Int      @id @default(autoincrement())
+  diesel_master_id Int
+  transaction_type String   @db.VarChar(20)
+  quantity         Decimal  @db.Decimal(10, 2)
+  reference_type   String   @db.VarChar(50)
+  reference_id     Int?
+  created_by       Int
+  created_at       DateTime @default(now())
+  remarks          String?  @db.Text
+
+  vehicle_name    String?  @db.VarChar(100)
+  supervisor_name String?  @db.VarChar(100)
+  amount          Decimal? @db.Decimal(10, 2)
+  bill_url        String?
+
+  diesel_master diesel_master @relation(fields: [diesel_master_id], references: [id])
+  user          users         @relation(fields: [created_by], references: [id])
 }

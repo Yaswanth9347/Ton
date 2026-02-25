@@ -151,7 +151,7 @@ export function OvertimeRulesConfig() {
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="text-muted text-xs uppercase font-semibold">Version:</span>
-                            <span className="font-medium text-sm">1.0.0</span>
+                            <span className="font-medium text-sm">{import.meta.env.VITE_APP_VERSION || '1.0.0'}</span>
                         </div>
                     </div>
                 </Card>

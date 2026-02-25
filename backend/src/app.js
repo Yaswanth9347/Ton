@@ -94,7 +94,9 @@ app.use((req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
-  res.status(err.status || 500).json({
+  const code = typeof err.statusCode === 'number' ? err.statusCode : (typeof err.status === 'number' ? err.status : 500);
+  res.status(code).json({
+    status: 'fail',
     error: err.message || 'Internal server error'
   });
 });

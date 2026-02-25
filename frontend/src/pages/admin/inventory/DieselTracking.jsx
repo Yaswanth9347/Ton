@@ -63,12 +63,16 @@ export function DieselTracking() {
 
     const fetchRecords = useCallback(async () => {
         try {
+            console.log('[Inventory] Fetching Diesel data...');
             const r = await axios.get(`${API_URL}/inventory/diesel`, {
                 params: { start_date: dateRange.start, end_date: dateRange.end },
                 headers: authH()
             });
             setRecords(r.data.data);
-        } catch { /* silent */ }
+            console.log(`[Inventory] Diesel data fetched successfully. Count: ${r.data.data.length}`);
+        } catch (err) {
+            console.error('[Inventory] Error fetching Diesel data:', err);
+        }
     }, [dateRange]);
 
     const fetchSummary = useCallback(async () => {
@@ -106,16 +110,20 @@ export function DieselTracking() {
         setSubmitting(true);
         try {
             const payload = { ...formData, amount: parseFloat(formData.amount), liters: formData.liters ? parseFloat(formData.liters) : null };
+            console.log(`[Inventory] Attempting to execute ${editingRecord ? 'update' : 'add'} on Diesel...`);
             if (editingRecord) {
                 await axios.put(`${API_URL}/inventory/diesel/${editingRecord.id}`, payload, { headers: authH() });
+                console.log(`[Inventory] Diesel item updated successfully. ID: ${editingRecord.id}`);
                 showToast('success', 'Diesel record updated');
             } else {
-                await axios.post(`${API_URL}/inventory/diesel`, payload, { headers: authH() });
+                const res = await axios.post(`${API_URL}/inventory/diesel`, payload, { headers: authH() });
+                console.log(`[Inventory] Diesel stock added successfully. ID: ${res.data?.data?.id || 'Unknown'}`);
                 showToast('success', 'Diesel record added');
             }
             await Promise.all([fetchRecords(), fetchSummary()]);
             closeModal();
         } catch (err) {
+            console.error(`[Inventory] Failed to execute ${editingRecord ? 'update' : 'add'} on Diesel. Reason:`, err.response?.data?.message || err.message);
             showToast('error', err.response?.data?.message || 'An error occurred');
         } finally {
             setSubmitting(false);
@@ -128,10 +136,13 @@ export function DieselTracking() {
             onConfirm: async () => {
                 setConfirm(null);
                 try {
+                    console.log(`[Inventory] Attempting to execute delete on Diesel...`);
                     await axios.delete(`${API_URL}/inventory/diesel/${record.id}`, { headers: authH() });
+                    console.log(`[Inventory] Diesel item deleted successfully. ID: ${record.id}`);
                     showToast('success', 'Record deleted');
                     await Promise.all([fetchRecords(), fetchSummary()]);
                 } catch (err) {
+                    console.error(`[Inventory] Failed to execute delete on Diesel. Reason:`, err.response?.data?.message || err.message);
                     showToast('error', err.response?.data?.message || 'Error deleting record');
                 }
             }

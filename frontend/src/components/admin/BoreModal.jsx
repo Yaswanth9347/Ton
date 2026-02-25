@@ -253,8 +253,8 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                             <div className="govt-bore-modal__grid govt-bore-modal__grid--3">
                                 <InputField label="No. of Pipes (Slotting)" name="slotting_pipes" type="number" value={formData.slotting_pipes} onChange={handleChange} viewMode={viewMode} />
                                 <InputField label="Slotting Rate" name="slotting_rate" type="number" value={formData.slotting_rate} onChange={handleChange} viewMode={viewMode} />
-                                <InputField label="Slotting Total (₹)" name="slotting_amt" type="number" value={formData.slotting_amt} readOnly viewMode={viewMode} />
-                                <InputField label="Labour Charge (₹)" name="labour_charge" type="number" value={formData.labour_charge} onChange={handleChange} viewMode={viewMode} />
+                                <InputField label="Slotting Total" name="slotting_amt" type="number" value={formData.slotting_amt} readOnly viewMode={viewMode} />
+                                <InputField label="Labour Charge" name="labour_charge" type="number" value={formData.labour_charge} onChange={handleChange} viewMode={viewMode} />
                                 <InputField label="RPM / Other" name="rpm" type="number" value={formData.rpm} onChange={handleChange} viewMode={viewMode} />
                             </div>
                         </div>
@@ -308,9 +308,9 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                                     </div>
                                 </div>
                                 <div className="bore-modal__payment-card">
-                                    <div className="payment-item"><span>Net Amount:</span> <strong>₹{(formData.total_amount || 0).toLocaleString()}</strong></div>
-                                    <div className="payment-item"><span>Amount Paid:</span> <strong>₹{(formData.amount_paid || 0).toLocaleString()}</strong></div>
-                                    <div className="payment-item payment-item--balance"><span>Balance:</span> <strong>₹{(formData.balance || 0).toLocaleString()}</strong></div>
+                                    <div className="payment-item"><span>Net Amount:</span> <strong>{(formData.total_amount || 0).toLocaleString()}</strong></div>
+                                    <div className="payment-item"><span>Amount Paid:</span> <strong>{(formData.amount_paid || 0).toLocaleString()}</strong></div>
+                                    <div className="payment-item payment-item--balance"><span>Balance:</span> <strong>{(formData.balance || 0).toLocaleString()}</strong></div>
                                 </div>
                             </div>
                         </div>

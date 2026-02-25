@@ -22,7 +22,13 @@ function LoadingSpinner() {
 }
 
 export function InventoryPage() {
-    const [activeTab, setActiveTab] = useState('pipes');
+    const [activeTab, setActiveTab] = useState(() => localStorage.getItem('inventoryActiveTab') || 'pipes');
+
+    const handleTabChange = (id) => {
+        console.log(`[Inventory] Tab changed to: ${id}`);
+        setActiveTab(id);
+        localStorage.setItem('inventoryActiveTab', id);
+    };
 
     return (
         <div className="inventory-page">
@@ -46,7 +52,7 @@ export function InventoryPage() {
                     <button
                         key={tab.id}
                         className={`inv-tab ${activeTab === tab.id ? 'inv-tab--active' : ''}`}
-                        onClick={() => setActiveTab(tab.id)}
+                        onClick={() => handleTabChange(tab.id)}
                     >
                         <span className="inv-tab__icon">{tab.icon}</span>
                         <span>{tab.label}</span>

@@ -872,7 +872,7 @@ textarea.form-input {
   .sidebar__brand-text,
   .sidebar__link-text,
   .sidebar__user-info,
-  .sidebar__logout span {
+  .sidebar__logout .sidebar__link-text {
     display: none;
   }
 
