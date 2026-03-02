@@ -31,6 +31,7 @@ export function AdminDashboard({ tab = 'dashboard' }) {
 
     // Employees state
     const [employees, setEmployees] = useState([]);
+
     const [employeesLoading, setEmployeesLoading] = useState(false);
     const [showEmployeeModal, setShowEmployeeModal] = useState(false);
     const [editingEmployee, setEditingEmployee] = useState(null);
@@ -68,12 +69,11 @@ export function AdminDashboard({ tab = 'dashboard' }) {
         }
     }, []);
 
-    // Fetch employees
     const fetchEmployees = useCallback(async () => {
         setEmployeesLoading(true);
         try {
-            const response = await adminApi.getEmployees();
-            setEmployees(response.data.data);
+            const empRes = await adminApi.getEmployees();
+            setEmployees(empRes.data.data);
         } catch (error) {
             console.error('Failed to fetch employees:', error);
         } finally {
@@ -336,6 +336,7 @@ export function AdminDashboard({ tab = 'dashboard' }) {
                         </div>
                         <EmployeeTable
                             employees={employees}
+
                             loading={employeesLoading}
                             onEdit={handleEditEmployee}
                             onToggleActive={handleToggleActive}

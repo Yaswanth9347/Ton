@@ -1,7 +1,7 @@
 import express from 'express';
 import * as govtBoreController from '../controllers/govtBoreController.js';
 import { authenticate } from '../middleware/auth.js';
-import { adminOnly, employeeRo } from '../middleware/roleGuard.js';
+import { adminOnly, anyRole } from '../middleware/roleGuard.js';
 
 const router = express.Router();
 
@@ -12,14 +12,14 @@ router.use(authenticate);
 
 
 // GET /api/govt-bores - Get all records (Read-only for everyone)
-router.get('/', employeeRo, govtBoreController.getAllRecords);
+router.get('/', anyRole, govtBoreController.getAllRecords);
 
 // Master Data Routes
 router.get('/mandals', govtBoreController.getMandals);
 router.get('/mandals/:id/villages', govtBoreController.getVillages);
 
 // GET /api/govt-bores/:id - Get single record (Read-only for everyone)
-router.get('/:id', employeeRo, govtBoreController.getRecord);
+router.get('/:id', anyRole, govtBoreController.getRecord);
 
 // POST /api/govt-bores - Create new record (Admin only)
 router.post('/', adminOnly, govtBoreController.createRecord);

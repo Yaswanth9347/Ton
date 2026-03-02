@@ -19,6 +19,11 @@ router.post('/pipes/return', inventoryController.returnPipes);
 router.delete('/pipes/:id', inventoryController.deletePipe);
 router.get('/pipes/transactions', inventoryController.getPipeTransactions);
 
+router.get('/pipes/companies', inventoryController.getPipeCompanies);
+router.post('/pipes/companies', inventoryController.addPipeCompany);
+router.put('/pipes/companies/:id', inventoryController.updatePipeCompany);
+router.delete('/pipes/companies/:id', inventoryController.deletePipeCompany);
+
 // =============================================
 // SPARES ROUTES
 // =============================================

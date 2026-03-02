@@ -31,7 +31,8 @@ export const getAllRecords = async () => {
   const records = await prisma.borewellWork.findMany({
     include: {
       mandal: true,
-      village: true
+      village: true,
+      pipe_company_ref: true
     },
     orderBy: { id: 'desc' }
   });
@@ -47,7 +48,8 @@ export const getRecordById = async (id) => {
     include: {
       mandal: true,
       village: true,
-      bill: true
+      bill: true,
+      pipe_company_ref: true
     }
   });
   return record;
@@ -181,6 +183,7 @@ export const createRecord = async (data) => {
 
         // GI Pipes
         pipe_company: data.pipe_company || null,
+        pipe_company_id: data.pipe_company_id ? parseInt(data.pipe_company_id) : null,
         geologist: data.geologist || null,
 
         // Labour
@@ -201,7 +204,8 @@ export const createRecord = async (data) => {
       where: { id: work.id },
       include: {
         mandal: true,
-        village: true
+        village: true,
+        pipe_company_ref: true
       }
     });
   });
@@ -340,6 +344,7 @@ export const updateRecord = async (id, data) => {
 
       // GI Pipes
       pipe_company: data.pipe_company,
+      pipe_company_id: data.pipe_company_id ? parseInt(data.pipe_company_id) : undefined,
       geologist: data.geologist,
 
       // Labour
@@ -363,7 +368,7 @@ export const updateRecord = async (id, data) => {
     const updatedWork = await tx.borewellWork.update({
       where: { id: workId },
       data: updateData,
-      include: { mandal: true, village: true }
+      include: { mandal: true, village: true, pipe_company_ref: true }
     });
 
     return updatedWork;

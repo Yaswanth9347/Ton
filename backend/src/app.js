@@ -97,7 +97,9 @@ app.use((err, req, res, next) => {
   const code = typeof err.statusCode === 'number' ? err.statusCode : (typeof err.status === 'number' ? err.status : 500);
   res.status(code).json({
     status: 'fail',
-    error: err.message || 'Internal server error'
+    success: false,
+    error: err.message || 'Internal server error',
+    message: err.message || 'Internal server error'
   });
 });
 

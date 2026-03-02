@@ -68,10 +68,8 @@ export const generatePayslipPDF = async (payslipData) => {
          doc.text(payslipData.employeeId || 'N/A', rightValCol, y);
 
          y += 15;
-         doc.text('Department:', leftCol, y);
-         doc.text(payslipData.department || 'General', leftValCol, y);
-         doc.text('Designation:', rightCol, y);
-         doc.text(payslipData.designation || 'Employee', rightValCol, y);
+         doc.text('Designation:', leftCol, y);
+         doc.text(payslipData.designation || 'Employee', leftValCol, y);
 
          y += 15;
          doc.text('Pay Period:', leftCol, y);

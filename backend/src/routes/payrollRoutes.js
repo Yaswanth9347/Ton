@@ -20,4 +20,10 @@ router.post('/generate', roleGuard('ADMIN', 'SUPERVISOR'), payrollController.gen
 router.get('/export', roleGuard('ADMIN', 'SUPERVISOR'), payrollController.exportPayroll);
 router.get('/admin-payslip/:userId/:month/:year', roleGuard('ADMIN', 'SUPERVISOR'), payrollController.downloadEmployeePayslip);
 
+// Admin-only Lifecycle Routes
+router.put('/:id/approve', roleGuard('ADMIN'), payrollController.approvePayroll);
+router.put('/:id/lock', roleGuard('ADMIN'), payrollController.lockPayroll);
+router.put('/:id/reopen', roleGuard('ADMIN'), payrollController.reopenPayroll);
+router.post('/:id/cancel', roleGuard('ADMIN'), payrollController.cancelPayroll);
+
 export default router;

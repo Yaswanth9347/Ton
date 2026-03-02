@@ -6,7 +6,7 @@ export const getPayrollPreview = async (req, res, next) => {
         const { month, year } = req.query;
         if (!month || !year) throw new Error('Month and Year are required');
 
-        const preview = await payrollService.calculatePayrollPreview(parseInt(month), parseInt(year));
+        const preview = await payrollService.calculatePayrollPreview(parseInt(month), parseInt(year), req.user);
         res.json({ success: true, data: preview });
     } catch (error) {
         next(error);
@@ -18,7 +18,7 @@ export const generatePayroll = async (req, res, next) => {
         const { month, year } = req.body;
         if (!month || !year) throw new Error('Month and Year are required');
 
-        const payroll = await payrollService.generatePayroll(req.user.id, parseInt(month), parseInt(year));
+        const payroll = await payrollService.generatePayroll(req.user.id, parseInt(month), parseInt(year), req.user);
 
         await logAudit(req.user.id, 'GENERATE', 'PAYROLL', payroll.id, null, { month, year });
 
@@ -42,7 +42,7 @@ export const exportPayroll = async (req, res, next) => {
         const { month, year } = req.query;
         if (!month || !year) throw new Error('Month and Year are required');
 
-        const csv = await payrollService.exportPayrollToCSV(parseInt(month), parseInt(year));
+        const csv = await payrollService.exportPayrollToCSV(parseInt(month), parseInt(year), req.user);
 
         res.header('Content-Type', 'text/csv');
         res.attachment(`payroll_${year}_${month}.csv`);
@@ -114,6 +114,53 @@ export const downloadEmployeePayslip = async (req, res, next) => {
         res.header('Content-Type', 'application/pdf');
         res.header('Content-Disposition', `attachment; filename=payslip_emp${userId}_${year}_${month}.pdf`);
         res.send(pdfBuffer);
+    } catch (error) {
+        next(error);
+    }
+};
+
+// ─── Lifecycle Controllers ──────────────────────────────────────────────
+
+export const approvePayroll = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const payroll = await payrollService.approvePayroll(req.user.id, parseInt(id));
+        await logAudit(req.user.id, 'APPROVE', 'PAYROLL', payroll.id, null, null);
+        res.json({ success: true, message: 'Payroll approved successfully', data: payroll });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const lockPayroll = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const payroll = await payrollService.lockPayroll(req.user.id, parseInt(id));
+        await logAudit(req.user.id, 'LOCK', 'PAYROLL', payroll.id, null, null);
+        res.json({ success: true, message: 'Payroll locked successfully', data: payroll });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const cancelPayroll = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+        const payroll = await payrollService.cancelPayroll(req.user.id, parseInt(id), reason);
+        await logAudit(req.user.id, 'CANCEL', 'PAYROLL', payroll.id, null, { reason });
+        res.json({ success: true, message: 'Payroll cancelled successfully', data: payroll });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const reopenPayroll = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const payroll = await payrollService.reopenPayroll(req.user.id, parseInt(id));
+        await logAudit(req.user.id, 'REOPEN', 'PAYROLL', payroll.id, null, null);
+        res.json({ success: true, message: 'Payroll reopened to draft successfully', data: payroll });
     } catch (error) {
         next(error);
     }

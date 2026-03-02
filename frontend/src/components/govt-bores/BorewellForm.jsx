@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Plus, Calculator, AlertCircle, Calendar, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { govtBoreApi } from '../../services/api';
+import { govtBoreApi, inventoryApi } from '../../services/api';
 import MiniCalendar from '../common/MiniCalendar';
 
 // --- Constants & Rates ---
@@ -209,6 +209,7 @@ const initialFormData = {
 
     // GI Pipes
     pipe_company: '',
+    pipe_company_id: '',
     gi_pipes_qty: '',
     gi_pipes_rate: '',
     gi_pipes_amount: '',
@@ -422,6 +423,7 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
 
     const [formData, setFormData] = useState(() => mapRecordToFormData(record));
     const [mandals, setMandals] = useState([]);
+    const [companies, setCompanies] = useState([]);
 
     // Custom Row States
     const [customMaterials, setCustomMaterials] = useState([]);
@@ -457,6 +459,7 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
 
     useEffect(() => {
         fetchMandals();
+        fetchCompanies();
     }, [record]);
 
     const fetchMandals = async () => {
@@ -465,6 +468,15 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
             setMandals(res.data.data || []);
         } catch (err) {
             console.error('Failed to fetch mandals:', err);
+        }
+    };
+
+    const fetchCompanies = async () => {
+        try {
+            const res = await inventoryApi.getPipeCompanies();
+            setCompanies(res.data.data || []);
+        } catch (err) {
+            console.error('Failed to fetch pipe companies:', err);
         }
     };
 
@@ -880,11 +892,11 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
                             <div className="govt-bore-modal__grid govt-bore-modal__grid--4">
                                 <div className="form-field">
                                     <label className="form-field__label">Company</label>
-                                    <select name="pipe_company" value={formData.pipe_company} onChange={handleChange} className="form-field__input" disabled={viewMode}>
+                                    <select name="pipe_company_id" value={formData.pipe_company_id || ''} onChange={handleChange} className="form-field__input" disabled={viewMode}>
                                         <option value="">Select Company</option>
-                                        <option value="Nandi">Nandi</option>
-                                        <option value="Sudhakar (G1)">Sudhakar (G1)</option>
-                                        <option value="Sudhakar (G2)">Sudhakar (G2)</option>
+                                        {companies.map(c => (
+                                            <option key={c.id} value={c.id}>{c.company_name}</option>
+                                        ))}
                                     </select>
                                 </div>
                                 <InputField label="Qty" name="gi_pipes_qty" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />

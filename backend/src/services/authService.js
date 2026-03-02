@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import db from '../models/db.js';
 import jwtConfig from '../config/jwt.js';
-import { UnauthorizedError, ValidationError } from '../utils/errors.js';
+import { UnauthorizedError, ValidationError, ForbiddenError } from '../utils/errors.js';
 
 const SALT_ROUNDS = 10;
 
@@ -48,14 +48,15 @@ export const authenticateUser = async (username, password) => {
 
     const user = result.rows[0];
 
-    if (!user.is_active) {
-        throw new UnauthorizedError('Account has been deactivated');
-    }
-
-    // Verify password
+    // Verify password FIRST before checking is_active to ensure invalid credentials
+    // are still treated as invalid regardless of activation status (prevents enumeration).
     const isValidPassword = await comparePassword(password, user.password_hash);
     if (!isValidPassword) {
         throw new UnauthorizedError('Invalid username or password');
+    }
+
+    if (!user.is_active) {
+        throw new ForbiddenError('Your account has been deactivated. Please contact the administrator.');
     }
 
     // Generate token

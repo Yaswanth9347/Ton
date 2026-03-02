@@ -18,7 +18,9 @@ export function LoginPage() {
                 navigate('/dashboard');
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Login failed. Please try again.');
+            const data = err.response?.data;
+            const errMsg = data?.message || data?.error || 'Login failed. Please try again.';
+            setError(errMsg);
         }
     };
 

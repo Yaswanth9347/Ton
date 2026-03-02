@@ -36,6 +36,21 @@ export const createNewPipe = async (data, userId) => {
             throw new Error('Pipe type and size combination already exists.');
         }
 
+        // Auto-create company in global master if it doesn't exist
+        const existingCompany = await tx.pipes_company_master.findFirst({
+            where: { company_name: { equals: data.company, mode: 'insensitive' } }
+        });
+
+        if (!existingCompany) {
+            console.log(`[Inventory - Pipes] Auto-creating new company master global entry for: ${data.company}`);
+            await tx.pipes_company_master.create({
+                data: {
+                    company_name: data.company,
+                    is_active: true
+                }
+            });
+        }
+
         const pipe = await tx.pipes_master.create({
             data: {
                 pipe_type_name: data.company,
@@ -239,6 +254,77 @@ export const getPipeTransactions = async (filters) => {
         created_at: t.created_at,
         remarks: t.remarks
     }));
+};
+
+
+
+// =============================================
+// PIPE COMPANIES SERVICE
+// =============================================
+
+export const getAllPipeCompanies = async () => {
+    return await prisma.pipes_company_master.findMany({
+        where: { is_active: true },
+        orderBy: { company_name: 'asc' }
+    });
+};
+
+export const addPipeCompany = async (companyName) => {
+    // Prevent exactly identical names
+    const existing = await prisma.pipes_company_master.findUnique({
+        where: { company_name: companyName }
+    });
+    if (existing) {
+        if (!existing.is_active) {
+            // Restore if previously deleted
+            return await prisma.pipes_company_master.update({
+                where: { id: existing.id },
+                data: { is_active: true }
+            });
+        }
+        throw new Error('A company with this name already exists.');
+    }
+
+    return await prisma.pipes_company_master.create({
+        data: { company_name: companyName, is_active: true }
+    });
+};
+
+export const updatePipeCompany = async (id, data) => {
+    return await prisma.pipes_company_master.update({
+        where: { id: parseInt(id) },
+        data: { company_name: data.company_name, updated_at: new Date() }
+    });
+};
+
+export const deletePipeCompany = async (companyId) => {
+    return await prisma.$transaction(async (tx) => {
+        const company = await tx.pipes_company_master.findUnique({ where: { id: parseInt(companyId) } });
+        if (!company) throw new Error('Company not found');
+
+        // Check 1: Are there any historical Borewell Works using this company?
+        const boreCount = await tx.borewellWork.count({
+            where: { pipe_company_id: parseInt(companyId) }
+        });
+        if (boreCount > 0) {
+            throw new Error('Cannot delete this company. It is used in existing bore records.');
+        }
+
+        // Check 2: Are there any physical pipe inventory records tied to this company name?
+        // (Legacy schema mapped them loosely by string matching)
+        const productCount = await tx.pipes_master.count({
+            where: { pipe_type_name: company.company_name }
+        });
+        if (productCount > 0) {
+            throw new Error('Cannot delete this company. It has registered pipe specifications in inventory.');
+        }
+
+        // Soft delete
+        return await tx.pipes_company_master.update({
+            where: { id: parseInt(companyId) },
+            data: { is_active: false }
+        });
+    });
 };
 
 // =============================================

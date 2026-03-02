@@ -114,6 +114,7 @@ export const createEmployee = async ({ username, password, firstName, lastName, 
         lastName: row.last_name,
         role: roleName,
         baseSalary: parseFloat(row.base_salary) || 0,
+
         isActive: row.is_active,
         createdAt: row.created_at,
     };
@@ -192,6 +193,8 @@ export const updateEmployee = async (id, updates) => {
         values.push(newSalary);
     }
 
+
+
     if (fields.length === 0) {
         return employee;
     }
@@ -214,6 +217,7 @@ export const updateEmployee = async (id, updates) => {
         lastName: row.last_name,
         role: newRole,
         baseSalary: parseFloat(row.base_salary) || 0,
+
         isActive: row.is_active,
         updatedAt: row.updated_at,
     };
@@ -233,7 +237,7 @@ export const deactivateEmployee = async (id) => {
     }
 
     await db.query(
-        `UPDATE users SET is_active = false, deactivated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        `UPDATE users SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
         [id]
     );
 
@@ -250,7 +254,7 @@ export const reactivateEmployee = async (id) => {
     }
 
     await db.query(
-        `UPDATE users SET is_active = true, deactivated_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        `UPDATE users SET is_active = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
         [id]
     );
 
@@ -341,3 +345,4 @@ export const updateProfilePhoto = async (userId, photoUrl) => {
 
     return result.rows[0];
 };
+

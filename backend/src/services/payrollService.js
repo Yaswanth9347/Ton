@@ -97,7 +97,7 @@ export const getPayrollByMonth = async (month, year) => {
 
     const payroll = result.rows[0];
     const items = await db.query(
-        `SELECT pi.*, u.first_name, u.last_name, u.username 
+        `SELECT pi.*, u.first_name, u.last_name, u.username
          FROM payroll_items pi
          JOIN users u ON pi.user_id = u.id
          WHERE pi.payroll_id = $1`,
@@ -107,27 +107,27 @@ export const getPayrollByMonth = async (month, year) => {
     return payroll;
 };
 
-export const calculatePayrollPreview = async (month, year) => {
+export const calculatePayrollPreview = async (month, year, callerUser) => {
     // 1. Get all NON-ADMIN employees who were active for ANY part of the month
     //    - Currently active employees
-    //    - Employees deactivated DURING this month (deactivated_at is within the month)
+    //    - Active employees only
     const monthStart = new Date(year, month - 1, 1);
     const monthEnd = new Date(year, month, 0); // last day of the month
     const startDate = monthStart.toISOString().split('T')[0];
     const endDate = monthEnd.toISOString().split('T')[0];
 
-    const users = await db.query(
-        `SELECT u.id, u.first_name, u.last_name, u.username, u.base_salary,
-                u.is_active, u.deactivated_at, r.name as role
+    let usersQuery = `
+        SELECT u.id, u.first_name, u.last_name, u.username, u.base_salary,
+                u.is_active, r.name as role
          FROM users u
          JOIN roles r ON u.role_id = r.id
          WHERE r.name NOT IN ('ADMIN')
-         AND (
-             u.is_active = true
-             OR (u.deactivated_at IS NOT NULL AND u.deactivated_at >= $1::date)
-         )`,
-        [startDate]
-    );
+         AND u.is_active = true
+    `;
+    const queryParams = [];
+
+
+    const users = await db.query(usersQuery, queryParams);
 
     // 2. Calculate working days (excludes Sundays + public holidays) for the full month
     const workingInfo = await calculateWorkingDays(month, year);
@@ -146,30 +146,6 @@ export const calculatePayrollPreview = async (month, year) => {
         let employeeStatus = 'active';
         let effectiveEndDate = endDate;
 
-        if (!user.is_active && user.deactivated_at) {
-            const deactivationDate = new Date(user.deactivated_at);
-            // If deactivated before the month started, skip entirely
-            if (deactivationDate < monthStart) {
-                continue;
-            }
-            // If deactivated during the month, pro-rate working days
-            if (deactivationDate <= monthEnd) {
-                effectiveEndDate = deactivationDate.toISOString().split('T')[0];
-                employeeStatus = 'deactivated';
-
-                // Count working days from month start to deactivation date
-                let activeDays = 0;
-                for (let d = new Date(monthStart); d <= deactivationDate; d.setDate(d.getDate() + 1)) {
-                    const dayOfWeek = d.getDay();
-                    const dateStr = d.toISOString().split('T')[0];
-                    // Skip Sundays and holidays
-                    if (dayOfWeek !== 0 && !holidayDates?.includes(dateStr)) {
-                        activeDays++;
-                    }
-                }
-                effectiveWorkingDays = activeDays;
-            }
-        }
 
         // Pro-rate base salary based on active working days
         const proRatedSalary = effectiveWorkingDays === workingDays
@@ -240,15 +216,26 @@ export const calculatePayrollPreview = async (month, year) => {
     };
 };
 
-export const generatePayroll = async (adminId, month, year) => {
-    // 1. Check if already generated
-    const existing = await getPayrollByMonth(month, year);
-    if (existing) {
-        throw new ConflictError('Payroll already generated for this month. Please contact support to regenerate.');
+export const generatePayroll = async (adminId, month, year, callerUser) => {
+    // 1. Check if an active payroll already exists for this month
+    const existingRes = await db.query(
+        'SELECT id, version, status FROM payroll WHERE month = $1 AND year = $2 ORDER BY version DESC LIMIT 1',
+        [month, year]
+    );
+
+    let nextVersion = 1;
+
+    if (existingRes.rows.length > 0) {
+        const latest = existingRes.rows[0];
+        if (latest.status !== 'CANCELLED') {
+            throw new ConflictError('An active payroll already exists for this month. Cancel it first to regenerate.');
+        }
+        // If it exists but is cancelled, we create a new version
+        nextVersion = (latest.version || 1) + 1;
     }
 
     // 2. Calculate
-    const preview = await calculatePayrollPreview(month, year);
+    const preview = await calculatePayrollPreview(month, year, callerUser);
 
     // 3. Insert Payroll Record
     const client = await db.pool.connect();
@@ -256,10 +243,10 @@ export const generatePayroll = async (adminId, month, year) => {
         await client.query('BEGIN');
 
         const payrollRes = await client.query(
-            `INSERT INTO payroll (month, year, status, total_payout, generated_by)
-             VALUES ($1, $2, 'generated', $3, $4)
+            `INSERT INTO payroll (month, year, status, version, total_payout, generated_by)
+             VALUES ($1, $2, 'DRAFT', $3, $4, $5)
              RETURNING id`,
-            [month, year, preview.total_payout, adminId]
+            [month, year, nextVersion, preview.total_payout, adminId]
         );
         const payrollId = payrollRes.rows[0].id;
 
@@ -306,17 +293,17 @@ export const generatePayroll = async (adminId, month, year) => {
 
 export const getEmployeePayrollHistory = async (userId) => {
     const result = await db.query(
-        `SELECT pi.*, p.month, p.year, p.generated_at
+        `SELECT pi.*, p.month, p.year, p.generated_at, p.status, p.version
          FROM payroll_items pi
          JOIN payroll p ON pi.payroll_id = p.id
-         WHERE pi.user_id = $1
-         ORDER BY p.year DESC, p.month DESC`,
+         WHERE pi.user_id = $1 AND p.is_deleted = false
+         ORDER BY p.year DESC, p.month DESC, p.version DESC`,
         [userId]
     );
     return result.rows;
 };
 
-export const exportPayrollToCSV = async (month, year) => {
+export const exportPayrollToCSV = async (month, year, callerUser) => {
     const payroll = await getPayrollByMonth(month, year);
     if (!payroll) throw new AppError('Payroll not found', 404);
 
@@ -324,6 +311,7 @@ export const exportPayrollToCSV = async (month, year) => {
     const rows = [header.join(',')];
 
     for (const item of payroll.items) {
+
         const details = item.details || {};
         rows.push([
             item.user_id,
@@ -344,6 +332,44 @@ export const exportPayrollToCSV = async (month, year) => {
     }
 
     return rows.join('\n');
+};
+
+// ─── Lifecycle Endpoints ──────────────────────────────────────────────
+
+export const approvePayroll = async (adminId, payrollId) => {
+    const res = await db.query('UPDATE payroll SET status = $1, approved_by = $2, approved_at = NOW() WHERE id = $3 AND status = $4 RETURNING *',
+        ['APPROVED', adminId, payrollId, 'DRAFT']
+    );
+    if (res.rowCount === 0) throw new Error('Payroll must be in DRAFT state to approve');
+    return res.rows[0];
+};
+
+export const lockPayroll = async (adminId, payrollId) => {
+    const res = await db.query('UPDATE payroll SET status = $1, locked_at = NOW() WHERE id = $2 AND status = $3 RETURNING *',
+        ['LOCKED', payrollId, 'APPROVED']
+    );
+    if (res.rowCount === 0) throw new Error('Payroll must be in APPROVED state to lock');
+    return res.rows[0];
+};
+
+export const cancelPayroll = async (adminId, payrollId, reason) => {
+    const res = await db.query(
+        `UPDATE payroll SET status = $1, is_deleted = true, deleted_by = $2, deleted_at = NOW(), cancellation_reason = $3
+         WHERE id = $4 AND status IN ('DRAFT', 'APPROVED') RETURNING *`,
+        ['CANCELLED', adminId, reason, payrollId]
+    );
+    if (res.rowCount === 0) throw new Error('Cannot cancel a LOCKED payroll. Reopen it first.');
+    return res.rows[0];
+};
+
+export const reopenPayroll = async (adminId, payrollId) => {
+    const res = await db.query(
+        `UPDATE payroll SET status = $1, reopened_by = $2, reopened_at = NOW()
+         WHERE id = $3 AND status = $4 RETURNING *`,
+        ['DRAFT', adminId, payrollId, 'LOCKED']
+    );
+    if (res.rowCount === 0) throw new Error('Can only reopen LOCKED payrolls');
+    return res.rows[0];
 };
 
 /**
@@ -403,7 +429,6 @@ export const generatePayslipPDF = async (userId, month, year) => {
     const payslipData = {
         employeeName: `${user.first_name} ${user.last_name}`,
         employeeId: `EMP${String(user.id).padStart(4, '0')}`,
-        department: 'General',
         designation: details.role || 'Employee',
         monthName: pdfService.getMonthName(month),
         month,

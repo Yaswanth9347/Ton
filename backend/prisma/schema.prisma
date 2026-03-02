@@ -377,14 +377,24 @@ model payroll {
   id            Int             @id @default(autoincrement())
   month         Int
   year          Int
-  status        String?         @default("generated") @db.VarChar(20)
+  status        String?         @default("DRAFT") @db.VarChar(20) // DRAFT, APPROVED, LOCKED, CANCELLED
+  version       Int?            @default(1)
+  is_deleted    Boolean?        @default(false)
+  deleted_at    DateTime?       @db.Timestamp(6)
+  deleted_by    Int?
+  cancellation_reason String?   @db.Text
+  approved_by   Int?
+  approved_at   DateTime?       @db.Timestamp(6)
+  locked_at     DateTime?       @db.Timestamp(6)
+  reopened_by   Int?
+  reopened_at   DateTime?       @db.Timestamp(6)
   total_payout  Decimal?        @default(0.00) @db.Decimal(12, 2)
   generated_by  Int
   generated_at  DateTime?       @default(now()) @db.Timestamp(6)
   users         users           @relation(fields: [generated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   payroll_items payroll_items[]
 
-  @@unique([month, year])
+  @@unique([month, year, version])
   @@index([month, year], map: "idx_payroll_month_year")
 }
 
@@ -671,6 +681,9 @@ model BorewellWork {
   // GI Pipes Extended
   // ----------------------------
   pipe_company String?
+  pipe_company_id   Int? 
+  
+  pipe_company_ref  pipes_company_master? @relation(fields: [pipe_company_id], references: [id])
 
   // ----------------------------
   // Labour
@@ -857,6 +870,16 @@ model diesel_master {
   transactions diesel_stock_transactions[]
 
   @@unique([storage_location])
+}
+
+model pipes_company_master {
+  id           Int       @id @default(autoincrement())
+  company_name String    @unique @db.VarChar(100)
+  is_active    Boolean   @default(true)
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+  updated_at   DateTime? @default(now()) @db.Timestamp(6)
+
+  bores        BorewellWork[]
 }
 
 model diesel_stock {

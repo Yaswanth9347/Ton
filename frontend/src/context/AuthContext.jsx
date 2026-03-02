@@ -82,10 +82,8 @@ export function AuthProvider({ children }) {
         logout,
         refreshUser,
         isAuthenticated: !!user,
-        isAdmin: user?.role === 'ADMIN',
-        isSupervisor: user?.role === 'ADMIN' || user?.role === 'SUPERVISOR',
-        isEmployee: !!user, // Everyone logged in is at least an employee level
-        userRole: user?.role,
+        isAdmin: user?.role === 'ADMIN' || user?.role === 'SUPERVISOR',
+        isEmployee: user?.role === 'EMPLOYEE',
     };
 
     return (

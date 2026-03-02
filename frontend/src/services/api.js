@@ -39,6 +39,23 @@ api.interceptors.response.use(
     }
 );
 
+export const inventoryApi = {
+    // Pipes
+    getPipes: () => api.get('/inventory/pipes'),
+    addPipe: (data) => api.post('/inventory/pipes', data),
+    addStock: (data) => api.post('/inventory/pipes/add-stock', data),
+    issuePipes: (data) => api.post('/inventory/pipes/issue', data),
+    returnPipes: (data) => api.post('/inventory/pipes/return', data),
+    deletePipe: (id) => api.delete(`/inventory/pipes/${id}`),
+    getPipeTransactions: (params) => api.get('/inventory/pipes/transactions', { params }),
+
+    // Companies
+    getPipeCompanies: () => api.get('/inventory/pipes/companies'),
+    addPipeCompany: (data) => api.post('/inventory/pipes/companies', data),
+    updatePipeCompany: (id, data) => api.put(`/inventory/pipes/companies/${id}`, data),
+    deletePipeCompany: (id) => api.delete(`/inventory/pipes/companies/${id}`),
+};
+
 // Auth API
 export const authApi = {
     login: (username, password) => api.post('/auth/login', { username, password }),
@@ -66,9 +83,9 @@ export const attendanceApi = {
     getOvertimeSummary: (params) => api.get('/attendance/overtime-summary', { params }),
 };
 
-// Admin API
 export const adminApi = {
     getDashboard: () => api.get('/admin/dashboard'),
+
     getEmployees: () => api.get('/admin/employees'),
     addEmployee: (data) => api.post('/admin/employees', data),
     updateEmployee: (id, data) => api.put(`/admin/employees/${id}`, data),
@@ -130,8 +147,13 @@ export const payrollApi = {
     generate: (month, year) => api.post('/payroll/generate', { month, year }),
     export: (month, year) => api.get('/payroll/export', { params: { month, year }, responseType: 'blob' }),
     downloadPayslip: (month, year) => api.get(`/payroll/payslip/${month}/${year}`, { responseType: 'blob' }),
-    getPayslipDetails: (month, year) => api.get(`/payroll/payslip-details/${month}/${year}`),
     downloadEmployeePayslip: (userId, month, year) => api.get(`/payroll/admin-payslip/${userId}/${month}/${year}`, { responseType: 'blob' }),
+    getPayslipDetails: (month, year) => api.get(`/payroll/payslip-details/${month}/${year}`),
+    // Lifecycle actions
+    approvePayroll: (id) => api.put(`/payroll/${id}/approve`),
+    lockPayroll: (id) => api.put(`/payroll/${id}/lock`),
+    reopenPayroll: (id) => api.put(`/payroll/${id}/reopen`),
+    cancelPayroll: (id, reason) => api.post(`/payroll/${id}/cancel`, { reason }),
 };
 
 // Govt Bores API

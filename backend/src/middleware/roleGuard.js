@@ -19,14 +19,7 @@ export const roleGuard = (...allowedRoles) => {
 };
 
 // Convenience exports for common role checks
-
-// Use for Write operations (Create, Update, Delete) - Only Admins
-export const adminOnly = roleGuard('ADMIN');
-
-// Use for Sensitive Read operations (e.g. Downloading Receipts) - Admins & Supervisors
-export const supervisorRo = roleGuard('ADMIN', 'SUPERVISOR');
-
-// Use for General Read operations (Viewing Lists) - All Authenticated Roles
-export const employeeRo = roleGuard('ADMIN', 'SUPERVISOR', 'EMPLOYEE');
-
+// SUPERVISOR has the same privileges as ADMIN
+export const adminOnly = roleGuard('ADMIN', 'SUPERVISOR');
+export const employeeOnly = roleGuard('EMPLOYEE');
 export const anyRole = roleGuard('ADMIN', 'SUPERVISOR', 'EMPLOYEE');

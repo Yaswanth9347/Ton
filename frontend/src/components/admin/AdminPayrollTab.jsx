@@ -6,8 +6,11 @@ import { toast } from 'react-hot-toast';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../common/Table';
 import { formatCurrency } from '../../utils/formatters';
 import { FileText, AlertTriangle, History, X, UserX } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 export function AdminPayrollTab() {
+    const { user } = useAuth();
+    const isSupervisor = user?.role === 'SUPERVISOR';
     const [month, setMonth] = useState(new Date().getMonth() + 1);
     const [year, setYear] = useState(new Date().getFullYear());
     const [preview, setPreview] = useState(null);
@@ -32,16 +35,30 @@ export function AdminPayrollTab() {
         }
     };
 
-    const handleGenerate = async () => {
-        if (!window.confirm('Are you sure? This action is irreversible. Salary pay date should be between 1st–4th of the month.')) return;
+    const handleGenerate = async (action = 'generate') => {
+        let confirmText = '';
+        if (action === 'generate' || action === 'regenerate') confirmText = 'Generate a new Draft payroll for this month? (This will cancel any existing active drafts)';
+        if (action === 'approve') confirmText = 'Approve this Draft? (This indicates it has been reviewed and is ready for payment tracking)';
+        if (action === 'lock') confirmText = 'Lock this Payroll? (Once locked, it is highly restricted and requires an Admin to manually reopen)';
+        if (action === 'cancel') confirmText = 'Cancel this Payroll? (This soft-deletes the record and allows generating a fresh draft)';
+        if (action === 'reopen') confirmText = 'Reopen this locked Payroll? (This changes the status back to Draft)';
+
+        if (confirmText && !window.confirm(confirmText)) return;
 
         setGenerateLoading(true);
         try {
-            await payrollApi.generate(month, year);
-            toast.success('Payroll generated successfully!');
-            setPreview(null);
+            if (action === 'generate' || action === 'regenerate') {
+                await payrollApi.generate(month, year);
+            } else if (preview && preview.id) {
+                if (action === 'approve') await payrollApi.approvePayroll(preview.id);
+                if (action === 'lock') await payrollApi.lockPayroll(preview.id);
+                if (action === 'cancel') await payrollApi.cancelPayroll(preview.id, 'Cancelled via UI');
+                if (action === 'reopen') await payrollApi.reopenPayroll(preview.id);
+            }
+            toast.success(`Payroll ${action} successful!`);
+            handlePreview(); // Refresh data to show new statuses
         } catch (err) {
-            toast.error('Failed to generate: ' + (err.response?.data?.message || err.message));
+            toast.error(`Failed to ${action}: ` + (err.response?.data?.message || err.message));
         } finally {
             setGenerateLoading(false);
         }
@@ -111,7 +128,7 @@ export function AdminPayrollTab() {
 
     return (
         <div>
-            <h2 className="mb-4">Payroll Management</h2>
+            <h2 className="mb-4">Company Payroll Management</h2>
 
             <Card className="mb-6">
                 <div className="flex gap-4 items-end flex-wrap">
@@ -147,6 +164,7 @@ export function AdminPayrollTab() {
                 <div className="fade-in">
                     {/* Summary Cards */}
                     <div className="flex gap-4 mb-4 flex-wrap">
+                        {/* Summary Stats */}
                         <Card style={{ flex: 1, minWidth: '180px', textAlign: 'center' }}>
                             <div className="text-muted text-xs mb-1">Working Days</div>
                             <div className="text-xl font-bold">{preview.working_days}</div>
@@ -167,11 +185,50 @@ export function AdminPayrollTab() {
                     </div>
 
                     <div className="flex justify-between items-center mb-4">
-                        <h3>Preview: {new Date(year, month - 1).toLocaleString('default', { month: 'long' })} {year}</h3>
-                        <div className="flex gap-4 items-center">
-                            <Button variant="success" size="sm" onClick={handleGenerate} loading={generateLoading}>
-                                Generate Payroll
-                            </Button>
+                        <div className="flex items-center gap-3">
+                            <h3 style={{ margin: 0 }}>Preview: {new Date(year, month - 1).toLocaleString('default', { month: 'long' })} {year}</h3>
+                            {preview.status && (
+                                <span className={`badge badge-${preview.status === 'LOCKED' ? 'success' : preview.status === 'APPROVED' ? 'info' : preview.status === 'CANCELLED' ? 'danger' : 'warning'}`}>
+                                    {preview.status} {preview.version ? `(v${preview.version})` : ''}
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex gap-4 items-center flex-wrap justify-end">
+                            {(!preview.status || preview.status === 'CANCELLED') && (
+                                <Button variant="primary" size="sm" onClick={() => handleGenerate('generate')} loading={generateLoading}>
+                                    Generate Draft
+                                </Button>
+                            )}
+
+                            {preview.status === 'DRAFT' && (
+                                <>
+                                    <Button variant="success" size="sm" onClick={() => handleGenerate('approve')} loading={generateLoading}>
+                                        Approve
+                                    </Button>
+                                    <Button variant="danger" size="sm" onClick={() => handleGenerate('cancel')} loading={generateLoading}>
+                                        Cancel
+                                    </Button>
+                                </>
+                            )}
+
+                            {preview.status === 'APPROVED' && (
+                                <>
+                                    <Button variant="success" size="sm" onClick={() => handleGenerate('lock')} loading={generateLoading}>
+                                        Lock (Finalize)
+                                    </Button>
+                                    <Button variant="danger" size="sm" onClick={() => handleGenerate('cancel')} loading={generateLoading}>
+                                        Cancel
+                                    </Button>
+                                </>
+                            )}
+
+                            {preview.status === 'LOCKED' && (
+                                <>
+                                    <Button variant="warning" size="sm" onClick={() => handleGenerate('reopen')} loading={generateLoading}>
+                                        Reopen (Admin)
+                                    </Button>
+                                </>
+                            )}
                         </div>
                     </div>
 
@@ -297,99 +354,102 @@ export function AdminPayrollTab() {
                         </Table>
                     </Card>
                 </div>
-            )}
+            )
+            }
 
             {/* Payroll History Modal — solid opaque background */}
-            {historyModal && (
-                <div
-                    style={{
-                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                        background: 'rgba(0, 0, 0, 0.85)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 1000, backdropFilter: 'blur(4px)',
-                    }}
-                    onClick={() => setHistoryModal(null)}
-                >
+            {
+                historyModal && (
                     <div
                         style={{
-                            background: 'var(--color-bg-card, #1a1d2e)',
-                            borderRadius: '12px', padding: '24px',
-                            maxWidth: '800px', width: '90%', maxHeight: '80vh',
-                            overflow: 'auto',
-                            border: '1px solid var(--color-border, #2a2d3e)',
-                            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
+                            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                            background: 'rgba(0, 0, 0, 0.85)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            zIndex: 1000, backdropFilter: 'blur(4px)',
                         }}
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={() => setHistoryModal(null)}
                     >
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 style={{ margin: 0 }}>Payroll History — {historyModal.name}</h3>
-                            <button
-                                onClick={() => setHistoryModal(null)}
-                                style={{
-                                    background: 'transparent', border: 'none', cursor: 'pointer',
-                                    color: 'var(--color-primary)',
-                                }}
-                            >
-                                <X size={22} />
-                            </button>
-                        </div>
-
-                        {historyModal.records.length === 0 ? (
-                            <div className="text-muted text-center" style={{ padding: '32px' }}>
-                                No payroll records found. Payroll history will appear here once payroll is generated.
+                        <div
+                            style={{
+                                background: 'var(--color-bg-card, #1a1d2e)',
+                                borderRadius: '12px', padding: '24px',
+                                maxWidth: '800px', width: '90%', maxHeight: '80vh',
+                                overflow: 'auto',
+                                border: '1px solid var(--color-border, #2a2d3e)',
+                                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 style={{ margin: 0 }}>Payroll History — {historyModal.name}</h3>
+                                <button
+                                    onClick={() => setHistoryModal(null)}
+                                    style={{
+                                        background: 'transparent', border: 'none', cursor: 'pointer',
+                                        color: 'var(--color-primary)',
+                                    }}
+                                >
+                                    <X size={22} />
+                                </button>
                             </div>
-                        ) : (
-                            <Table>
-                                <TableHead>
-                                    <TableRow>
-                                        <TableHeader>Period</TableHeader>
-                                        <TableHeader>Base Salary</TableHeader>
-                                        <TableHeader>Present Days</TableHeader>
-                                        <TableHeader>Deductions</TableHeader>
-                                        <TableHeader>Overtime</TableHeader>
-                                        <TableHeader>Net Salary</TableHeader>
-                                        <TableHeader>Generated</TableHeader>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {historyModal.records.map((record, idx) => {
-                                        const details = record.details || {};
-                                        return (
-                                            <TableRow key={idx}>
-                                                <TableCell className="font-bold">
-                                                    {new Date(record.year, record.month - 1).toLocaleString('default', { month: 'short' })} {record.year}
-                                                </TableCell>
-                                                <TableCell>{formatCurrency(parseFloat(record.base_salary))}</TableCell>
-                                                <TableCell>{record.present_days} / {details.working_days || '—'}</TableCell>
-                                                <TableCell>
-                                                    {parseFloat(record.total_attendance_deduction) > 0 ? (
-                                                        <span style={{ color: 'var(--color-danger)' }}>
-                                                            −{formatCurrency(parseFloat(record.total_attendance_deduction))}
-                                                        </span>
-                                                    ) : '—'}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {parseFloat(record.overtime_amount) > 0
-                                                        ? formatCurrency(parseFloat(record.overtime_amount))
-                                                        : '—'}
-                                                </TableCell>
-                                                <TableCell className="font-bold">
-                                                    {formatCurrency(parseFloat(record.net_salary))}
-                                                </TableCell>
-                                                <TableCell className="text-muted text-xs">
-                                                    {record.generated_at
-                                                        ? new Date(record.generated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                                                        : '—'}
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })}
-                                </TableBody>
-                            </Table>
-                        )}
+
+                            {historyModal.records.length === 0 ? (
+                                <div className="text-muted text-center" style={{ padding: '32px' }}>
+                                    No payroll records found. Payroll history will appear here once payroll is generated.
+                                </div>
+                            ) : (
+                                <Table>
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableHeader>Period</TableHeader>
+                                            <TableHeader>Base Salary</TableHeader>
+                                            <TableHeader>Present Days</TableHeader>
+                                            <TableHeader>Deductions</TableHeader>
+                                            <TableHeader>Overtime</TableHeader>
+                                            <TableHeader>Net Salary</TableHeader>
+                                            <TableHeader>Generated</TableHeader>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {historyModal.records.map((record, idx) => {
+                                            const details = record.details || {};
+                                            return (
+                                                <TableRow key={idx}>
+                                                    <TableCell className="font-bold">
+                                                        {new Date(record.year, record.month - 1).toLocaleString('default', { month: 'short' })} {record.year}
+                                                    </TableCell>
+                                                    <TableCell>{formatCurrency(parseFloat(record.base_salary))}</TableCell>
+                                                    <TableCell>{record.present_days} / {details.working_days || '—'}</TableCell>
+                                                    <TableCell>
+                                                        {parseFloat(record.total_attendance_deduction) > 0 ? (
+                                                            <span style={{ color: 'var(--color-danger)' }}>
+                                                                −{formatCurrency(parseFloat(record.total_attendance_deduction))}
+                                                            </span>
+                                                        ) : '—'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {parseFloat(record.overtime_amount) > 0
+                                                            ? formatCurrency(parseFloat(record.overtime_amount))
+                                                            : '—'}
+                                                    </TableCell>
+                                                    <TableCell className="font-bold">
+                                                        {formatCurrency(parseFloat(record.net_salary))}
+                                                    </TableCell>
+                                                    <TableCell className="text-muted text-xs">
+                                                        {record.generated_at
+                                                            ? new Date(record.generated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                                                            : '—'}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 }

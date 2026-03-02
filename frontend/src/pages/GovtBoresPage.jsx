@@ -40,7 +40,7 @@ const DISPLAY_COLS = [
 
     // 📌 Materials Section
     { key: 'material_date', label: 'Material Dt', width: '110px', align: 'center' },
-    { key: 'pipe_company', label: 'Pipe Company', width: '110px', align: 'center' },
+    { key: 'pipe_company_display', label: 'Pipe Company', width: '110px', align: 'center' },
     { key: 'gi_pipes_amount', label: 'Pipe Amount', width: '110px', isNumber: true, align: 'center' },
     { key: 'materials_total', label: 'Materials Total', width: '120px', isNumber: true, align: 'center' },
     { key: 'geologist', label: 'Geologist', width: '120px', align: 'center' },
@@ -160,6 +160,7 @@ export default function GovtBoresPage() {
             return val.replace(/\btyre\b/gi, 'Tyre');
         }
         if (key === 'date' || key === 'platform_date' || key === 'material_date' || key === 'cheque_date') return formatDate(rec[key]);
+        if (key === 'pipe_company_display') return rec.pipe_company_ref?.company_name || rec.pipe_company || '-';
 
         // Calculated Fields (Display only)
         if (key === 'total_casing_amount') {
@@ -241,7 +242,7 @@ export default function GovtBoresPage() {
             const cheque = rec.cheque_no || '';
             const voucher = rec.voucher_no || '';
             const mBook = rec.mBookNo || '';
-            const pipeCo = rec.pipe_company || '';
+            const pipeCo = rec.pipe_company_ref?.company_name || rec.pipe_company || '';
             const geologist = rec.geologist || '';
 
             return village.toLowerCase().includes(term) ||

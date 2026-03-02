@@ -175,6 +175,95 @@ export const getPipeTransactions = async (req, res, next) => {
 };
 
 // =============================================
+// PIPE COMPANIES CONTROLLERS
+// =============================================
+
+export const getPipeCompanies = async (req, res, next) => {
+    try {
+        const companies = await inventoryService.getAllPipeCompanies();
+        res.json({
+            status: 'success',
+            data: companies
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const addPipeCompany = async (req, res, next) => {
+    console.log(`[Inventory - Pipes Companies] Adding new company: ${req.body.company_name}`);
+    try {
+        const { company_name } = req.body;
+        if (!company_name) {
+            return res.status(400).json({ status: 'fail', message: 'Company name is required' });
+        }
+
+        const company = await inventoryService.addPipeCompany(company_name);
+        console.log(`[Inventory - Pipes Companies] Company added successfully. ID: ${company.id}`);
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Pipe company added successfully',
+            data: company
+        });
+    } catch (error) {
+        console.error(`[Inventory - Pipes Companies] Add failed: ${error.message}`);
+        res.status(400).json({
+            status: 'fail',
+            message: error.message || 'Error adding company'
+        });
+    }
+};
+
+export const updatePipeCompany = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { company_name } = req.body;
+        if (!company_name) {
+            return res.status(400).json({ status: 'fail', message: 'Company name is required' });
+        }
+
+        const company = await inventoryService.updatePipeCompany(id, { company_name });
+
+        res.json({
+            status: 'success',
+            message: 'Pipe company updated successfully',
+            data: company
+        });
+    } catch (error) {
+        res.status(400).json({
+            status: 'fail',
+            message: error.message || 'Error updating company'
+        });
+    }
+};
+
+export const deletePipeCompany = async (req, res, next) => {
+    const { id } = req.params;
+    console.log(`[Inventory - Pipes Companies] Attempting to delete company ID: ${id}`);
+
+    try {
+        if (!id) {
+            return res.status(400).json({ status: 'fail', message: 'ID is required' });
+        }
+
+        await inventoryService.deletePipeCompany(id);
+
+        console.log(`[Inventory - Pipes Companies] Company deleted successfully. ID: ${id}`);
+        res.json({
+            status: 'success',
+            message: 'Company deleted successfully'
+        });
+    } catch (error) {
+        console.error(`[Inventory - Pipes Companies] Delete blocked. Reason: ${error.message}`);
+        res.status(400).json({
+            status: 'fail',
+            message: error.message || 'Error deleting company'
+        });
+    }
+};
+
+// =============================================
 // SPARES CONTROLLERS
 // =============================================
 
