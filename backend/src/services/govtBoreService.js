@@ -5,6 +5,53 @@
 
 import prisma from '../config/prisma.js';
 import { ensureGovtBoreSchema } from '../utils/ensureGovtBoreSchema.js';
+import db from '../models/db.js';
+
+function isMissingPipeCompanyColumn(error) {
+  return (
+    error?.code === 'P2022' &&
+    typeof error?.meta?.column === 'string' &&
+    error.meta.column.includes('pipe_company_id')
+  );
+}
+
+async function getAllRecordsFallback() {
+  const result = await db.query(
+    `
+    SELECT
+      bw.*,
+      json_build_object('id', m.id, 'name', m.name) AS mandal,
+      json_build_object('id', v.id, 'name', v.name, 'mandalId', v."mandalId") AS village,
+      NULL::json AS pipe_company_ref
+    FROM "BorewellWork" bw
+    LEFT JOIN "Mandal" m ON m.id = bw."mandalId"
+    LEFT JOIN "Village" v ON v.id = bw."villageId"
+    ORDER BY bw.id DESC
+    `
+  );
+
+  return result.rows;
+}
+
+async function getRecordByIdFallback(id) {
+  const result = await db.query(
+    `
+    SELECT
+      bw.*,
+      json_build_object('id', m.id, 'name', m.name) AS mandal,
+      json_build_object('id', v.id, 'name', v.name, 'mandalId', v."mandalId") AS village,
+      NULL::json AS pipe_company_ref
+    FROM "BorewellWork" bw
+    LEFT JOIN "Mandal" m ON m.id = bw."mandalId"
+    LEFT JOIN "Village" v ON v.id = bw."villageId"
+    WHERE bw.id = $1
+    LIMIT 1
+    `,
+    [parseInt(id)]
+  );
+
+  return result.rows[0] || null;
+}
 
 // Helper: Find or create Mandal and Village
 async function findOrCreateLocation(tx, mandalName, villageName) {
@@ -30,15 +77,23 @@ async function findOrCreateLocation(tx, mandalName, villageName) {
 // =============================================
 export const getAllRecords = async () => {
   await ensureGovtBoreSchema();
-  const records = await prisma.borewellWork.findMany({
-    include: {
-      mandal: true,
-      village: true,
-      pipe_company_ref: true
-    },
-    orderBy: { id: 'desc' }
-  });
-  return records;
+  try {
+    const records = await prisma.borewellWork.findMany({
+      include: {
+        mandal: true,
+        village: true,
+        pipe_company_ref: true
+      },
+      orderBy: { id: 'desc' }
+    });
+    return records;
+  } catch (error) {
+    if (isMissingPipeCompanyColumn(error)) {
+      console.warn('Govt bores fallback: missing pipe_company_id column');
+      return await getAllRecordsFallback();
+    }
+    throw error;
+  }
 };
 
 // =============================================
@@ -46,16 +101,24 @@ export const getAllRecords = async () => {
 // =============================================
 export const getRecordById = async (id) => {
   await ensureGovtBoreSchema();
-  const record = await prisma.borewellWork.findUnique({
-    where: { id: parseInt(id) },
-    include: {
-      mandal: true,
-      village: true,
-      bill: true,
-      pipe_company_ref: true
+  try {
+    const record = await prisma.borewellWork.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        mandal: true,
+        village: true,
+        bill: true,
+        pipe_company_ref: true
+      }
+    });
+    return record;
+  } catch (error) {
+    if (isMissingPipeCompanyColumn(error)) {
+      console.warn('Govt bore get-by-id fallback: missing pipe_company_id column');
+      return await getRecordByIdFallback(id);
     }
-  });
-  return record;
+    throw error;
+  }
 };
 
 // =============================================
