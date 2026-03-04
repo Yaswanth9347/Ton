@@ -4,6 +4,7 @@
  */
 
 import prisma from '../config/prisma.js';
+import { ensureGovtBoreSchema } from '../utils/ensureGovtBoreSchema.js';
 
 // Helper: Find or create Mandal and Village
 async function findOrCreateLocation(tx, mandalName, villageName) {
@@ -28,6 +29,7 @@ async function findOrCreateLocation(tx, mandalName, villageName) {
 // GET ALL RECORDS
 // =============================================
 export const getAllRecords = async () => {
+  await ensureGovtBoreSchema();
   const records = await prisma.borewellWork.findMany({
     include: {
       mandal: true,
@@ -43,6 +45,7 @@ export const getAllRecords = async () => {
 // GET RECORD BY ID
 // =============================================
 export const getRecordById = async (id) => {
+  await ensureGovtBoreSchema();
   const record = await prisma.borewellWork.findUnique({
     where: { id: parseInt(id) },
     include: {
@@ -59,6 +62,7 @@ export const getRecordById = async (id) => {
 // CREATE RECORD
 // =============================================
 export const createRecord = async (data) => {
+  await ensureGovtBoreSchema();
   const mandalName = data.mandal || data.mandalName || 'Unknown';
   const villageName = data.village || data.villageName || 'Unknown';
 
@@ -215,6 +219,7 @@ export const createRecord = async (data) => {
 // UPDATE RECORD
 // =============================================
 export const updateRecord = async (id, data) => {
+  await ensureGovtBoreSchema();
   return await prisma.$transaction(async (tx) => {
     const workId = parseInt(id);
 
