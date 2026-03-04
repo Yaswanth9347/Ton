@@ -1,6 +1,6 @@
 {
     "name": "attendance-system-backend",
-    "version": "4.0.0",
+    "version": "4.0.1",
     "description": "Employee Attendance Management System - Backend API",
     "main": "src/app.js",
     "type": "module",
