@@ -26,12 +26,12 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV}
       - PORT=3002
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
+      - DB_HOST=postgres
+      - DB_PORT=5432
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
       - DB_NAME=${POSTGRES_DB}
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
       - FRONTEND_URL=${FRONTEND_URL}

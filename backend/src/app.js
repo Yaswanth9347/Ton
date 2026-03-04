@@ -94,7 +94,20 @@ app.use((req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
-  const code = typeof err.statusCode === 'number' ? err.statusCode : (typeof err.status === 'number' ? err.status : 500);
+
+  // Safely determine a valid HTTP status code
+  let code = 500;
+  if (typeof err.statusCode === 'number' && err.statusCode >= 100 && err.statusCode < 600) {
+    code = err.statusCode;
+  } else if (typeof err.status === 'number' && err.status >= 100 && err.status < 600) {
+    code = err.status;
+  }
+
+  // Guard against headers already sent
+  if (res.headersSent) {
+    return next(err);
+  }
+
   res.status(code).json({
     status: 'fail',
     success: false,

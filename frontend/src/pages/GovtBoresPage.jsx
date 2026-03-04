@@ -324,8 +324,10 @@ export default function GovtBoresPage() {
             }
             setIsModalOpen(false);
             fetchRecords();
-        } catch {
-            toast.error('Failed to save record');
+        } catch (err) {
+            console.error('Save record error:', err);
+            const msg = err?.response?.data?.message || err?.message || 'Failed to save record';
+            toast.error(msg);
         } finally {
             setSaving(false);
         }

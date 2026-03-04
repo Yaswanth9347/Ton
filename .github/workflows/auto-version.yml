@@ -1,9 +1,11 @@
 name: Auto Version Bump
 
+# DISABLED: Re-enable by uncommenting the 'on' block below and removing the workflow_dispatch line
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch: # Manual trigger only — auto version bump is turned off
+  # push:
+  #   branches:
+  #     - main
 
 jobs:
   version_bump:
