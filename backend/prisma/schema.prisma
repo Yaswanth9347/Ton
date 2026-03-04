@@ -685,6 +685,8 @@ model BorewellWork {
   
   pipe_company_ref  pipes_company_master? @relation(fields: [pipe_company_id], references: [id])
 
+  geologist String? // Geologist name
+
   // ----------------------------
   // Labour
   // ----------------------------
