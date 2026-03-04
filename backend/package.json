@@ -7,7 +7,7 @@
     "scripts": {
         "start": "node src/server.js",
         "dev": "nodemon src/server.js",
-        "vercel-build": "npx prisma generate",
+        "vercel-build": "if [ -n \"$DATABASE_URL\" ]; then node migrations/run_prod_migration.js; else echo \"Skipping DB migration (DATABASE_URL not set)\"; fi && npx prisma generate",
         "migrate": "node migrations/run.js",
         "seed": "node seeds/run.js",
         "lint": "eslint src/",
