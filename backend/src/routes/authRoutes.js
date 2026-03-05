@@ -4,11 +4,22 @@ import { authenticate } from '../middleware/auth.js';
 import { validateRequest } from '../middleware/validateRequest.js';
 import { loginValidator } from '../utils/validators.js';
 import { profileUpload } from '../middleware/upload.js';
+import { roleGuard } from '../middleware/roleGuard.js';
 
 const router = express.Router();
 
+// ── Public routes (no auth) ──
+
 // POST /api/auth/login - Login user
 router.post('/login', loginValidator, validateRequest, authController.login);
+
+// POST /api/auth/forgot-password - Admin email-based password recovery
+router.post('/forgot-password', authController.forgotPassword);
+
+// POST /api/auth/reset-password/:token - Reset password with email token
+router.post('/reset-password/:token', authController.resetPassword);
+
+// ── Authenticated routes ──
 
 // POST /api/auth/logout - Logout user
 router.post('/logout', authenticate, authController.logout);
@@ -21,6 +32,14 @@ router.put('/profile', authenticate, authController.updateProfile);
 
 // PUT /api/auth/change-password - Change password
 router.put('/change-password', authenticate, authController.changePassword);
+
+// PUT /api/auth/users/:id/reset-password - Admin/Supervisor reset user password
+router.put(
+    '/users/:id/reset-password',
+    authenticate,
+    roleGuard('ADMIN', 'SUPERVISOR'),
+    authController.resetUserPassword
+);
 
 // POST /api/auth/profile/photo - Upload profile photo
 router.post('/profile/photo', authenticate, profileUpload.single('photo'), authController.uploadProfilePhoto);

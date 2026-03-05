@@ -186,6 +186,11 @@ JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
 
 # Frontend URL (for CORS)
 FRONTEND_URL=${FRONTEND_URL}
+
+# Email (Admin password reset)
+SMTP_SERVICE=${SMTP_SERVICE}
+SMTP_USER=${SMTP_USER}
+SMTP_PASS=${SMTP_PASS}
 EOF
 fi
 echo -e "${GREEN}✓ Environment configured${NC}"

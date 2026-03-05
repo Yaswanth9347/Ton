@@ -167,6 +167,11 @@ export const updateEmployee = async (id, updates) => {
         const passwordHash = await hashPassword(updates.password);
         fields.push(`password_hash = $${paramCount++} `);
         values.push(passwordHash);
+        // Unlock account and reset failed attempts when password is changed by admin
+        fields.push(`failed_login_attempts = $${paramCount++} `);
+        values.push(0);
+        fields.push(`account_locked = $${paramCount++} `);
+        values.push(false);
     }
 
     // Handle role change (EMPLOYEE <-> SUPERVISOR)

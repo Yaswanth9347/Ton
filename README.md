@@ -1,76 +1,127 @@
 # JMJ Management System (V-Ops)
 
-An enterprise-grade management system designed for **JMJ Enterprises**, specialized in handling Attendance, Payroll, Leaves, Expenses, and Borewell Operations.
+Full-stack app for managing JMJ operations (attendance, payroll, borewell tracking).
 
-## 🚀 Overview
+## Tech stack
 
-This application provides a centralized platform for managing employee records, tracking attendance with GPS location, automating payroll generation, and maintaining detailed records of both private and government borewell drilling operations.
+- Frontend: React + Vite
+- Backend: Node.js (Express)
+- Database: PostgreSQL
+- Docker: docker-compose + Nginx (frontend reverse-proxies `/api` to backend)
 
-## 🛠 Tech Stack
+## Requirements
 
-- **Frontend**: React (Vite), React Router, Axios, Lucide Icons, Custom CSS Design System.
-- **Backend**: Node.js, Express, Prisma ORM, PostgreSQL.
-- **Infrastructure**: Docker & Docker Compose, Nginx.
-- **Tools**: PDFKit (Payslip generation), XLSX (Excel processing).
+- Docker + Docker Compose
+- Node.js `20.x` (for local development)
 
-## 📂 Project Structure
+## Quick start (recommended)
 
-```text
-.
-├── backend/            # Express.js Server
-│   ├── prisma/         # Database Schema & Migrations
-│   ├── src/            # API Source Code
-│   └── uploads/        # User-uploaded receipts/profiles
-├── frontend/           # React Application
-│   ├── src/            # Frontend Components & Pages
-│   └── public/         # Static Assets
-├── docker-compose.yml  # Container Orchestration
-└── start.sh            # One-click startup script
-```
+This repo ships with a one-command launcher.
 
-## 🚥 Quick Start
-
-### 1. Requirements
-- [Docker](https://www.docker.com/) and Docker Compose.
-- Node.js (v18+) for local development.
-
-### 2. Startup
-The easiest way to get started is by using the automation script:
 ```bash
 chmod +x start.sh
+
+# Dev mode (default): DB in Docker, frontend+backend on host
 ./start.sh
+
+# Full Docker mode: frontend+backend+db all in containers
+./start.sh docker
+
+# Stop everything
+./start.sh stop
 ```
-This script will:
-1. Verify Docker environment.
-2. Setup environment variables.
-3. Start the PostgreSQL database container.
-4. Run migrations and seed the database with default users (Admin/Supervisor).
-5. Start both Frontend and Backend development servers.
 
-### 3. Default Credentials
-- **Admin**: `Admin` / `Admin@13`
-- **Supervisor**: `User1` / `User@123`
+On first run, `./start.sh` will:
 
-## 📊 Features
+1. Create `.env` from `.env.example` if missing
+2. Start Postgres
+3. Run migrations
+4. Seed default users (unless you pass `--no-seed`)
+5. Start frontend + backend
 
-- **🛡️ Secure Authentication**: Role-based access control (Admin, Employee, Supervisor).
-- **📍 Attendance Tracking**: Check-in/out with GPS location and address logging.
-- **💰 Payroll Management**: Automated monthly payroll generation with PDF payslips.
-- **🏗️ Borewell Operations**:
-  - **Private Bores**: Track client details, depth, casing, and payments.
-  - **Govt Bores**: Complex management of govt-funded drilling projects with flattened Excel-style logging.
-- **🍽️ Expense Claims**: Employee lunch and travel expense submission with receipt uploads.
-- **📅 Leave Management**: Request and approve employee leave requests.
+## URLs & ports
 
-## 📜 Development Commands
+Dev mode (`./start.sh`):
 
-| Command | Action |
-|---------|--------|
-| `npm run dev` | Start both frontend and backend locally |
-| `npm run setup` | Install all dependencies and setup database |
-| `npm run migrate` | Run Prisma/SQL migrations |
-| `npm run seed` | Seed initial database data |
-| `npm run docker:up` | Run the entire stack in Docker |
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:3002/api`
+- Postgres: `localhost:5435`
 
-## 📝 Analysis & Known Gaps
-Refer to [feature.md](./feature.md) for a detailed audit of current implementation progress and identified improvement areas.
+Docker mode (`./start.sh docker`):
+
+- Frontend: `http://localhost:8085`
+- Backend API: `http://localhost:3005/api`
+- Postgres: `localhost:5435`
+
+## Default seeded users
+
+Created by `npm run seed` (see `backend/seeds/run.js`):
+
+- Admin: `Admin` / `Admin@13`
+- Supervisor: `Supervisor` / `Super@13`
+- Employee: `User1` / `User@123`
+
+## Authentication rules (current behavior)
+
+- Roles: `ADMIN`, `SUPERVISOR`, `EMPLOYEE`
+- No public registration
+- Account lockout: after **3 failed login attempts**
+- Password reset:
+  - Admin: email-based reset is supported (see “Email (SMTP)” below)
+  - Supervisor/Employee: no self-service “forgot password”; they must contact Admin
+- UI rule: “Admin: Forgot Password?” is hidden until the Admin fails login 3 times
+- Admin reset/unlock: when Admin resets a user’s password, lockout counters are cleared
+
+## Environment variables
+
+### Root `.env` (used by `start.sh` and `docker-compose.yml`)
+
+Start by copying `.env.example` → `.env` and filling values.
+
+Key variables:
+
+- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
+- `JWT_SECRET`, `JWT_EXPIRES_IN`
+- `FRONTEND_URL` (used for CORS + password reset links)
+- Local DB access (dev mode): `DB_HOST=localhost`, `DB_PORT=5435`, `DB_*`
+
+### Frontend `.env`
+
+For dev mode only (`frontend/.env`):
+
+```dotenv
+VITE_API_URL=http://localhost:3002/api
+```
+
+In Docker mode, the frontend uses `/api` and Nginx proxies to the backend container (no `VITE_API_URL` needed).
+
+## Email (SMTP) for admin reset
+
+Admin password reset emails are sent via Nodemailer.
+
+- If SMTP is configured: email is sent to the Admin email address.
+- If SMTP is not configured: the reset link is logged to the backend console (development fallback).
+
+Required env vars:
+
+- `SMTP_SERVICE` (optional; defaults to `gmail`)
+- `SMTP_USER`
+- `SMTP_PASS` (Gmail App Password)
+
+Important: restart the backend after changing SMTP env vars.
+
+## Useful commands
+
+From repo root:
+
+- `npm run dev` — run frontend + backend locally
+- `npm run migrate` — run backend migrations
+- `npm run seed` — seed default users
+- `npm run setup` — install all deps + migrate + seed
+- `npm run docker:up:build` — build + run containers
+
+## Troubleshooting
+
+- Ports already in use: run `./start.sh stop`, then retry.
+- Not receiving reset email: verify `SMTP_USER`/`SMTP_PASS` and restart backend.
+- Fresh DB: `docker compose down -v` removes the database volume.

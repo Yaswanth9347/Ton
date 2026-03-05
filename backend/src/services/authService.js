@@ -1,44 +1,55 @@
+/**
+ * Auth Service — handles authentication, login security, and password resets.
+ *
+ * Security features:
+ *  - Failed login attempt tracking
+ *  - Account lockout after MAX_FAILED_ATTEMPTS (Admin only → email reset)
+ *  - Password reset token generation & validation
+ *  - Role-based reset hierarchy enforcement
+ */
+
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import db from '../models/db.js';
 import jwtConfig from '../config/jwt.js';
-import { UnauthorizedError, ValidationError, ForbiddenError } from '../utils/errors.js';
+import { UnauthorizedError, ValidationError, ForbiddenError, NotFoundError } from '../utils/errors.js';
+import { sendAdminResetEmail, sendLoginWarningEmail } from './emailService.js';
 
 const SALT_ROUNDS = 10;
+const MAX_FAILED_ATTEMPTS = 3;
+const RESET_TOKEN_EXPIRY_HOURS = 1;
 
-/**
- * Hash a password using bcrypt
- */
+// =============================================
+// PASSWORD UTILITIES
+// =============================================
+
 export const hashPassword = async (password) => {
     return bcrypt.hash(password, SALT_ROUNDS);
 };
 
-/**
- * Compare password with hash
- */
 export const comparePassword = async (password, hash) => {
     return bcrypt.compare(password, hash);
 };
 
-/**
- * Generate JWT token
- */
 export const generateToken = (userId) => {
     return jwt.sign({ userId }, jwtConfig.secret, {
         expiresIn: jwtConfig.expiresIn,
     });
 };
 
-/**
- * Authenticate user with username and password
- */
+// =============================================
+// LOGIN WITH ATTEMPT TRACKING
+// =============================================
+
 export const authenticateUser = async (username, password) => {
-    // Find user by username
+    // Find user
     const result = await db.query(
-        `SELECT u.id, u.username, u.email, u.password_hash, u.first_name, u.last_name, u.is_active, r.name as role
-     FROM users u
-     JOIN roles r ON u.role_id = r.id
-     WHERE u.username = $1`,
+        `SELECT u.id, u.username, u.email, u.password_hash, u.first_name, u.last_name,
+                u.is_active, u.failed_login_attempts, u.account_locked, r.name as role
+         FROM users u
+         JOIN roles r ON u.role_id = r.id
+         WHERE u.username = $1`,
         [username]
     );
 
@@ -48,18 +59,94 @@ export const authenticateUser = async (username, password) => {
 
     const user = result.rows[0];
 
-    // Verify password FIRST before checking is_active to ensure invalid credentials
-    // are still treated as invalid regardless of activation status (prevents enumeration).
+    // Check if account is locked
+    if (user.account_locked) {
+        if (user.role === 'ADMIN') {
+            throw new ForbiddenError(
+                'Admin account is locked due to multiple failed login attempts. ' +
+                'A password reset link has been sent to the registered email. Please check your inbox.'
+            );
+        } else {
+            throw new ForbiddenError(
+                'Your account has been locked due to multiple failed login attempts. ' +
+                'Please contact the Admin to reset your password.'
+            );
+        }
+    }
+
+    // Verify password
     const isValidPassword = await comparePassword(password, user.password_hash);
+
     if (!isValidPassword) {
+        // Increment failed attempts
+        const newAttempts = (user.failed_login_attempts || 0) + 1;
+
+        await db.query(
+            `UPDATE users SET
+                failed_login_attempts = $1,
+                last_failed_login = CURRENT_TIMESTAMP
+             WHERE id = $2`,
+            [newAttempts, user.id]
+        );
+
+        // Lockout after MAX_FAILED_ATTEMPTS — all roles
+        if (newAttempts >= MAX_FAILED_ATTEMPTS) {
+            // Lock account
+            await db.query(
+                `UPDATE users SET account_locked = true WHERE id = $1`,
+                [user.id]
+            );
+
+            if (user.role === 'ADMIN') {
+                // Admin: generate reset token and send email
+                const resetToken = crypto.randomBytes(32).toString('hex');
+                const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+                const expiry = new Date(Date.now() + RESET_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
+
+                await db.query(
+                    `UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE id = $3`,
+                    [resetTokenHash, expiry, user.id]
+                );
+
+                const adminName = `${user.first_name} ${user.last_name}`.trim() || user.username;
+                if (user.email) {
+                    sendLoginWarningEmail(user.email, adminName, newAttempts).catch(e =>
+                        console.error('[AUTH] Warning email error:', e.message)
+                    );
+                    sendAdminResetEmail(user.email, resetToken, adminName).catch(e =>
+                        console.error('[AUTH] Reset email error:', e.message)
+                    );
+                }
+
+                throw new ForbiddenError(
+                    'Admin account locked after ' + MAX_FAILED_ATTEMPTS + ' failed attempts. ' +
+                    'A password reset link has been sent to the registered email.'
+                );
+            } else {
+                // Supervisor / Employee: lock and tell them to contact Admin
+                throw new ForbiddenError(
+                    'Your account has been locked after ' + MAX_FAILED_ATTEMPTS + ' failed login attempts. ' +
+                    'Please contact the Admin to reset your password.'
+                );
+            }
+        }
+
         throw new UnauthorizedError('Invalid username or password');
     }
 
+    // Check if account is active
     if (!user.is_active) {
         throw new ForbiddenError('Your account has been deactivated. Please contact the administrator.');
     }
 
-    // Generate token
+    // Successful login — reset failed attempts
+    if (user.failed_login_attempts > 0 || user.account_locked) {
+        await db.query(
+            `UPDATE users SET failed_login_attempts = 0, account_locked = false WHERE id = $1`,
+            [user.id]
+        );
+    }
+
     const token = generateToken(user.id);
 
     return {
@@ -75,15 +162,17 @@ export const authenticateUser = async (username, password) => {
     };
 };
 
-/**
- * Get user profile by ID
- */
+// =============================================
+// USER PROFILE
+// =============================================
+
 export const getUserProfile = async (userId) => {
     const result = await db.query(
-        `SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.is_active, u.created_at, u.profile_photo_url, r.name as role
-     FROM users u
-     JOIN roles r ON u.role_id = r.id
-     WHERE u.id = $1`,
+        `SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.is_active,
+                u.created_at, u.profile_photo_url, r.name as role
+         FROM users u
+         JOIN roles r ON u.role_id = r.id
+         WHERE u.id = $1`,
         [userId]
     );
 
@@ -102,5 +191,179 @@ export const getUserProfile = async (userId) => {
         isActive: user.is_active,
         createdAt: user.created_at,
         profilePhotoUrl: user.profile_photo_url,
+    };
+};
+
+// =============================================
+// ADMIN-ONLY: FORGOT PASSWORD (Email-based)
+// =============================================
+
+/**
+ * Initiate password reset for Admin account.
+ * Only the Admin's registered email can trigger this.
+ */
+export const forgotPasswordAdmin = async (email) => {
+    // Find admin user by email
+    const result = await db.query(
+        `SELECT u.id, u.username, u.email, u.first_name, u.last_name, r.name as role
+         FROM users u
+         JOIN roles r ON u.role_id = r.id
+         WHERE u.email = $1 AND r.name = 'ADMIN'`,
+        [email]
+    );
+
+    // Always return success message to prevent email enumeration
+    if (result.rows.length === 0) {
+        return { message: 'If that email is associated with an Admin account, a reset link has been sent.' };
+    }
+
+    const admin = result.rows[0];
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const expiry = new Date(Date.now() + RESET_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
+
+    await db.query(
+        `UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE id = $3`,
+        [resetTokenHash, expiry, admin.id]
+    );
+
+    const adminName = `${admin.first_name} ${admin.last_name}`.trim() || admin.username;
+    await sendAdminResetEmail(admin.email, resetToken, adminName);
+
+    return { message: 'If that email is associated with an Admin account, a reset link has been sent.' };
+};
+
+// =============================================
+// RESET PASSWORD WITH TOKEN (Admin email flow)
+// =============================================
+
+export const resetPasswordWithToken = async (token, newPassword) => {
+    // Hash the provided token and find matching user
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const result = await db.query(
+        `SELECT u.id, u.username, r.name as role
+         FROM users u
+         JOIN roles r ON u.role_id = r.id
+         WHERE u.reset_token = $1 AND u.reset_token_expiry > NOW()`,
+        [tokenHash]
+    );
+
+    if (result.rows.length === 0) {
+        throw new ValidationError('Invalid or expired reset token. Please request a new reset link.');
+    }
+
+    const user = result.rows[0];
+
+    // Only admin accounts can use email-based reset
+    if (user.role !== 'ADMIN') {
+        throw new ForbiddenError('Email-based password reset is only available for Admin accounts.');
+    }
+
+    // Validate new password
+    if (!newPassword || newPassword.length < 6) {
+        throw new ValidationError('New password must be at least 6 characters long.');
+    }
+
+    const newHash = await hashPassword(newPassword);
+
+    // Update password, clear reset token, unlock account, reset attempts
+    await db.query(
+        `UPDATE users SET
+            password_hash = $1,
+            reset_token = NULL,
+            reset_token_expiry = NULL,
+            account_locked = false,
+            failed_login_attempts = 0
+         WHERE id = $2`,
+        [newHash, user.id]
+    );
+
+    return { message: 'Password has been reset successfully. You can now log in with your new password.' };
+};
+
+// =============================================
+// PASSWORD RESET BY ADMIN/SUPERVISOR (hierarchy)
+// =============================================
+
+/**
+ * Reset a user's password (Admin/Supervisor initiated).
+ *
+ * Rules:
+ *  - Admin can reset passwords for: Supervisors and Employees
+ *  - Supervisor can reset passwords for: Employees only
+ *  - Nobody can reset Admin password via this route (must use email)
+ */
+export const resetUserPassword = async (requesterId, targetUserId, newPassword) => {
+    // Get requester details
+    const requesterResult = await db.query(
+        `SELECT u.id, r.name as role FROM users u
+         JOIN roles r ON u.role_id = r.id
+         WHERE u.id = $1`,
+        [requesterId]
+    );
+
+    if (requesterResult.rows.length === 0) {
+        throw new NotFoundError('Requester not found');
+    }
+
+    const requester = requesterResult.rows[0];
+
+    // Get target user details
+    const targetResult = await db.query(
+        `SELECT u.id, u.username, r.name as role FROM users u
+         JOIN roles r ON u.role_id = r.id
+         WHERE u.id = $1`,
+        [targetUserId]
+    );
+
+    if (targetResult.rows.length === 0) {
+        throw new NotFoundError('Target user not found');
+    }
+
+    const target = targetResult.rows[0];
+
+    // ── Hierarchy enforcement ──
+    // Admin password can ONLY be reset via email
+    if (target.role === 'ADMIN') {
+        throw new ForbiddenError(
+            'Admin password cannot be reset by other users. Admin must use the email-based recovery.'
+        );
+    }
+
+    // Supervisor can only reset EMPLOYEE passwords
+    if (requester.role === 'SUPERVISOR' && target.role !== 'EMPLOYEE') {
+        throw new ForbiddenError(
+            'Supervisors can only reset passwords for Employees. Contact Admin for Supervisor password resets.'
+        );
+    }
+
+    // Employees cannot reset anyone's password
+    if (requester.role === 'EMPLOYEE') {
+        throw new ForbiddenError('Employees do not have permission to reset passwords.');
+    }
+
+    // Validate new password
+    if (!newPassword || newPassword.length < 6) {
+        throw new ValidationError('New password must be at least 6 characters long.');
+    }
+
+    const newHash = await hashPassword(newPassword);
+
+    await db.query(
+        `UPDATE users SET
+            password_hash = $1,
+            failed_login_attempts = 0,
+            account_locked = false,
+            updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [newHash, targetUserId]
+    );
+
+    return {
+        message: `Password for ${target.username} has been reset successfully.`,
+        targetUsername: target.username,
     };
 };

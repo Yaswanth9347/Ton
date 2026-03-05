@@ -26,7 +26,7 @@ export const authenticate = async (req, res, next) => {
 
         // Check if user still exists
         const result = await db.query(
-            `SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.is_active, r.name as role
+            `SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.is_active, u.account_locked, r.name as role
        FROM users u
        JOIN roles r ON u.role_id = r.id
        WHERE u.id = $1`,
@@ -41,6 +41,10 @@ export const authenticate = async (req, res, next) => {
 
         if (!user.is_active) {
             throw new UnauthorizedError('Account has been deactivated');
+        }
+
+        if (user.account_locked) {
+            throw new UnauthorizedError('Account is locked. Please reset your password.');
         }
 
         // Attach user to request

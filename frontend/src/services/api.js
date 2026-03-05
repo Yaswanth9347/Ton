@@ -31,9 +31,14 @@ api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            window.location.href = '/login';
+            // Don't redirect on login/forgot-password failures — let the page handle the error
+            const url = error.config?.url || '';
+            const isAuthAttempt = url.includes('/auth/login') || url.includes('/auth/forgot-password') || url.includes('/auth/reset-password');
+            if (!isAuthAttempt) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = '/login';
+            }
         }
         return Promise.reject(error);
     }
@@ -63,6 +68,9 @@ export const authApi = {
     getCurrentUser: () => api.get('/auth/me'),
     updateProfile: (data) => api.put('/auth/profile', data),
     changePassword: (data) => api.put('/auth/change-password', data),
+    forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+    resetPassword: (token, newPassword) => api.post(`/auth/reset-password/${token}`, { newPassword }),
+    resetUserPassword: (userId, newPassword) => api.put(`/auth/users/${userId}/reset-password`, { newPassword }),
     uploadProfilePhoto: (file) => {
         const formData = new FormData();
         formData.append('photo', file);

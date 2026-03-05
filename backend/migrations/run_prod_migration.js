@@ -31,15 +31,23 @@ const pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false } });
 const sqlFile = path.join(__dirname, 'fix_missing_columns.sql');
 const sql = fs.readFileSync(sqlFile, 'utf8');
 
+const authSqlFile = path.join(__dirname, 'add_auth_security_columns.sql');
+const authSql = fs.readFileSync(authSqlFile, 'utf8');
+
 async function run() {
     console.log('🚀 Connecting to production database...');
     try {
         await pool.query(sql);
-        console.log('✅ Migration applied successfully!');
+        console.log('✅ fix_missing_columns migration applied successfully!');
         console.log('   - pipes_company_master table ensured');
         console.log('   - BorewellWork.pipe_company_id column ensured');
         console.log('   - BorewellWork.geologist column ensured');
         console.log('   - Foreign key constraint ensured');
+
+        await pool.query(authSql);
+        console.log('✅ auth_security_columns migration applied successfully!');
+        console.log('   - Login security columns added');
+        console.log('   - Admin email updated');
     } catch (err) {
         console.error('❌ Migration failed:', err.message);
         console.error(err);

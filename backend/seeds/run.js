@@ -34,7 +34,7 @@ async function seed() {
             `INSERT INTO users (username, email, password_hash, first_name, last_name, role_id, is_active, base_salary)
        VALUES ($1, $2, $3, $4, $5, $6, true, 50000.00)
        ON CONFLICT (username) DO UPDATE SET password_hash = $3, base_salary = 50000.00`,
-            ['Admin', 'admin@company.com', adminPassword, 'System', 'Administrator', roles.ADMIN]
+            ['Admin', 'yaswanthyerra2025@gmail.com', adminPassword, 'System', 'Administrator', roles.ADMIN]
         );
         console.log('Admin user created: Admin / Admin@13');
 

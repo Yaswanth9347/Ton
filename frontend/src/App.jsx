@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './pages/LoginPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import { EmployeeDashboard } from './pages/EmployeeDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import ProfilePage from './pages/ProfilePage';
@@ -78,6 +80,18 @@ function AppRoutes() {
                         <LoginPage />
                     </PublicRoute>
                 }
+            />
+            <Route
+                path="/forgot-password"
+                element={
+                    <PublicRoute>
+                        <ForgotPasswordPage />
+                    </PublicRoute>
+                }
+            />
+            <Route
+                path="/reset-password/:token"
+                element={<ResetPasswordPage />}
             />
 
             {/* Employee routes — wrapped in Layout */}

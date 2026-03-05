@@ -27,8 +27,95 @@ export const login = async (req, res, next) => {
             message: 'Login successful',
             data: {
                 user: result.user,
-                token: result.token, // Also send in response for flexibility
+                token: result.token,
             },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Admin Forgot Password (email-based recovery)
+ * POST /api/auth/forgot-password
+ * Public — no auth required
+ */
+export const forgotPassword = async (req, res, next) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email is required',
+            });
+        }
+
+        const result = await authService.forgotPasswordAdmin(email);
+
+        res.json({
+            success: true,
+            message: result.message,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Reset Password with token (Admin email flow)
+ * POST /api/auth/reset-password/:token
+ * Public — no auth required
+ */
+export const resetPassword = async (req, res, next) => {
+    try {
+        const { token } = req.params;
+        const { newPassword } = req.body;
+
+        if (!newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: 'New password is required',
+            });
+        }
+
+        const result = await authService.resetPasswordWithToken(token, newPassword);
+
+        res.json({
+            success: true,
+            message: result.message,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Reset another user's password (Admin/Supervisor hierarchy)
+ * PUT /api/auth/users/:id/reset-password
+ * Requires auth — Admin or Supervisor
+ */
+export const resetUserPassword = async (req, res, next) => {
+    try {
+        const targetUserId = parseInt(req.params.id, 10);
+        const { newPassword } = req.body;
+
+        if (!newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: 'New password is required',
+            });
+        }
+
+        const result = await authService.resetUserPassword(req.user.id, targetUserId, newPassword);
+
+        await logAudit(req.user.id, 'UPDATE', 'PASSWORD_RESET', targetUserId, null, {
+            targetUsername: result.targetUsername,
+        });
+
+        res.json({
+            success: true,
+            message: result.message,
         });
     } catch (error) {
         next(error);
