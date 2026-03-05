@@ -16,6 +16,21 @@ function isMissingColumnError(error) {
   return error?.code === 'P2022';
 }
 
+async function tableExists(tableName) {
+  try {
+    const rows = await prisma.$queryRawUnsafe(`
+      SELECT 1 AS ok
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = '${tableName}'
+      LIMIT 1
+    `);
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 // =============================================
 // RAW-SQL FALLBACK QUERIES (use Prisma connection)
 // =============================================
@@ -44,6 +59,109 @@ async function getRecordByIdFallback(id) {
     LEFT JOIN "Mandal" m ON m.id = bw."mandalId"
     LEFT JOIN "Village" v ON v.id = bw."villageId"
     WHERE bw.id = $1
+    LIMIT 1
+  `, parseInt(id));
+
+  return rows[0] || null;
+}
+
+async function getAllRecordsLegacyFallback() {
+  return await prisma.$queryRawUnsafe(`
+    SELECT
+      g.id,
+      g.s_no AS "sNo",
+      g.vehicle,
+      g.bore_date AS "date",
+      g.location,
+      g.grant_name AS grant,
+      g.est_cost AS "estCost",
+      g.drill_depth AS drilling_depth_mtrs,
+      g.drill_rate AS drilling_rate,
+      g.drill_amt AS drilling_amount,
+      g.cas140_depth AS casing140_qty,
+      g.cas140_rate AS casing140_rate,
+      g.cas140_amt AS casing140_amount,
+      g.cas180_depth AS casing180_qty,
+      g.cas180_rate AS casing180_rate,
+      g.cas180_amt AS casing180_amount,
+      g.slot_qty AS slotting_qty,
+      g.slot_rate AS slotting_rate,
+      g.slot_amt AS slotting_amount,
+      g.gi_qty AS gi_pipes_qty,
+      g.gi_rate AS gi_pipes_rate,
+      g.gi_amt AS gi_pipes_amount,
+      g.total_amt,
+      g.status,
+      g.m_book_no AS "mBookNo",
+      g.total_bill_amt AS total_bill_amount,
+      g.first_part AS first_part_amount,
+      g.second_part AS second_part_amount,
+      g.it AS it_amount,
+      g.vat AS vat_amount,
+      g.total_recoveries,
+      g.net_amount,
+      g.voucher_no,
+      g.cheque_no_date AS cheque_no,
+      g.custom_data,
+      g.created_at AS "createdAt",
+      g.updated_at AS "updatedAt",
+      NULL::json AS mandal,
+      json_build_object('id', NULL, 'name', g.village, 'mandalId', NULL) AS village,
+      NULL::json AS pipe_company_ref,
+      NULL::integer AS pipe_company_id,
+      NULL::text AS geologist
+    FROM govt_bores g
+    ORDER BY g.id DESC
+  `);
+}
+
+async function getRecordByIdLegacyFallback(id) {
+  const rows = await prisma.$queryRawUnsafe(`
+    SELECT
+      g.id,
+      g.s_no AS "sNo",
+      g.vehicle,
+      g.bore_date AS "date",
+      g.location,
+      g.grant_name AS grant,
+      g.est_cost AS "estCost",
+      g.drill_depth AS drilling_depth_mtrs,
+      g.drill_rate AS drilling_rate,
+      g.drill_amt AS drilling_amount,
+      g.cas140_depth AS casing140_qty,
+      g.cas140_rate AS casing140_rate,
+      g.cas140_amt AS casing140_amount,
+      g.cas180_depth AS casing180_qty,
+      g.cas180_rate AS casing180_rate,
+      g.cas180_amt AS casing180_amount,
+      g.slot_qty AS slotting_qty,
+      g.slot_rate AS slotting_rate,
+      g.slot_amt AS slotting_amount,
+      g.gi_qty AS gi_pipes_qty,
+      g.gi_rate AS gi_pipes_rate,
+      g.gi_amt AS gi_pipes_amount,
+      g.total_amt,
+      g.status,
+      g.m_book_no AS "mBookNo",
+      g.total_bill_amt AS total_bill_amount,
+      g.first_part AS first_part_amount,
+      g.second_part AS second_part_amount,
+      g.it AS it_amount,
+      g.vat AS vat_amount,
+      g.total_recoveries,
+      g.net_amount,
+      g.voucher_no,
+      g.cheque_no_date AS cheque_no,
+      g.custom_data,
+      g.created_at AS "createdAt",
+      g.updated_at AS "updatedAt",
+      NULL::json AS mandal,
+      json_build_object('id', NULL, 'name', g.village, 'mandalId', NULL) AS village,
+      NULL::json AS pipe_company_ref,
+      NULL::integer AS pipe_company_id,
+      NULL::text AS geologist
+    FROM govt_bores g
+    WHERE g.id = $1
     LIMIT 1
   `, parseInt(id));
 
@@ -314,6 +432,16 @@ function buildUpdateData(data, includePipeCols) {
 // GET ALL RECORDS
 // =============================================
 export const getAllRecords = async () => {
+  const hasBorewellWork = await tableExists('BorewellWork');
+  if (!hasBorewellWork) {
+    const hasLegacyGovtBores = await tableExists('govt_bores');
+    if (hasLegacyGovtBores) {
+      console.warn('Govt bores: BorewellWork missing — using legacy govt_bores fallback');
+      return await getAllRecordsLegacyFallback();
+    }
+    throw new Error('Govt bore tables are missing in database (BorewellWork / govt_bores)');
+  }
+
   await ensureGovtBoreSchema();
 
   // If we know the column is missing, skip Prisma entirely
@@ -346,6 +474,16 @@ export const getAllRecords = async () => {
 // GET RECORD BY ID
 // =============================================
 export const getRecordById = async (id) => {
+  const hasBorewellWork = await tableExists('BorewellWork');
+  if (!hasBorewellWork) {
+    const hasLegacyGovtBores = await tableExists('govt_bores');
+    if (hasLegacyGovtBores) {
+      console.warn('Govt bores: BorewellWork missing — using legacy govt_bores fallback (getById)');
+      return await getRecordByIdLegacyFallback(id);
+    }
+    throw new Error('Govt bore tables are missing in database (BorewellWork / govt_bores)');
+  }
+
   await ensureGovtBoreSchema();
 
   const colReady = await hasPipeCompanyColumn();
@@ -524,6 +662,9 @@ export const deleteRecord = async (id) => {
 // GET MANDALS
 // =============================================
 export const getMandals = async () => {
+  const hasMandalTable = await tableExists('Mandal');
+  if (!hasMandalTable) return [];
+
   return await prisma.mandal.findMany({
     orderBy: { name: 'asc' }
   });
@@ -533,6 +674,9 @@ export const getMandals = async () => {
 // GET VILLAGES BY MANDAL
 // =============================================
 export const getVillagesByMandal = async (mandalId) => {
+  const hasVillageTable = await tableExists('Village');
+  if (!hasVillageTable) return [];
+
   return await prisma.village.findMany({
     where: { mandalId: parseInt(mandalId) },
     orderBy: { name: 'asc' }
