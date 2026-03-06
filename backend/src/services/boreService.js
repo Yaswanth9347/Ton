@@ -1,4 +1,5 @@
 import db from '../models/db.js';
+import { releaseBorePipeAllocations, syncPrivateBorePipeInventory } from './pipeAllocationService.js';
 
 /**
  * Get all borewell records with optional search and pagination
@@ -53,7 +54,7 @@ export const createRecord = async (data, userId) => {
             cas250_4g_feet, cas250_4g_rate, cas250_4g_amt,
             slotting_pipes, slotting_rate, slotting_amt,
             pipes_on_vehicle_before, pipes_used_qty, pipes_used_pieces_ft, pipes_left_on_vehicle,
-            pipe_details, labour_charge, rpm,
+            pipe_details, pipe_inventory_id, labour_charge, rpm,
             start_time, end_time, total_hrs,
             phone_pe_received, phone_pe_receiver_name, cash_paid,
             total_amount, amount_paid, balance, discount,
@@ -64,7 +65,7 @@ export const createRecord = async (data, userId) => {
             $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
             $31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
             $41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
-            $51, $52, $53, $54
+            $51, $52, $53, $54, $55
         ) RETURNING *`,
     [
       data.date, data.vehicle_name, data.supervisor_name, data.customer_name, data.village, data.phone_number, data.bore_type,
@@ -79,20 +80,23 @@ export const createRecord = async (data, userId) => {
       data.cas250_4g_feet || 0, data.cas250_4g_rate || 0, data.cas250_4g_amt || 0,
       data.slotting_pipes || 0, data.slotting_rate || 0, data.slotting_amt || 0,
       data.pipes_on_vehicle_before || 0, data.pipes_used_qty || 0, data.pipes_used_pieces_ft || 0, data.pipes_left_on_vehicle || 0,
-      data.pipe_details || {}, data.labour_charge || 0, data.rpm || 0,
+      data.pipe_details || {}, data.pipe_inventory_id || null, data.labour_charge || 0, data.rpm || 0,
       data.start_time, data.end_time, data.total_hrs || 0,
       data.phone_pe_received || 0, data.phone_pe_receiver_name, data.cash_paid || 0,
       data.total_amount || 0, data.amount_paid || 0, data.balance || 0, data.discount || 0,
       userId
     ]
   );
-  return result.rows[0];
+  const record = result.rows[0];
+  await syncPrivateBorePipeInventory({ currentRecord: record, createdBy: userId });
+  return record;
 };
 
 /**
  * Update an existing borewell record
  */
-export const updateRecord = async (id, data) => {
+export const updateRecord = async (id, data, userId) => {
+  const previousRecord = await getRecordById(id);
   const result = await db.query(
     `UPDATE borewell_data SET
             date = $1, vehicle_name = $2, supervisor_name = $3, customer_name = $4, village = $5,
@@ -108,12 +112,12 @@ export const updateRecord = async (id, data) => {
             cas250_4g_feet = $31, cas250_4g_rate = $32, cas250_4g_amt = $33,
             slotting_pipes = $34, slotting_rate = $35, slotting_amt = $36,
             pipes_on_vehicle_before = $37, pipes_used_qty = $38, pipes_used_pieces_ft = $39, pipes_left_on_vehicle = $40,
-            pipe_details = $41, labour_charge = $42, rpm = $43,
-            start_time = $44, end_time = $45, total_hrs = $46,
-            phone_pe_received = $47, phone_pe_receiver_name = $48, cash_paid = $49,
-            total_amount = $50, amount_paid = $51, balance = $52, discount = $53,
+            pipe_details = $41, pipe_inventory_id = $42, labour_charge = $43, rpm = $44,
+            start_time = $45, end_time = $46, total_hrs = $47,
+            phone_pe_received = $48, phone_pe_receiver_name = $49, cash_paid = $50,
+            total_amount = $51, amount_paid = $52, balance = $53, discount = $54,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = $54
+          WHERE id = $55
         RETURNING *`,
     [
       data.date, data.vehicle_name, data.supervisor_name, data.customer_name, data.village,
@@ -129,21 +133,33 @@ export const updateRecord = async (id, data) => {
       data.cas250_4g_feet || 0, data.cas250_4g_rate || 0, data.cas250_4g_amt || 0,
       data.slotting_pipes || 0, data.slotting_rate || 0, data.slotting_amt || 0,
       data.pipes_on_vehicle_before || 0, data.pipes_used_qty || 0, data.pipes_used_pieces_ft || 0, data.pipes_left_on_vehicle || 0,
-      data.pipe_details || {}, data.labour_charge || 0, data.rpm || 0,
+      data.pipe_details || {}, data.pipe_inventory_id || null, data.labour_charge || 0, data.rpm || 0,
       data.start_time, data.end_time, data.total_hrs || 0,
       data.phone_pe_received || 0, data.phone_pe_receiver_name, data.cash_paid || 0,
       data.total_amount || 0, data.amount_paid || 0, data.balance || 0, data.discount || 0,
       id
     ]
   );
-  return result.rows[0];
+  const record = result.rows[0];
+  if (record) {
+    await syncPrivateBorePipeInventory({ currentRecord: record, previousRecord, createdBy: userId });
+  }
+  return record;
 };
 
 /**
  * Delete a borewell record
  */
-export const deleteRecord = async (id) => {
+export const deleteRecord = async (id, userId) => {
   const result = await db.query('DELETE FROM borewell_data WHERE id = $1 RETURNING *', [id]);
+  if (result.rows[0]) {
+    await releaseBorePipeAllocations({
+      boreType: 'private',
+      boreId: id,
+      createdBy: userId,
+      remarks: `Auto-returned to store after deleting private bore #${id}`
+    });
+  }
   return result.rows[0];
 };
 
@@ -159,14 +175,6 @@ export const generateBoreReceipt = (record) => {
     const n = parseFloat(v) || 0;
     return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
-
-  const pipeDetails = typeof record.pipe_details === 'string' ? JSON.parse(record.pipe_details || '{}') : (record.pipe_details || {});
-  const pipeDetailsHtml = Object.entries(pipeDetails).map(([key, val]) => `
-    <div class="info-item">
-      <div class="info-label">${key}</div>
-      <div class="info-value">${val}</div>
-    </div>
-  `).join('');
 
   const html = `
 <!DOCTYPE html>

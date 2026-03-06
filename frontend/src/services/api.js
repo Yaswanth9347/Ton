@@ -47,6 +47,8 @@ api.interceptors.response.use(
 export const inventoryApi = {
     // Pipes
     getPipes: () => api.get('/inventory/pipes'),
+    getSummary: () => api.get('/inventory/summary'),
+    getPipeAllocations: () => api.get('/inventory/pipes/allocations'),
     addPipe: (data) => api.post('/inventory/pipes', data),
     addStock: (data) => api.post('/inventory/pipes/add-stock', data),
     issuePipes: (data) => api.post('/inventory/pipes/issue', data),

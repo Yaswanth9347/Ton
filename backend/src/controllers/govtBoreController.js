@@ -81,7 +81,7 @@ export const createRecord = async (req, res, next) => {
         // For now, we trust the frontend's gross_amount but validated standard rows
         // ------------------------------------------
 
-        const record = await govtBoreService.createRecord(req.body);
+        const record = await govtBoreService.createRecord(req.body, req.user.id);
 
         // Async Sync to Google Sheets (Non-blocking)
         googleSheetsService.appendRecord(record).catch(err => console.error('bg-sync error:', err));
@@ -129,7 +129,7 @@ export const updateRecord = async (req, res, next) => {
             });
         // ------------------------------------------
 
-        const record = await govtBoreService.updateRecord(req.params.id, req.body);
+        const record = await govtBoreService.updateRecord(req.params.id, req.body, req.user.id);
 
         if (!record) {
             return res.status(404).json({
@@ -156,7 +156,7 @@ export const updateRecord = async (req, res, next) => {
  */
 export const deleteRecord = async (req, res, next) => {
     try {
-        const record = await govtBoreService.deleteRecord(req.params.id);
+        const record = await govtBoreService.deleteRecord(req.params.id, req.user.id);
 
         if (!record) {
             return res.status(404).json({

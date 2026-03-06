@@ -8,6 +8,7 @@
 
 import prisma from '../config/prisma.js';
 import { ensureGovtBoreSchema, hasPipeCompanyColumn } from '../utils/ensureGovtBoreSchema.js';
+import { releaseBorePipeAllocations, syncGovtBorePipeInventory } from './pipeAllocationService.js';
 
 // =============================================
 // ERROR DETECTION
@@ -232,6 +233,7 @@ function buildCreateData(data, mandalId, villageId, includePipeCols) {
     gi_pipes_qty: data.gi_pipes_qty ? parseInt(data.gi_pipes_qty) : null,
     gi_pipes_rate: data.gi_pipes_rate ? parseFloat(data.gi_pipes_rate) : null,
     gi_pipes_amount: data.gi_pipes_amount ? parseFloat(data.gi_pipes_amount) : null,
+    gi_pipes_returned_qty: data.gi_pipes_returned_qty ? parseInt(data.gi_pipes_returned_qty) : 0,
 
     plotfarm_qty: data.plotfarm_qty ? parseInt(data.plotfarm_qty) : null,
     plotfarm_rate: data.plotfarm_rate ? parseFloat(data.plotfarm_rate) : null,
@@ -295,6 +297,7 @@ function buildCreateData(data, mandalId, villageId, includePipeCols) {
     head_handle_amount: data.head_handle_amount ? parseFloat(data.head_handle_amount) : null,
 
     pipe_company: data.pipe_company || null,
+    pipe_inventory_id: data.pipe_inventory_id ? parseInt(data.pipe_inventory_id) : null,
     labour_type: data.labour_type || null,
     labour_amount: data.labour_amount ? parseFloat(data.labour_amount) : null,
     pcs: data.pcs ? parseFloat(data.pcs) : null,
@@ -350,6 +353,7 @@ function buildUpdateData(data, includePipeCols) {
     gi_pipes_qty: data.gi_pipes_qty !== undefined ? parseInt(data.gi_pipes_qty) : undefined,
     gi_pipes_rate: data.gi_pipes_rate !== undefined ? parseFloat(data.gi_pipes_rate) : undefined,
     gi_pipes_amount: data.gi_pipes_amount !== undefined ? parseFloat(data.gi_pipes_amount) : undefined,
+    gi_pipes_returned_qty: data.gi_pipes_returned_qty !== undefined ? parseInt(data.gi_pipes_returned_qty) : undefined,
 
     plotfarm_qty: data.plotfarm_qty !== undefined ? parseInt(data.plotfarm_qty) : undefined,
     plotfarm_rate: data.plotfarm_rate !== undefined ? parseFloat(data.plotfarm_rate) : undefined,
@@ -413,6 +417,7 @@ function buildUpdateData(data, includePipeCols) {
     head_handle_amount: data.head_handle_amount !== undefined ? parseFloat(data.head_handle_amount) : undefined,
 
     pipe_company: data.pipe_company,
+    pipe_inventory_id: data.pipe_inventory_id !== undefined ? (data.pipe_inventory_id ? parseInt(data.pipe_inventory_id) : null) : undefined,
     labour_type: data.labour_type,
     labour_amount: data.labour_amount !== undefined ? parseFloat(data.labour_amount) : undefined,
     pcs: data.pcs !== undefined ? parseFloat(data.pcs) : undefined,
@@ -456,7 +461,8 @@ export const getAllRecords = async () => {
       include: {
         mandal: true,
         village: true,
-        pipe_company_ref: true
+        pipe_company_ref: true,
+        pipe_inventory_ref: true
       },
       orderBy: { id: 'desc' }
     });
@@ -498,7 +504,8 @@ export const getRecordById = async (id) => {
         mandal: true,
         village: true,
         bill: true,
-        pipe_company_ref: true
+        pipe_company_ref: true,
+        pipe_inventory_ref: true
       }
     });
     return record;
@@ -514,7 +521,7 @@ export const getRecordById = async (id) => {
 // =============================================
 // CREATE RECORD
 // =============================================
-export const createRecord = async (data) => {
+export const createRecord = async (data, userId = null) => {
   await ensureGovtBoreSchema();
   const mandalName = data.mandal || data.mandalName || 'Unknown';
   const villageName = data.village || data.villageName || 'Unknown';
@@ -527,10 +534,12 @@ export const createRecord = async (data) => {
       return await prisma.$transaction(async (tx) => {
         const { mandal, village } = await findOrCreateLocation(tx, mandalName, villageName);
         const work = await tx.borewellWork.create({ data: buildCreateData(data, mandal.id, village.id, true) });
-        return await tx.borewellWork.findUnique({
+        const record = await tx.borewellWork.findUnique({
           where: { id: work.id },
-          include: { mandal: true, village: true, pipe_company_ref: true }
+          include: { mandal: true, village: true, pipe_company_ref: true, pipe_inventory_ref: true }
         });
+        await syncGovtBorePipeInventory({ currentRecord: record, createdBy: userId });
+        return record;
       });
     } catch (error) {
       if (!isMissingColumnError(error)) throw error;
@@ -560,16 +569,19 @@ export const createRecord = async (data) => {
     ...vals
   );
 
-  return await getRecordByIdFallback(inserted[0].id);
+  const record = await getRecordByIdFallback(inserted[0].id);
+  await syncGovtBorePipeInventory({ currentRecord: record, createdBy: userId });
+  return record;
 };
 
 // =============================================
 // UPDATE RECORD
 // =============================================
-export const updateRecord = async (id, data) => {
+export const updateRecord = async (id, data, userId = null) => {
   await ensureGovtBoreSchema();
   const workId = parseInt(id);
   const colReady = await hasPipeCompanyColumn();
+  const previousRecord = await getRecordById(workId);
 
   // --- Fast path: all columns exist, use Prisma ---
   if (colReady) {
@@ -589,11 +601,13 @@ export const updateRecord = async (id, data) => {
         if (villageId) updateData.villageId = villageId;
         Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
 
-        return await tx.borewellWork.update({
+        const record = await tx.borewellWork.update({
           where: { id: workId },
           data: updateData,
-          include: { mandal: true, village: true, pipe_company_ref: true }
+          include: { mandal: true, village: true, pipe_company_ref: true, pipe_inventory_ref: true }
         });
+        await syncGovtBorePipeInventory({ currentRecord: record, previousRecord, createdBy: userId });
+        return record;
       });
     } catch (error) {
       if (!isMissingColumnError(error)) throw error;
@@ -618,7 +632,9 @@ export const updateRecord = async (id, data) => {
   Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
 
   if (Object.keys(updateData).length === 0) {
-    return await getRecordByIdFallback(workId);
+    const record = await getRecordByIdFallback(workId);
+    await syncGovtBorePipeInventory({ currentRecord: record, previousRecord, createdBy: userId });
+    return record;
   }
 
   // Build parameterised UPDATE
@@ -635,15 +651,24 @@ export const updateRecord = async (id, data) => {
     ...values
   );
 
-  return await getRecordByIdFallback(workId);
+  const record = await getRecordByIdFallback(workId);
+  await syncGovtBorePipeInventory({ currentRecord: record, previousRecord, createdBy: userId });
+  return record;
 };
 
 // =============================================
 // DELETE RECORD
 // =============================================
-export const deleteRecord = async (id) => {
+export const deleteRecord = async (id, userId = null) => {
   return await prisma.$transaction(async (tx) => {
     const workId = parseInt(id);
+    await releaseBorePipeAllocations({
+      tx,
+      boreType: 'govt',
+      boreId: workId,
+      createdBy: userId,
+      remarks: `Auto-returned to store after deleting govt bore #${workId}`
+    });
 
     // Delete related bill if exists
     await tx.borewellBill.deleteMany({ where: { workId } });

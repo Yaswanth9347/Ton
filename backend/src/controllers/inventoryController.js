@@ -18,7 +18,7 @@ export const getPipes = async (req, res, next) => {
 
 export const createPipe = async (req, res, next) => {
     try {
-        const { size, company, quantity, unit } = req.body;
+        const { size, company, quantity, unit, material_type, quality_grade, length_feet, cost_per_unit } = req.body;
 
         if (!size || !company) {
             return res.status(400).json({
@@ -31,7 +31,11 @@ export const createPipe = async (req, res, next) => {
             size,
             company,
             quantity: quantity || 0,
-            unit: unit || 'pieces'
+            unit: unit || 'pieces',
+            material_type,
+            quality_grade,
+            length_feet,
+            cost_per_unit
         }, req.user.id);
 
         res.status(201).json({
@@ -46,7 +50,7 @@ export const createPipe = async (req, res, next) => {
 
 export const addStock = async (req, res, next) => {
     try {
-        const { pipe_id, quantity, unit } = req.body;
+        const { pipe_id, quantity, unit, supplier_name, purchase_mode, source_location, destination_location, remarks } = req.body;
 
         if (!pipe_id || !quantity || quantity <= 0) {
             return res.status(400).json({
@@ -59,7 +63,14 @@ export const addStock = async (req, res, next) => {
             pipe_id,
             parseFloat(quantity),
             unit || 'pipes',
-            req.user.id
+            req.user.id,
+            {
+                supplier_name,
+                purchase_mode,
+                source_location,
+                destination_location,
+                remarks
+            }
         );
 
         res.json({
@@ -76,10 +87,10 @@ export const issuePipes = async (req, res, next) => {
     try {
         const data = req.body;
 
-        if (!data.pipe_inventory_id || !data.quantity || data.quantity <= 0) {
+        if (!data.pipe_inventory_id || !data.quantity || data.quantity <= 0 || !data.bore_id || !data.bore_type) {
             return res.status(400).json({
                 status: 'fail',
-                message: 'Pipe ID and positive quantity are required'
+                message: 'Pipe ID, bore type, bore ID, and positive quantity are required'
             });
         }
 
@@ -99,10 +110,10 @@ export const returnPipes = async (req, res, next) => {
     try {
         const data = req.body;
 
-        if (!data.pipe_inventory_id || !data.quantity || data.quantity <= 0) {
+        if (!data.allocation_id || !data.quantity || data.quantity <= 0) {
             return res.status(400).json({
                 status: 'fail',
-                message: 'Pipe ID and positive quantity are required'
+                message: 'Allocation ID and positive quantity are required'
             });
         }
 
@@ -118,7 +129,7 @@ export const returnPipes = async (req, res, next) => {
     }
 };
 
-export const deletePipe = async (req, res, next) => {
+export const deletePipe = async (req, res) => {
     const { id } = req.params;
     console.log(`[Inventory - Pipes] Attempting to delete pipe ID: ${id}`);
 
@@ -174,6 +185,18 @@ export const getPipeTransactions = async (req, res, next) => {
     }
 };
 
+export const getPipeAllocations = async (req, res, next) => {
+    try {
+        const allocations = await inventoryService.getPipeAllocations();
+        res.json({
+            status: 'success',
+            data: allocations
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // =============================================
 // PIPE COMPANIES CONTROLLERS
 // =============================================
@@ -190,7 +213,7 @@ export const getPipeCompanies = async (req, res, next) => {
     }
 };
 
-export const addPipeCompany = async (req, res, next) => {
+export const addPipeCompany = async (req, res) => {
     console.log(`[Inventory - Pipes Companies] Adding new company: ${req.body.company_name}`);
     try {
         const { company_name } = req.body;
@@ -215,7 +238,7 @@ export const addPipeCompany = async (req, res, next) => {
     }
 };
 
-export const updatePipeCompany = async (req, res, next) => {
+export const updatePipeCompany = async (req, res) => {
     try {
         const { id } = req.params;
         const { company_name } = req.body;
@@ -238,7 +261,7 @@ export const updatePipeCompany = async (req, res, next) => {
     }
 };
 
-export const deletePipeCompany = async (req, res, next) => {
+export const deletePipeCompany = async (req, res) => {
     const { id } = req.params;
     console.log(`[Inventory - Pipes Companies] Attempting to delete company ID: ${id}`);
 
@@ -382,7 +405,7 @@ export const updateSpareStatus = async (req, res, next) => {
     }
 };
 
-export const deleteSpare = async (req, res, next) => {
+export const deleteSpare = async (req, res) => {
     const { id } = req.params;
     console.log(`[Inventory - Spares] Attempting to delete spare ID: ${id}`);
 
@@ -488,7 +511,7 @@ export const updateDieselRecord = async (req, res, next) => {
     }
 };
 
-export const deleteDieselRecord = async (req, res, next) => {
+export const deleteDieselRecord = async (req, res) => {
     const { id } = req.params;
     console.log(`[Inventory - Diesel] Attempting to delete diesel record ID: ${id}`);
 
@@ -530,6 +553,22 @@ export const getDieselSummary = async (req, res, next) => {
 
         const summary = await inventoryService.getDieselSummary(start_date, end_date);
 
+        res.json({
+            status: 'success',
+            data: summary
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// =============================================
+// INVENTORY SUMMARY
+// =============================================
+
+export const getSummary = async (req, res, next) => {
+    try {
+        const summary = await inventoryService.getInventorySummary();
         res.json({
             status: 'success',
             data: summary

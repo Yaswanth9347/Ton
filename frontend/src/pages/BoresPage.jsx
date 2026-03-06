@@ -158,10 +158,9 @@ export default function BoresPage() {
     // Filter records based on search
     const filteredRecords = useMemo(() => {
         let result = records.map(rec => {
-            const balance = parseFloat(rec.balance) || 0;
             return {
                 ...rec,
-                status: balance > 0 ? 'Pending' : 'Completed'
+                status: rec.status || ((parseFloat(rec.balance) || 0) > 0 ? 'Pending' : 'Done')
             };
         });
 
@@ -402,7 +401,10 @@ export default function BoresPage() {
                                         } else if (col.key === 'balance') {
                                             cellContent = <span className={`bores__badge ${parseFloat(rec.balance) > 0 ? 'bores__badge--pending' : 'bores__badge--paid'}`}>{cellContent}</span>;
                                         } else if (col.key === 'status') {
-                                            cellContent = <span className={`bores__status-tag ${rec.status === 'Pending' ? 'bores__status-tag--pending' : 'bores__status-tag--completed'}`}>{rec.status}</span>;
+                                            const statusClass = rec.status === 'Done' || rec.status === 'Completed'
+                                                ? 'bores__status-tag--completed'
+                                                : 'bores__status-tag--pending';
+                                            cellContent = <span className={`bores__status-tag ${statusClass}`}>{rec.status}</span>;
                                         }
 
                                         return (

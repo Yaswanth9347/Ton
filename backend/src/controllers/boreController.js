@@ -67,7 +67,7 @@ export const createRecord = async (req, res, next) => {
  */
 export const updateRecord = async (req, res, next) => {
     try {
-        const record = await boreService.updateRecord(req.params.id, req.body);
+        const record = await boreService.updateRecord(req.params.id, req.body, req.user.id);
 
         if (!record) {
             return res.status(404).json({
@@ -91,7 +91,7 @@ export const updateRecord = async (req, res, next) => {
  */
 export const deleteRecord = async (req, res, next) => {
     try {
-        const record = await boreService.deleteRecord(req.params.id);
+        const record = await boreService.deleteRecord(req.params.id, req.user.id);
 
         if (!record) {
             return res.status(404).json({

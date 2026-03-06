@@ -131,7 +131,7 @@ export function AdminPayrollTab() {
             <h2 className="mb-4">Company Payroll Management</h2>
 
             <Card className="mb-6">
-                <div className="flex gap-4 items-end flex-wrap">
+                <div className="flex gap-3 items-end flex-wrap">
                     <div className="form-group mb-0">
                         <label className="form-label">Month</label>
                         <select className="form-input" value={month} onChange={(e) => setMonth(parseInt(e.target.value))}
@@ -146,17 +146,35 @@ export function AdminPayrollTab() {
                         <input type="number" className="form-input" value={year} onChange={(e) => setYear(parseInt(e.target.value))}
                             style={{ padding: '6px 10px', fontSize: '0.85rem' }} />
                     </div>
-                    <Button variant="primary" size="sm" onClick={handlePreview} loading={loading}>
-                        Load Preview
-                    </Button>
-                    <Button variant="secondary" size="sm" onClick={handleExport}>
-                        📥 Export CSV
-                    </Button>
-                    {preview && (
-                        <Button variant="secondary" size="sm" onClick={handleBulkDownload}>
-                            📄 Bulk PDF Download
+                    <div className="flex gap-2 items-center flex-wrap" style={{ marginLeft: '4px' }}>
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={handlePreview}
+                            loading={loading}
+                            style={{ padding: '5px 10px', minHeight: '32px', lineHeight: 1.1, whiteSpace: 'nowrap' }}
+                        >
+                            Load Preview
                         </Button>
-                    )}
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={handleExport}
+                            style={{ padding: '5px 10px', minHeight: '32px', lineHeight: 1.1, whiteSpace: 'nowrap' }}
+                        >
+                            📥 Export CSV
+                        </Button>
+                        {preview && (
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={handleBulkDownload}
+                                style={{ padding: '5px 10px', minHeight: '32px', lineHeight: 1.1, whiteSpace: 'nowrap' }}
+                            >
+                                📄 Bulk PDF Download
+                            </Button>
+                        )}
+                    </div>
                 </div>
             </Card>
 

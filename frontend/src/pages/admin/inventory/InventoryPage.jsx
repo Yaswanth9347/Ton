@@ -1,16 +1,26 @@
-import { useState, Suspense, lazy } from 'react';
-import { Package, Wrench, Fuel, Boxes } from 'lucide-react';
+import { useState, useEffect, Suspense, lazy } from 'react';
+import { Package, Wrench, Fuel, Boxes, IndianRupee, TrendingUp, AlertTriangle } from 'lucide-react';
+import axios from 'axios';
 import './InventoryPage.css';
 
 const PipesInventory = lazy(() => import('./PipesInventory').then(m => ({ default: m.PipesInventory })));
 const SparesInventory = lazy(() => import('./SparesInventory').then(m => ({ default: m.SparesInventory })));
 const DieselTracking = lazy(() => import('./DieselTracking').then(m => ({ default: m.DieselTracking })));
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002/api';
+
 const tabs = [
     { id: 'pipes', label: 'Pipes', icon: <Package size={17} /> },
     { id: 'spares', label: 'Spares (Bits & OB)', icon: <Wrench size={17} /> },
     { id: 'diesel', label: 'Diesel', icon: <Fuel size={17} /> },
 ];
+
+const fmtCurrency = (val) => {
+    const num = parseFloat(val || 0);
+    if (num >= 100000) return `₹${(num / 100000).toFixed(1)}L`;
+    if (num >= 1000) return `₹${(num / 1000).toFixed(1)}K`;
+    return `₹${num.toFixed(0)}`;
+};
 
 function LoadingSpinner() {
     return (
@@ -23,6 +33,21 @@ function LoadingSpinner() {
 
 export function InventoryPage() {
     const [activeTab, setActiveTab] = useState(() => localStorage.getItem('inventoryActiveTab') || 'pipes');
+    const [summary, setSummary] = useState(null);
+
+    const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
+
+    useEffect(() => {
+        const fetchSummary = async () => {
+            try {
+                const r = await axios.get(`${API_URL}/inventory/summary`, { headers: authHeaders() });
+                setSummary(r.data.data);
+            } catch (err) {
+                console.error('[Inventory] Failed to fetch summary:', err.message);
+            }
+        };
+        fetchSummary();
+    }, [activeTab]);
 
     const handleTabChange = (id) => {
         console.log(`[Inventory] Tab changed to: ${id}`);
@@ -35,16 +60,62 @@ export function InventoryPage() {
             {/* Header */}
             <div className="inv-header">
                 <div className="inv-header__left">
-                    <div className="inv-header__eyebrow">
-                        <Boxes size={13} />
-                        Operations Management
-                    </div>
                     <h1 className="inv-header__title">Inventory &amp; Supplies</h1>
-                    <p className="inv-header__subtitle">
-                        Manage pipes stock, drilling spares, and diesel fuel tracking
-                    </p>
                 </div>
             </div>
+
+            {/* Summary Dashboard */}
+            {summary && (
+                <div className="inv-summary-dashboard">
+                    <div className="inv-summary-card inv-summary-card--pipes">
+                        <div className="inv-summary-card__icon"><Package size={20} /></div>
+                        <div className="inv-summary-card__content">
+                            <div className="inv-summary-card__value">{summary.pipes.total_types}</div>
+                            <div className="inv-summary-card__label">Pipe Types</div>
+                            <div className="inv-summary-card__sub">
+                                {(summary.pipes.total_stock_feet / 20).toFixed(0)} pipes total
+                                {summary.pipes.total_value > 0 && <> · {fmtCurrency(summary.pipes.total_value)} value</>}
+                            </div>
+                        </div>
+                        {summary.pipes.low_stock_count > 0 && (
+                            <div className="inv-summary-card__alert">
+                                <AlertTriangle size={14} /> {summary.pipes.low_stock_count} low
+                            </div>
+                        )}
+                    </div>
+                    <div className="inv-summary-card inv-summary-card--spares">
+                        <div className="inv-summary-card__icon"><Wrench size={20} /></div>
+                        <div className="inv-summary-card__content">
+                            <div className="inv-summary-card__value">{summary.spares.total}</div>
+                            <div className="inv-summary-card__label">Spare Parts</div>
+                            <div className="inv-summary-card__sub">
+                                {summary.spares.available} available · {summary.spares.in_use} in use
+                                {summary.spares.total_value > 0 && <> · {fmtCurrency(summary.spares.total_value)}</>}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="inv-summary-card inv-summary-card--diesel">
+                        <div className="inv-summary-card__icon"><Fuel size={20} /></div>
+                        <div className="inv-summary-card__content">
+                            <div className="inv-summary-card__value">{fmtCurrency(summary.diesel.last_30_days_amount)}</div>
+                            <div className="inv-summary-card__label">Diesel (30 days)</div>
+                            <div className="inv-summary-card__sub">
+                                {parseFloat(summary.diesel.last_30_days_liters).toFixed(0)}L consumed · {summary.diesel.last_30_days_entries} entries
+                            </div>
+                        </div>
+                    </div>
+                    <div className="inv-summary-card inv-summary-card--total">
+                        <div className="inv-summary-card__icon"><IndianRupee size={20} /></div>
+                        <div className="inv-summary-card__content">
+                            <div className="inv-summary-card__value">
+                                {fmtCurrency((summary.pipes.total_value || 0) + (summary.spares.total_value || 0) + (summary.diesel.last_30_days_amount || 0))}
+                            </div>
+                            <div className="inv-summary-card__label">Total Value</div>
+                            <div className="inv-summary-card__sub">Pipes + Spares + Diesel (30d)</div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Tab Bar */}
             <div className="inv-tabs">

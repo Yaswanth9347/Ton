@@ -210,9 +210,11 @@ const initialFormData = {
     // GI Pipes
     pipe_company: '',
     pipe_company_id: '',
+    pipe_inventory_id: '',
     gi_pipes_qty: '',
     gi_pipes_rate: '',
     gi_pipes_amount: '',
+    gi_pipes_returned_qty: '',
     geologist: '',
 
     // Labour
@@ -424,6 +426,7 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
     const [formData, setFormData] = useState(() => mapRecordToFormData(record));
     const [mandals, setMandals] = useState([]);
     const [companies, setCompanies] = useState([]);
+    const [inventoryPipes, setInventoryPipes] = useState([]);
 
     // Custom Row States
     const [customMaterials, setCustomMaterials] = useState([]);
@@ -460,6 +463,7 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
     useEffect(() => {
         fetchMandals();
         fetchCompanies();
+        fetchInventoryPipes();
     }, [record]);
 
     const fetchMandals = async () => {
@@ -477,6 +481,15 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
             setCompanies(res.data.data || []);
         } catch (err) {
             console.error('Failed to fetch pipe companies:', err);
+        }
+    };
+
+    const fetchInventoryPipes = async () => {
+        try {
+            const res = await inventoryApi.getPipes();
+            setInventoryPipes(res.data.data || []);
+        } catch (err) {
+            console.error('Failed to fetch inventory pipes:', err);
         }
     };
 
@@ -664,7 +677,18 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
             updates[amountKey] = calculateAmount(qty, rate);
         }
 
-        setFormData(prev => ({ ...prev, ...updates }));
+        setFormData(prev => {
+            const next = { ...prev, ...updates };
+            if (name === 'pipe_inventory_id') {
+                const selectedPipe = inventoryPipes.find((pipe) => String(pipe.id) === String(value));
+                if (selectedPipe) {
+                    const matchedCompany = companies.find((company) => company.company_name?.toLowerCase() === selectedPipe.company?.toLowerCase());
+                    next.pipe_company = selectedPipe.company;
+                    next.pipe_company_id = matchedCompany ? String(matchedCompany.id) : next.pipe_company_id;
+                }
+            }
+            return next;
+        });
     };
 
     const handleSubmit = (e) => {
@@ -892,17 +916,30 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
                             <div className="govt-bore-modal__grid govt-bore-modal__grid--4">
                                 <div className="form-field">
                                     <label className="form-field__label">Company</label>
-                                    <select name="pipe_company_id" value={formData.pipe_company_id || ''} onChange={handleChange} className="form-field__input" disabled={viewMode}>
+                                    <select name="pipe_inventory_id" value={formData.pipe_inventory_id || ''} onChange={handleChange} className="form-field__input" disabled={viewMode}>
                                         <option value="">Select Company</option>
-                                        {companies.map(c => (
-                                            <option key={c.id} value={c.id}>{c.company_name}</option>
-                                        ))}
+                                        {inventoryPipes.map(pipe => {
+                                            const storeQty = parseFloat(pipe.store_quantity || pipe.quantity || 0);
+                                            const lengthFt = parseFloat(pipe.length_feet || 20) || 20;
+                                            const pipeCount = Math.round((storeQty / lengthFt) * 100) / 100;
+                                            const isLowStock = pipeCount <= 0;
+                                            return (
+                                                <option key={pipe.id} value={pipe.id} disabled={isLowStock}>
+                                                    {pipe.company} ({pipe.size} inch){isLowStock ? ' - No Stock' : ''}
+                                                </option>
+                                            );
+                                        })}
                                     </select>
                                 </div>
                                 <InputField label="Qty" name="gi_pipes_qty" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
                                 <InputField label="Rate" name="gi_pipes_rate" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
-                                <InputField label="Amount" name="gi_pipes_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
+                                <InputField label="Amount" name="gi_pipes_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} readOnly inputStyle={{ textAlign: 'center' }} />
                             </div>
+                            {(formData.status === 'Done' || formData.status === 'Completed') && formData.gi_pipes_qty && (
+                                <div className="govt-bore-modal__grid govt-bore-modal__grid--4" style={{ marginTop: '10px' }}>
+                                    <InputField label="Returned Qty" name="gi_pipes_returned_qty" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
+                                </div>
+                            )}
                             <div className="govt-bore-modal__grid govt-bore-modal__grid--fixed-2" style={{ marginTop: '10px' }}>
                                 <InputField label="Geologist" name="geologist" formData={formData} handleChange={handleChange} viewMode={viewMode} />
                                 <InputField label="Labour Charges" name="labour_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} />

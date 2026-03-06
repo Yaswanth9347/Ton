@@ -55,7 +55,7 @@ export function SparesInventory() {
     const [txFilters, setTxFilters] = useState({ type: 'ALL', action: 'ALL', search: '' });
     const [filterType, setFilterType] = useState('ALL');
     const [filterStatus, setFilterStatus] = useState('ALL');
-    const [formData, setFormData] = useState({ spare_type: 'OB', spare_number: '', vehicle_name: '', supervisor_name: '', remarks: '' });
+    const [formData, setFormData] = useState({ spare_type: 'OB', spare_number: '', vehicle_name: '', supervisor_name: '', remarks: '', brand: '', cost_per_unit: '' });
 
     const showToast = (type, msg) => setToast({ type, message: msg });
     const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -83,7 +83,7 @@ export function SparesInventory() {
     const openModal = (type, spare = null) => {
         setModalType(type);
         setSelSpare(spare);
-        setFormData({ spare_type: 'OB', spare_number: '', vehicle_name: spare?.vehicle_name || '', supervisor_name: spare?.supervisor_name || '', remarks: '' });
+        setFormData({ spare_type: 'OB', spare_number: '', vehicle_name: spare?.vehicle_name || '', supervisor_name: spare?.supervisor_name || '', remarks: '', brand: '', cost_per_unit: '' });
         setShowModal(true);
     };
     const closeModal = () => { setShowModal(false); setSelSpare(null); };
@@ -94,7 +94,12 @@ export function SparesInventory() {
         try {
             const headers = authH();
             if (modalType === 'add') {
-                await axios.post(`${API_URL}/inventory/spares`, { spare_type: formData.spare_type, spare_number: formData.spare_number }, { headers });
+                await axios.post(`${API_URL}/inventory/spares`, {
+                    spare_type: formData.spare_type,
+                    spare_number: formData.spare_number,
+                    brand: formData.brand || null,
+                    cost_per_unit: formData.cost_per_unit ? parseFloat(formData.cost_per_unit) : 0
+                }, { headers });
                 showToast('success', `${formData.spare_type} #${formData.spare_number} added`);
             } else if (modalType === 'issue') {
                 await axios.post(`${API_URL}/inventory/spares/${selSpare.id}/issue`,
@@ -221,16 +226,17 @@ export function SparesInventory() {
                             <tr>
                                 <th>Type</th>
                                 <th>Spare #</th>
+                                <th>Brand</th>
+                                <th>Cost</th>
                                 <th>Status</th>
                                 <th>Location</th>
                                 <th>Vehicle</th>
-                                <th>Supervisor</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {spares.length === 0 ? (
-                                <tr><td colSpan="7" className="inv-table__empty">No spares found. Add one to get started.</td></tr>
+                                <tr><td colSpan="8" className="inv-table__empty">No spares found. Add one to get started.</td></tr>
                             ) : (
                                 spares.map(spare => (
                                     <tr key={spare.id}>
@@ -246,10 +252,13 @@ export function SparesInventory() {
                                             </span>
                                         </td>
                                         <td style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{spare.spare_number}</td>
+                                        <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>{spare.brand || '—'}</td>
+                                        <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem' }}>
+                                            {spare.cost_per_unit > 0 ? `₹${parseFloat(spare.cost_per_unit).toLocaleString('en-IN')}` : '—'}
+                                        </td>
                                         <td><span className={`status-badge status-badge--${STATUS_KEY[spare.status]}`}><span className="status-badge__dot" />{STATUS_LABEL[spare.status]}</span></td>
                                         <td style={{ color: 'var(--text-muted)' }}>{spare.current_location || 'HOME'}</td>
                                         <td>{spare.vehicle_name || '—'}</td>
-                                        <td>{spare.supervisor_name || '—'}</td>
                                         <td>
                                             <div className="inv-actions">
                                                 {spare.status === 'AVAILABLE' && (
@@ -381,6 +390,16 @@ export function SparesInventory() {
                                         <div className="inv-form-group">
                                             <label>Spare Number *</label>
                                             <input type="text" value={formData.spare_number} onChange={e => setFormData(f => ({ ...f, spare_number: e.target.value }))} placeholder="e.g. OB-001" required />
+                                        </div>
+                                        <div className="inv-form-row">
+                                            <div className="inv-form-group">
+                                                <label>Brand</label>
+                                                <input type="text" value={formData.brand} onChange={e => setFormData(f => ({ ...f, brand: e.target.value }))} placeholder="e.g. Kirloskar, Atlas Copco…" />
+                                            </div>
+                                            <div className="inv-form-group">
+                                                <label>Cost (₹)</label>
+                                                <input type="number" step="0.01" min="0" value={formData.cost_per_unit} onChange={e => setFormData(f => ({ ...f, cost_per_unit: e.target.value }))} placeholder="0.00" />
+                                            </div>
                                         </div>
                                     </>
                                 )}

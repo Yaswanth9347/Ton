@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Calculator, Clock, CreditCard, Droplets, Layers, TrendingUp, Zap, CirclePlus, Calendar } from 'lucide-react';
+import { inventoryApi } from '../../services/api';
 
 // Helper Components
 const InputField = ({ label, name, type = 'text', value, onChange, onBlur, required, readOnly, viewMode, placeholder }) => (
@@ -39,6 +40,7 @@ const QtyRateAmountRow = ({ label, prefix, data, onChange, viewMode }) => (
 
 export default function BoreModal({ isOpen, onClose, record, onSave, saving, viewMode = false }) {
     const [formData, setFormData] = useState({});
+    const [pipeOptions, setPipeOptions] = useState([]);
 
     useEffect(() => {
         if (record) {
@@ -56,6 +58,7 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                 date: new Date().toISOString().split('T')[0],
                 bore_type: '6 1/2"',
                 pipe_details: {},
+                pipe_inventory_id: '',
                 drill_upto_casing_feet: 0, drill_upto_casing_rate: 0, drill_upto_casing_amt: 0,
                 empty_drilling_feet: 0, empty_drilling_rate: 0, empty_drilling_amt: 0,
                 jump_300_feet: 0, jump_300_rate: 0, jump_300_amt: 0,
@@ -72,12 +75,30 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
         }
     }, [record, isOpen]);
 
+    useEffect(() => {
+        if (!isOpen) return;
+        inventoryApi.getPipes()
+            .then((res) => setPipeOptions(res.data?.data || []))
+            .catch(() => setPipeOptions([]));
+    }, [isOpen]);
+
     const handleChange = (e) => {
         const { name, value, type } = e.target;
         let val = type === 'number' ? Math.max(0, parseFloat(value) || 0) : value;
 
         setFormData(prev => {
             const updated = { ...prev, [name]: val };
+
+            if (name === 'pipe_inventory_id') {
+                const selectedPipe = pipeOptions.find((pipe) => String(pipe.id) === String(value));
+                if (selectedPipe) {
+                    updated.pipe_details = {
+                        ...(updated.pipe_details || {}),
+                        company: selectedPipe.company,
+                        size: selectedPipe.size
+                    };
+                }
+            }
 
             // Auto-calculate sub-amounts (Rate * Qty/Feet)
             // Auto-calculate sub-amounts (Rate * Qty/Feet)
@@ -264,6 +285,19 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                             <h3 className="govt-bore-modal__section-title">
                                 Pipes Tracking
                             </h3>
+                            <div className="govt-bore-modal__grid govt-bore-modal__grid--2" style={{ marginBottom: '16px' }}>
+                                <div className="form-field">
+                                    <label className="form-field__label">Inventory Pipe</label>
+                                    <select name="pipe_inventory_id" value={formData.pipe_inventory_id || ''} onChange={handleChange} disabled={viewMode} className="form-field__input">
+                                        <option value="">Select pipe from store</option>
+                                        {pipeOptions.map((pipe) => (
+                                            <option key={pipe.id} value={pipe.id}>
+                                                {pipe.company} · {pipe.size} · Store {Math.round((parseFloat(pipe.store_quantity || pipe.quantity || 0) / (parseFloat(pipe.length_feet || 20) || 20)) * 100) / 100}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
                             <div className="govt-bore-modal__grid govt-bore-modal__grid--4">
                                 <InputField label="Pipes on Vehicle (Before)" name="pipes_on_vehicle_before" type="number" value={formData.pipes_on_vehicle_before} onChange={handleChange} viewMode={viewMode} />
                                 <InputField label="Pipes Used (Nos)" name="pipes_used_qty" type="number" value={formData.pipes_used_qty} onChange={handleChange} viewMode={viewMode} />
@@ -307,10 +341,27 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                                         <InputField label="Discount" name="discount" type="number" value={formData.discount} onChange={handleChange} viewMode={viewMode} />
                                     </div>
                                 </div>
-                                <div className="bore-modal__payment-card">
-                                    <div className="payment-item"><span>Net Amount:</span> <strong>{(formData.total_amount || 0).toLocaleString()}</strong></div>
-                                    <div className="payment-item"><span>Amount Paid:</span> <strong>{(formData.amount_paid || 0).toLocaleString()}</strong></div>
-                                    <div className="payment-item payment-item--balance"><span>Balance:</span> <strong>{(formData.balance || 0).toLocaleString()}</strong></div>
+                                <div style={{
+                                    background: 'transparent',
+                                    border: '2px solid #e0b100',
+                                    borderRadius: '14px',
+                                    padding: '16px 20px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '10px'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', color: '#6b5a00' }}>
+                                        <span>Net Amount</span>
+                                        <strong style={{ fontSize: '16px', color: '#3d3400' }}>₹{(formData.total_amount || 0).toLocaleString()}</strong>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', color: '#6b5a00' }}>
+                                        <span>Amount Paid</span>
+                                        <strong style={{ fontSize: '16px', color: '#1a7a1a' }}>₹{(formData.amount_paid || 0).toLocaleString()}</strong>
+                                    </div>
+                                    <div style={{ borderTop: '1px dashed #e0b100', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', color: '#6b5a00' }}>
+                                        <span style={{ fontWeight: '600' }}>Balance</span>
+                                        <strong style={{ fontSize: '18px', color: (formData.balance || 0) > 0 ? '#c0392b' : '#1a7a1a' }}>₹{(formData.balance || 0).toLocaleString()}</strong>
+                                    </div>
                                 </div>
                             </div>
                         </div>

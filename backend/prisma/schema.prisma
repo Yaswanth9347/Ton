@@ -100,6 +100,7 @@ model borewell_data {
   pipes_used_pieces_ft    Decimal? @default(0) @db.Decimal(10, 2)
   pipes_left_on_vehicle   Int?     @default(0)
   pipe_details            Json?
+  pipe_inventory_id       Int?
 
   // Misc
   labour_charge Decimal? @default(0) @db.Decimal(10, 2)
@@ -123,6 +124,8 @@ model borewell_data {
   created_at DateTime? @default(now()) @db.Timestamp(6)
   updated_at DateTime? @default(now()) @db.Timestamp(6)
   users      users?    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pipe_inventory_ref pipes_master? @relation("PrivateBorePipeInventory", fields: [pipe_inventory_id], references: [id])
+  pipe_allocations   pipe_bore_allocations[] @relation("PrivateBoreAllocations")
 
   @@index([customer_name], map: "idx_borewell_data_customer")
   @@index([created_by], map: "idx_borewell_data_created_by")
@@ -478,6 +481,7 @@ model users {
   quotes                                           quotes[]
   roles                                            roles                       @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   pipes_stock_transactions                         pipes_stock_transactions[]
+  pipe_bore_allocations                           pipe_bore_allocations[]
   spares_stock_transactions                        spares_stock_transactions[]
   diesel_stock_transactions                        diesel_stock_transactions[]
 
@@ -570,9 +574,10 @@ model BorewellWork {
   // ----------------------------
   // G.I. PIPES (qty / rate / amount)
   // ----------------------------
-  gi_pipes_qty    Int?
-  gi_pipes_rate   Decimal? @db.Decimal(10, 2)
-  gi_pipes_amount Decimal? @db.Decimal(14, 2)
+  gi_pipes_qty              Int?
+  gi_pipes_rate             Decimal? @db.Decimal(10, 2)
+  gi_pipes_amount           Decimal? @db.Decimal(14, 2)
+  gi_pipes_returned_qty     Int?     @default(0)
 
   // ----------------------------
   // PLOT / FARM (qty / rate / amount)
@@ -682,8 +687,11 @@ model BorewellWork {
   // ----------------------------
   pipe_company String?
   pipe_company_id   Int? 
+  pipe_inventory_id Int?
   
   pipe_company_ref  pipes_company_master? @relation(fields: [pipe_company_id], references: [id])
+  pipe_inventory_ref pipes_master? @relation("GovtBorePipeInventory", fields: [pipe_inventory_id], references: [id])
+  pipe_allocations   pipe_bore_allocations[] @relation("GovtBoreAllocations")
 
   geologist String? // Geologist name
 
@@ -778,12 +786,20 @@ model pipes_master {
   pipe_size      String   @db.VarChar(50)
   unit           String   @db.VarChar(50)
   description    String?  @db.Text
+  material_type  String?  @db.VarChar(50)
+  quality_grade  String?  @db.VarChar(50)
+  length_feet    Decimal? @default(20) @db.Decimal(8, 2)
+  cost_per_unit  Decimal? @default(0) @db.Decimal(12, 2)
+  reorder_level  Int?     @default(10)
   is_active      Boolean  @default(true)
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
 
   stock        pipes_stock?
   transactions pipes_stock_transactions[]
+  bore_links_private borewell_data[] @relation("PrivateBorePipeInventory")
+  bore_links_govt    BorewellWork[]  @relation("GovtBorePipeInventory")
+  allocations        pipe_bore_allocations[]
 
   @@unique([pipe_type_name, pipe_size])
 }
@@ -807,9 +823,47 @@ model pipes_stock_transactions {
   created_by       Int
   created_at       DateTime @default(now())
   remarks          String?  @db.Text
+  vehicle_name     String?  @db.VarChar(100)
+  supervisor_name  String?  @db.VarChar(100)
+  source_location  String?  @default("MAIN_STORE") @db.VarChar(100)
+  destination_location String? @db.VarChar(100)
+  supplier_name    String?  @db.VarChar(150)
+  purchase_mode    String?  @db.VarChar(50)
+  allocation_id    Int?
 
   pipe_master pipes_master @relation(fields: [pipe_master_id], references: [id])
   user        users        @relation(fields: [created_by], references: [id])
+  allocation  pipe_bore_allocations? @relation(fields: [allocation_id], references: [id])
+}
+
+model pipe_bore_allocations {
+  id                   Int      @id @default(autoincrement())
+  pipe_master_id       Int
+  bore_type            String   @db.VarChar(20)
+  private_bore_id      Int?
+  govt_bore_id         Int?
+  vehicle_name         String?  @db.VarChar(100)
+  supervisor_name      String?  @db.VarChar(100)
+  issued_quantity      Decimal  @default(0) @db.Decimal(10, 2)
+  returned_quantity    Decimal  @default(0) @db.Decimal(10, 2)
+  source_location      String?  @default("MAIN_STORE") @db.VarChar(100)
+  destination_location String?  @db.VarChar(100)
+  status               String   @default("OPEN") @db.VarChar(20)
+  auto_created         Boolean  @default(false)
+  created_by           Int?
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  pipe_master     pipes_master              @relation(fields: [pipe_master_id], references: [id])
+  private_bore    borewell_data?            @relation("PrivateBoreAllocations", fields: [private_bore_id], references: [id])
+  govt_bore       BorewellWork?             @relation("GovtBoreAllocations", fields: [govt_bore_id], references: [id])
+  creator         users?                    @relation(fields: [created_by], references: [id])
+  transactions    pipes_stock_transactions[]
+
+  @@unique([pipe_master_id, private_bore_id, govt_bore_id])
+  @@index([bore_type, status])
+  @@index([private_bore_id])
+  @@index([govt_bore_id])
 }
 
 // =============================================
@@ -817,14 +871,18 @@ model pipes_stock_transactions {
 // =============================================
 
 model spares_master {
-  id          Int      @id @default(autoincrement())
-  spare_name  String   @db.VarChar(100)
-  category    String   @db.VarChar(50)
-  unit        String   @db.VarChar(50)
-  description String?  @db.Text
-  is_active   Boolean  @default(true)
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  id            Int      @id @default(autoincrement())
+  spare_name    String   @db.VarChar(100)
+  category      String   @db.VarChar(50)
+  unit          String   @db.VarChar(50)
+  description   String?  @db.Text
+  brand         String?  @db.VarChar(100)
+  unit_type     String?  @default("Piece") @db.VarChar(30)
+  cost_per_unit Decimal? @default(0) @db.Decimal(12, 2)
+  reorder_level Int?     @default(5)
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
 
   stock        spares_stock?
   transactions spares_stock_transactions[]
@@ -851,6 +909,8 @@ model spares_stock_transactions {
   created_by       Int
   created_at       DateTime @default(now())
   remarks          String?  @db.Text
+  vehicle_name     String?  @db.VarChar(100)
+  supervisor_name  String?  @db.VarChar(100)
 
   spare_master spares_master @relation(fields: [spare_master_id], references: [id])
   user         users         @relation(fields: [created_by], references: [id])
