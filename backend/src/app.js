@@ -12,6 +12,7 @@ import boreRoutes from './routes/boreRoutes.js';
 import govtBoreRoutes from './routes/govtBoreRoutes.js';
 import payrollRoutes from './routes/payrollRoutes.js';
 import inventoryRoutes from './routes/inventory.js';
+import { ensureAuthSchema } from './utils/ensureAuthSchema.js';
 
 dotenv.config();
 
@@ -67,6 +68,10 @@ app.use(helmet());
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+ensureAuthSchema().catch((error) => {
+  console.error('Auth schema ensure failed:', error?.message || error);
+});
 
 // Serve uploads from correct directory based on environment
 const uploadsDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, '../uploads');

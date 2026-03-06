@@ -15,6 +15,7 @@ import db from '../models/db.js';
 import jwtConfig from '../config/jwt.js';
 import { UnauthorizedError, ValidationError, ForbiddenError, NotFoundError } from '../utils/errors.js';
 import { sendAdminResetEmail, sendLoginWarningEmail } from './emailService.js';
+import { ensureAuthSchema } from '../utils/ensureAuthSchema.js';
 
 const SALT_ROUNDS = 10;
 const MAX_FAILED_ATTEMPTS = 3;
@@ -43,10 +44,15 @@ export const generateToken = (userId) => {
 // =============================================
 
 export const authenticateUser = async (username, password) => {
+    const authSchema = await ensureAuthSchema();
+
     // Find user
     const result = await db.query(
         `SELECT u.id, u.username, u.email, u.password_hash, u.first_name, u.last_name,
-                u.is_active, u.failed_login_attempts, u.account_locked, r.name as role
+                u.is_active,
+                ${authSchema.failed_login_attempts ? 'u.failed_login_attempts' : '0'} as failed_login_attempts,
+                ${authSchema.account_locked ? 'u.account_locked' : 'false'} as account_locked,
+                r.name as role
          FROM users u
          JOIN roles r ON u.role_id = r.id
          WHERE u.username = $1`,
@@ -81,21 +87,34 @@ export const authenticateUser = async (username, password) => {
         // Increment failed attempts
         const newAttempts = (user.failed_login_attempts || 0) + 1;
 
-        await db.query(
-            `UPDATE users SET
-                failed_login_attempts = $1,
-                last_failed_login = CURRENT_TIMESTAMP
-             WHERE id = $2`,
-            [newAttempts, user.id]
-        );
+        if (authSchema.failed_login_attempts || authSchema.last_failed_login) {
+            const updateParts = [];
+            const params = [];
+
+            if (authSchema.failed_login_attempts) {
+                params.push(newAttempts);
+                updateParts.push(`failed_login_attempts = $${params.length}`);
+            }
+            if (authSchema.last_failed_login) {
+                updateParts.push('last_failed_login = CURRENT_TIMESTAMP');
+            }
+
+            params.push(user.id);
+            await db.query(
+                `UPDATE users SET ${updateParts.join(', ')} WHERE id = $${params.length}`,
+                params
+            );
+        }
 
         // Lockout after MAX_FAILED_ATTEMPTS — all roles
         if (newAttempts >= MAX_FAILED_ATTEMPTS) {
             // Lock account
-            await db.query(
-                `UPDATE users SET account_locked = true WHERE id = $1`,
-                [user.id]
-            );
+            if (authSchema.account_locked) {
+                await db.query(
+                    `UPDATE users SET account_locked = true WHERE id = $1`,
+                    [user.id]
+                );
+            }
 
             if (user.role === 'ADMIN') {
                 // Admin: generate reset token and send email
@@ -103,10 +122,12 @@ export const authenticateUser = async (username, password) => {
                 const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
                 const expiry = new Date(Date.now() + RESET_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
 
-                await db.query(
-                    `UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE id = $3`,
-                    [resetTokenHash, expiry, user.id]
-                );
+                if (authSchema.reset_token && authSchema.reset_token_expiry) {
+                    await db.query(
+                        `UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE id = $3`,
+                        [resetTokenHash, expiry, user.id]
+                    );
+                }
 
                 const adminName = `${user.first_name} ${user.last_name}`.trim() || user.username;
                 if (user.email) {
@@ -140,9 +161,12 @@ export const authenticateUser = async (username, password) => {
     }
 
     // Successful login — reset failed attempts
-    if (user.failed_login_attempts > 0 || user.account_locked) {
+    if ((user.failed_login_attempts > 0 || user.account_locked) && (authSchema.failed_login_attempts || authSchema.account_locked)) {
+        const resetParts = [];
+        if (authSchema.failed_login_attempts) resetParts.push('failed_login_attempts = 0');
+        if (authSchema.account_locked) resetParts.push('account_locked = false');
         await db.query(
-            `UPDATE users SET failed_login_attempts = 0, account_locked = false WHERE id = $1`,
+            `UPDATE users SET ${resetParts.join(', ')} WHERE id = $1`,
             [user.id]
         );
     }
@@ -203,6 +227,8 @@ export const getUserProfile = async (userId) => {
  * Only the Admin's registered email can trigger this.
  */
 export const forgotPasswordAdmin = async (email) => {
+    const authSchema = await ensureAuthSchema();
+
     // Find admin user by email
     const result = await db.query(
         `SELECT u.id, u.username, u.email, u.first_name, u.last_name, r.name as role
@@ -224,6 +250,10 @@ export const forgotPasswordAdmin = async (email) => {
     const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
     const expiry = new Date(Date.now() + RESET_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
 
+    if (!authSchema.reset_token || !authSchema.reset_token_expiry) {
+        throw new ValidationError('Password reset schema is unavailable. Please contact support.');
+    }
+
     await db.query(
         `UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE id = $3`,
         [resetTokenHash, expiry, admin.id]
@@ -240,6 +270,11 @@ export const forgotPasswordAdmin = async (email) => {
 // =============================================
 
 export const resetPasswordWithToken = async (token, newPassword) => {
+    const authSchema = await ensureAuthSchema();
+    if (!authSchema.reset_token || !authSchema.reset_token_expiry) {
+        throw new ValidationError('Password reset schema is unavailable. Please contact support.');
+    }
+
     // Hash the provided token and find matching user
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
@@ -269,14 +304,14 @@ export const resetPasswordWithToken = async (token, newPassword) => {
 
     const newHash = await hashPassword(newPassword);
 
+    const resetColumns = ['password_hash = $1', 'reset_token = NULL', 'reset_token_expiry = NULL'];
+    if (authSchema.account_locked) resetColumns.push('account_locked = false');
+    if (authSchema.failed_login_attempts) resetColumns.push('failed_login_attempts = 0');
+
     // Update password, clear reset token, unlock account, reset attempts
     await db.query(
         `UPDATE users SET
-            password_hash = $1,
-            reset_token = NULL,
-            reset_token_expiry = NULL,
-            account_locked = false,
-            failed_login_attempts = 0
+            ${resetColumns.join(',\n            ')}
          WHERE id = $2`,
         [newHash, user.id]
     );
@@ -297,6 +332,8 @@ export const resetPasswordWithToken = async (token, newPassword) => {
  *  - Nobody can reset Admin password via this route (must use email)
  */
 export const resetUserPassword = async (requesterId, targetUserId, newPassword) => {
+    const authSchema = await ensureAuthSchema();
+
     // Get requester details
     const requesterResult = await db.query(
         `SELECT u.id, r.name as role FROM users u
@@ -352,12 +389,14 @@ export const resetUserPassword = async (requesterId, targetUserId, newPassword) 
 
     const newHash = await hashPassword(newPassword);
 
+    const updateColumns = ['password_hash = $1'];
+    if (authSchema.failed_login_attempts) updateColumns.push('failed_login_attempts = 0');
+    if (authSchema.account_locked) updateColumns.push('account_locked = false');
+    updateColumns.push('updated_at = CURRENT_TIMESTAMP');
+
     await db.query(
         `UPDATE users SET
-            password_hash = $1,
-            failed_login_attempts = 0,
-            account_locked = false,
-            updated_at = CURRENT_TIMESTAMP
+            ${updateColumns.join(',\n            ')}
          WHERE id = $2`,
         [newHash, targetUserId]
     );

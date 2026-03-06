@@ -2,12 +2,15 @@ import jwt from 'jsonwebtoken';
 import jwtConfig from '../config/jwt.js';
 import { UnauthorizedError } from '../utils/errors.js';
 import db from '../models/db.js';
+import { ensureAuthSchema } from '../utils/ensureAuthSchema.js';
 
 /**
  * Authentication middleware - verifies JWT token
  */
 export const authenticate = async (req, res, next) => {
     try {
+        const authSchema = await ensureAuthSchema();
+
         // Get token from Authorization header or cookie
         let token;
 
@@ -26,7 +29,9 @@ export const authenticate = async (req, res, next) => {
 
         // Check if user still exists
         const result = await db.query(
-            `SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.is_active, u.account_locked, r.name as role
+            `SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.is_active,
+                    ${authSchema.account_locked ? 'u.account_locked' : 'false'} as account_locked,
+                    r.name as role
        FROM users u
        JOIN roles r ON u.role_id = r.id
        WHERE u.id = $1`,

@@ -459,6 +459,11 @@ model users {
   role_id Int
 
   is_active                                        Boolean?                    @default(true)
+  failed_login_attempts                            Int?                        @default(0)
+  account_locked                                   Boolean?                    @default(false)
+  last_failed_login                                DateTime?                   @db.Timestamp(6)
+  reset_token                                      String?                     @db.VarChar(255)
+  reset_token_expiry                               DateTime?                   @db.Timestamp(6)
   created_at                                       DateTime?                   @default(now()) @db.Timestamp(6)
   updated_at                                       DateTime?                   @default(now()) @db.Timestamp(6)
   profile_photo_url                                String?
