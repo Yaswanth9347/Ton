@@ -13,8 +13,10 @@ import govtBoreRoutes from './routes/govtBoreRoutes.js';
 import payrollRoutes from './routes/payrollRoutes.js';
 import inventoryRoutes from './routes/inventory.js';
 import { ensureAuthSchema } from './utils/ensureAuthSchema.js';
+import { getCurrentISTDateTime } from './utils/dateTime.js';
 import { ensureInventorySchema } from './utils/ensureInventorySchema.js';
 import { ensureLoginAuditSchema } from './utils/ensureLoginAuditSchema.js';
+import { ensurePayrollSchema } from './utils/ensurePayrollSchema.js';
 
 dotenv.config();
 
@@ -120,6 +122,10 @@ ensureInventorySchema().catch((error) => {
   console.error('Inventory schema ensure failed:', error?.message || error);
 });
 
+ensurePayrollSchema().catch((error) => {
+  console.error('Payroll schema ensure failed:', error?.message || error);
+});
+
 // Serve uploads from correct directory based on environment
 const uploadsDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadsDir));
@@ -142,7 +148,14 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/bores', boreRoutes);
 app.use('/api/govt-bores', govtBoreRoutes);
-app.use('/api/payroll', payrollRoutes);
+app.use('/api/payroll', async (req, res, next) => {
+  try {
+    await ensurePayrollSchema();
+    next();
+  } catch (error) {
+    next(error);
+  }
+}, payrollRoutes);
 app.use('/api/inventory', async (req, res, next) => {
   try {
     await ensureInventorySchema();
@@ -154,7 +167,7 @@ app.use('/api/inventory', async (req, res, next) => {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', timezone: 'Asia/Kolkata', timestamp: getCurrentISTDateTime() });
 });
 
 // 404 handler

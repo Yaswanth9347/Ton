@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+process.env.TZ = process.env.TZ || 'Asia/Kolkata';
+
 // Only DATABASE_URL and JWT_SECRET are truly required.
 // PORT is NOT required on Vercel (Vercel manages ports internally).
 const requiredEnvVars = [

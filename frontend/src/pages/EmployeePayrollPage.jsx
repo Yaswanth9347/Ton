@@ -6,6 +6,7 @@ import { Button } from '../components/common/Button';
 import { toast } from 'react-hot-toast';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../components/common/Table';
 import { formatCurrency } from '../utils/formatters';
+import { getMonthName } from '../utils/dateTime';
 
 export function EmployeePayrollPage() {
     const [history, setHistory] = useState([]);
@@ -122,7 +123,7 @@ export function EmployeePayrollPage() {
                                     return (
                                         <TableRow key={item.id}>
                                             <TableCell style={{ fontWeight: 600 }}>
-                                                {new Date(item.year, item.month - 1).toLocaleString('default', { month: 'long' })} {item.year}
+                                                {getMonthName(item.month)} {item.year}
                                             </TableCell>
                                             <TableCell>{formatCurrency(item.base_salary)}</TableCell>
                                             <TableCell>

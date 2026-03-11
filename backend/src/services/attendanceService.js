@@ -1,20 +1,28 @@
 import db from '../models/db.js';
 import { NotFoundError, ConflictError, ValidationError } from '../utils/errors.js';
 import * as overtimeService from './overtimeService.js';
+import {
+    getCurrentISTDate,
+    getCurrentISTDateTime,
+    getISTDateString,
+    getISTMonthBounds,
+    getISTWeekdayIndex,
+    isPastISTDate,
+    toDatabaseTimestamp,
+} from '../utils/dateTime.js';
 
 /**
  * Get today's date in YYYY-MM-DD format (server time)
  */
 const getTodayDate = () => {
-    const now = new Date();
-    return now.toISOString().split('T')[0];
+    return getCurrentISTDate();
 };
 
 /**
  * Get current timestamp (server time)
  */
 const getCurrentTimestamp = () => {
-    return new Date();
+    return getCurrentISTDateTime();
 };
 
 /**
@@ -334,12 +342,12 @@ export const updateAttendance = async (id, updates) => {
 
     if (updates.checkIn !== undefined) {
         fields.push(`check_in = $${paramCount++}`);
-        values.push(updates.checkIn);
+        values.push(toDatabaseTimestamp(updates.checkIn));
     }
 
     if (updates.checkOut !== undefined) {
         fields.push(`check_out = $${paramCount++}`);
-        values.push(updates.checkOut);
+        values.push(toDatabaseTimestamp(updates.checkOut));
     }
 
     if (updates.status !== undefined) {
@@ -449,8 +457,8 @@ export const bulkUploadAttendance = async (records, adminId) => {
             const userId = userResult.rows[0].id;
 
             // Parse times
-            const checkInTime = checkIn ? new Date(`${date}T${checkIn}:00`) : null;
-            const checkOutTime = checkOut ? new Date(`${date}T${checkOut}:00`) : null;
+            const checkInTime = checkIn ? `${date} ${checkIn}:00` : null;
+            const checkOutTime = checkOut ? `${date} ${checkOut}:00` : null;
             const isComplete = !!(checkInTime && checkOutTime);
             const recordStatus = status || (checkInTime ? 'present' : 'absent');
 
@@ -518,10 +526,7 @@ export const getAttendanceAnalytics = async (startDate, endDate) => {
  * Get monthly calendar data for a user
  */
 export const getMonthlyCalendarData = async (userId, month, year) => {
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
-    const startDateStr = startDate.toISOString().split('T')[0];
-    const endDateStr = endDate.toISOString().split('T')[0];
+    const { startDate: startDateStr, endDate: endDateStr, daysInMonth } = getISTMonthBounds(month, year);
 
     // Check if user is active
     const userResult = await db.query(
@@ -551,12 +556,10 @@ export const getMonthlyCalendarData = async (userId, month, year) => {
 
     // Build calendar data
     const calendarDays = [];
-    const daysInMonth = endDate.getDate();
 
     for (let day = 1; day <= daysInMonth; day++) {
-        const currentDate = new Date(year, month - 1, day);
-        const dateStr = currentDate.toISOString().split('T')[0];
-        const dayOfWeek = currentDate.getDay();
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayOfWeek = getISTWeekdayIndex(dateStr);
 
         // Check if weekend (only Sunday = 0)
         const isWeekend = dayOfWeek === 0;
@@ -565,7 +568,7 @@ export const getMonthlyCalendarData = async (userId, month, year) => {
         let isHoliday = false;
         let holidayName = null;
         for (const holiday of holidaysResult.rows) {
-            if (holiday.holiday_date?.toISOString().split('T')[0] === dateStr) {
+            if (getISTDateString(holiday.holiday_date) === dateStr) {
                 isHoliday = true;
                 holidayName = holiday.name;
                 break;
@@ -594,9 +597,9 @@ export const getMonthlyCalendarData = async (userId, month, year) => {
         let isOnLeave = false;
         let leaveType = null;
         for (const leave of leavesResult.rows) {
-            const leaveStart = new Date(leave.start_date);
-            const leaveEnd = new Date(leave.end_date);
-            if (currentDate >= leaveStart && currentDate <= leaveEnd) {
+            const leaveStart = getISTDateString(leave.start_date);
+            const leaveEnd = getISTDateString(leave.end_date);
+            if (dateStr >= leaveStart && dateStr <= leaveEnd) {
                 isOnLeave = true;
                 leaveType = leave.leave_type_name || leave.leave_type;
                 break;
@@ -605,7 +608,7 @@ export const getMonthlyCalendarData = async (userId, month, year) => {
 
         // Find attendance record
         const attendance = attendanceResult.rows.find(
-            a => a.attendance_date.toISOString().split('T')[0] === dateStr
+            a => getISTDateString(a.attendance_date) === dateStr
         );
 
         // Determine status
@@ -636,7 +639,7 @@ export const getMonthlyCalendarData = async (userId, month, year) => {
                 status = 'present';
                 displayStatus = 'Present';
             }
-        } else if (currentDate < new Date()) {
+        } else if (isPastISTDate(dateStr)) {
             status = 'absent';
             displayStatus = 'Absent';
         }

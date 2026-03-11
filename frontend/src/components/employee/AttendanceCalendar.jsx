@@ -3,19 +3,16 @@ import { attendanceApi } from '../../services/api';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { formatTime } from '../../utils/formatters';
+import { getCurrentISTDay, getCurrentISTMonthYear, getDaysInMonth, getMonthName, getWeekdayIndexInIST } from '../../utils/dateTime';
 import { X } from 'lucide-react';
 
 export function AttendanceCalendar() {
+    const currentIST = getCurrentISTMonthYear();
     const [calendarData, setCalendarData] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    const [selectedMonth, setSelectedMonth] = useState(currentIST.month);
+    const [selectedYear, setSelectedYear] = useState(currentIST.year);
     const [selectedDay, setSelectedDay] = useState(null);
-
-    const monthNames = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-    ];
 
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -67,8 +64,8 @@ export function AttendanceCalendar() {
     const renderCalendarGrid = () => {
         if (!calendarData) return null;
 
-        const firstDayOfMonth = new Date(selectedYear, selectedMonth - 1, 1).getDay();
-        const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+        const firstDayOfMonth = getWeekdayIndexInIST(`${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`);
+        const daysInMonth = getDaysInMonth(selectedYear, selectedMonth);
 
         const cells = [];
 
@@ -79,10 +76,8 @@ export function AttendanceCalendar() {
 
         // Calendar days
         for (const dayData of calendarData.days) {
-            const isToday = 
-                dayData.day === new Date().getDate() && 
-                selectedMonth === new Date().getMonth() + 1 && 
-                selectedYear === new Date().getFullYear();
+            const current = getCurrentISTMonthYear();
+            const isToday = dayData.day === getCurrentISTDay() && selectedMonth === current.month && selectedYear === current.year;
 
             cells.push(
                 <div
@@ -109,7 +104,7 @@ export function AttendanceCalendar() {
                     <span style={{ fontSize: '18px', fontWeight: 'bold' }}>←</span>
                 </Button>
                 <h3 className="calendar-title">
-                    {monthNames[selectedMonth - 1]} {selectedYear}
+                    {getMonthName(selectedMonth)} {selectedYear}
                 </h3>
                 <Button variant="secondary" size="sm" onClick={handleNextMonth} title="Next month">
                     <span style={{ fontSize: '18px', fontWeight: 'bold' }}>→</span>
@@ -161,7 +156,7 @@ export function AttendanceCalendar() {
                     {selectedDay && (
                         <div className="calendar-day-details-compact">
                             <div className="details-info">
-                                <strong>{monthNames[selectedMonth - 1]} {selectedDay.day}{selectedDay.holidayName ? ` (${selectedDay.holidayName})` : ''}:</strong> {selectedDay.displayStatus}
+                                <strong>{getMonthName(selectedMonth)} {selectedDay.day}{selectedDay.holidayName ? ` (${selectedDay.holidayName})` : ''}:</strong> {selectedDay.displayStatus}
                                 {selectedDay.attendance && (
                                     <span> • {formatTime(selectedDay.attendance.checkIn)} - {formatTime(selectedDay.attendance.checkOut)} ({(selectedDay.attendance.regularHours + selectedDay.attendance.overtimeHours).toFixed(1)}h)</span>
                                 )}

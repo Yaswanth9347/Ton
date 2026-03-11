@@ -1,43 +1,30 @@
+import {
+    formatDateInIST,
+    formatDateTimeInIST,
+    formatTimeInIST,
+    getCurrentISTDate,
+    getDateDaysAgoIST,
+} from './dateTime';
+
 /**
  * Format a date string to display format
  */
 export const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-    });
+    return formatDateInIST(dateString);
 };
 
 /**
  * Format a timestamp to time format
  */
 export const formatTime = (timestamp) => {
-    if (!timestamp) return '-';
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-    });
+    return formatTimeInIST(timestamp);
 };
 
 /**
  * Format a timestamp to datetime format
  */
 export const formatDateTime = (timestamp) => {
-    if (!timestamp) return '-';
-    const date = new Date(timestamp);
-    return date.toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-    });
+    return formatDateTimeInIST(timestamp);
 };
 
 /**
@@ -86,14 +73,12 @@ export const getStatusText = (status, isComplete) => {
  * Get today's date in YYYY-MM-DD format
  */
 export const getTodayDate = () => {
-    return new Date().toISOString().split('T')[0];
+    return getCurrentISTDate();
 };
 
 /**
  * Get date N days ago in YYYY-MM-DD format
  */
 export const getDateDaysAgo = (days) => {
-    const date = new Date();
-    date.setDate(date.getDate() - days);
-    return date.toISOString().split('T')[0];
+    return getDateDaysAgoIST(days);
 };

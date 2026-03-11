@@ -9,6 +9,7 @@ import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
 import { attendanceApi } from '../services/api';
 import toast from 'react-hot-toast';
+import { getCurrentISTMonthYear } from '../utils/dateTime';
 
 export function EmployeeDashboard() {
     const { user, logout } = useAuth();
@@ -92,7 +93,8 @@ export function EmployeeDashboard() {
     useEffect(() => {
         const fetchOvertimeSummary = async () => {
             try {
-                const response = await attendanceApi.getOvertimeSummary();
+                const current = getCurrentISTMonthYear();
+                const response = await attendanceApi.getOvertimeSummary({ month: current.month, year: current.year });
                 setOvertimeSummary(response.data.data);
             } catch (err) {
                 console.error('Failed to fetch overtime summary:', err);

@@ -1,5 +1,6 @@
 import db from '../models/db.js';
 import { AppError, ValidationError, NotFoundError } from '../utils/errors.js';
+import { getISTDateString, getISTMonthBounds, getISTWeekdayIndex } from '../utils/dateTime.js';
 
 /**
  * Get active overtime rules
@@ -87,8 +88,7 @@ export const deleteOvertimeRule = async (id) => {
  * Check if a date is a weekend
  */
 export const isWeekend = (date) => {
-    const d = new Date(date);
-    const day = d.getDay();
+    const day = getISTWeekdayIndex(date);
     return day === 0 || day === 6; // Sunday = 0, Saturday = 6
 };
 
@@ -96,8 +96,7 @@ export const isWeekend = (date) => {
  * Check if a date is a holiday
  */
 export const isHoliday = async (date) => {
-    const dateStr = new Date(date).toISOString().split('T')[0];
-    const d = new Date(date);
+    const dateStr = getISTDateString(date);
     
     // Check one-time holidays
     const oneTimeResult = await db.query(
@@ -108,7 +107,7 @@ export const isHoliday = async (date) => {
     if (oneTimeResult.rows.length > 0) return true;
     
     // Check weekly recurring (e.g., every Sunday)
-    const dayOfWeek = d.getDay();
+    const dayOfWeek = getISTWeekdayIndex(dateStr);
     const weeklyResult = await db.query(
         `SELECT id FROM holidays 
          WHERE recurrence_type = 'weekly' AND recurrence_day = $1`,
@@ -117,7 +116,7 @@ export const isHoliday = async (date) => {
     if (weeklyResult.rows.length > 0) return true;
     
     // Check monthly recurring
-    const dayOfMonth = d.getDate();
+    const dayOfMonth = parseInt(dateStr.split('-')[2]);
     const monthlyResult = await db.query(
         `SELECT id FROM holidays 
          WHERE recurrence_type = 'monthly' AND recurrence_day = $1`,
@@ -126,7 +125,7 @@ export const isHoliday = async (date) => {
     if (monthlyResult.rows.length > 0) return true;
     
     // Check yearly recurring
-    const month = d.getMonth() + 1;
+    const month = parseInt(dateStr.split('-')[1]);
     const yearlyResult = await db.query(
         `SELECT id FROM holidays 
          WHERE recurrence_type = 'yearly' AND recurrence_month = $1 AND recurrence_day = $2`,
@@ -222,8 +221,7 @@ export const getOvertimeSummary = async (userId, startDate, endDate) => {
  * Calculate overtime pay for payroll
  */
 export const calculateOvertimePay = async (userId, month, year, hourlyRate) => {
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
+    const { startDate, endDate } = getISTMonthBounds(month, year);
     
     const result = await db.query(
         `SELECT 
@@ -233,7 +231,7 @@ export const calculateOvertimePay = async (userId, month, year, hourlyRate) => {
          WHERE a.user_id = $1 
          AND a.attendance_date BETWEEN $2 AND $3 
          AND a.overtime_hours > 0`,
-        [userId, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]
+        [userId, startDate, endDate]
     );
     
     const rule = await getActiveOvertimeRule();

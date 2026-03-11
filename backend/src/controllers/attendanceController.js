@@ -1,5 +1,6 @@
 import * as attendanceService from '../services/attendanceService.js';
 import * as overtimeService from '../services/overtimeService.js';
+import { getCurrentISTMonthYear, getISTMonthBounds } from '../utils/dateTime.js';
 
 /**
  * Check in
@@ -86,9 +87,9 @@ export const getHistory = async (req, res, next) => {
 export const getCalendarView = async (req, res, next) => {
     try {
         const { month, year } = req.query;
-        const currentDate = new Date();
-        const targetMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
-        const targetYear = year ? parseInt(year) : currentDate.getFullYear();
+        const currentDate = getCurrentISTMonthYear();
+        const targetMonth = month ? parseInt(month) : currentDate.month;
+        const targetYear = year ? parseInt(year) : currentDate.year;
 
         const calendarData = await attendanceService.getMonthlyCalendarData(
             req.user.id,
@@ -112,14 +113,13 @@ export const getCalendarView = async (req, res, next) => {
 export const getOvertimeSummary = async (req, res, next) => {
     try {
         const { startDate, endDate } = req.query;
-        const currentDate = new Date();
-        const defaultStartDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-        const defaultEndDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+        const currentDate = getCurrentISTMonthYear();
+        const { startDate: defaultStartDate, endDate: defaultEndDate } = getISTMonthBounds(currentDate.month, currentDate.year);
 
         const summary = await overtimeService.getOvertimeSummary(
             req.user.id,
-            startDate || defaultStartDate.toISOString().split('T')[0],
-            endDate || defaultEndDate.toISOString().split('T')[0]
+            startDate || defaultStartDate,
+            endDate || defaultEndDate
         );
 
         res.json({

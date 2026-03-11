@@ -2,6 +2,12 @@ import db from '../models/db.js';
 import { AppError, ConflictError, NotFoundError } from '../utils/errors.js';
 import * as overtimeService from './overtimeService.js';
 import * as pdfService from './pdfService.js';
+import {
+    getCurrentISTDate,
+    getISTDateString,
+    getISTMonthBounds,
+    getISTWeekdayIndex,
+} from '../utils/dateTime.js';
 
 // ─── Role-based LOP rates (Admin excluded — Admin manages payroll, no salary) ─
 const LOP_RATES = {
@@ -13,10 +19,11 @@ const LOP_RATES = {
  * Count Sundays in a given month/year
  */
 function countSundaysInMonth(month, year) {
-    const daysInMonth = new Date(year, month, 0).getDate();
+    const { daysInMonth } = getISTMonthBounds(month, year);
     let sundays = 0;
     for (let day = 1; day <= daysInMonth; day++) {
-        if (new Date(year, month - 1, day).getDay() === 0) {
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        if (getISTWeekdayIndex(dateStr) === 0) {
             sundays++;
         }
     }
@@ -28,8 +35,7 @@ function countSundaysInMonth(month, year) {
  * excluding Sundays (to avoid double-counting).
  */
 async function getWeekdayHolidaysInMonth(month, year) {
-    const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
-    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+    const { startDate, endDate } = getISTMonthBounds(month, year);
 
     // Get one-time holidays in this month
     const result = await db.query(
@@ -50,17 +56,17 @@ async function getWeekdayHolidaysInMonth(month, year) {
 
     // One-time holidays
     for (const row of result.rows) {
-        const d = new Date(row.holiday_date);
-        if (d.getDay() !== 0) { // Not a Sunday
-            holidayDates.add(d.toISOString().split('T')[0]);
+        const holidayDate = getISTDateString(row.holiday_date);
+        if (getISTWeekdayIndex(holidayDate) !== 0) {
+            holidayDates.add(holidayDate);
         }
     }
 
     // Yearly recurring holidays
     for (const row of yearlyResult.rows) {
-        const d = new Date(year, row.recurrence_month - 1, row.recurrence_day);
-        if (d.getDay() !== 0 && d.getMonth() === month - 1) {
-            holidayDates.add(d.toISOString().split('T')[0]);
+        const holidayDate = `${year}-${String(row.recurrence_month).padStart(2, '0')}-${String(row.recurrence_day).padStart(2, '0')}`;
+        if (row.recurrence_month === month && getISTWeekdayIndex(holidayDate) !== 0) {
+            holidayDates.add(holidayDate);
         }
     }
 
@@ -71,7 +77,7 @@ async function getWeekdayHolidaysInMonth(month, year) {
  * Calculate working days in a month (excluding Sundays and public holidays)
  */
 async function calculateWorkingDays(month, year) {
-    const daysInMonth = new Date(year, month, 0).getDate();
+    const { daysInMonth } = getISTMonthBounds(month, year);
     const sundays = countSundaysInMonth(month, year);
     const holidays = await getWeekdayHolidaysInMonth(month, year);
     const workingDays = daysInMonth - sundays - holidays.size;
@@ -111,10 +117,7 @@ export const calculatePayrollPreview = async (month, year, callerUser) => {
     // 1. Get all NON-ADMIN employees who were active for ANY part of the month
     //    - Currently active employees
     //    - Active employees only
-    const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0); // last day of the month
-    const startDate = monthStart.toISOString().split('T')[0];
-    const endDate = monthEnd.toISOString().split('T')[0];
+    const { startDate, endDate } = getISTMonthBounds(month, year);
 
     let usersQuery = `
         SELECT u.id, u.first_name, u.last_name, u.username, u.base_salary,
@@ -357,7 +360,7 @@ export const exportPayrollToCSV = async (month, year, callerUser) => {
             item.overtime_hours || 0,
             item.overtime_amount || 0,
             item.net_salary,
-            new Date(payroll.generated_at).toISOString()
+            getISTDateString(payroll.generated_at)
         ].join(','));
     }
 
@@ -463,7 +466,7 @@ export const generatePayslipPDF = async (userId, month, year) => {
         monthName: pdfService.getMonthName(month),
         month,
         year,
-        payDate: new Date().toLocaleDateString('en-IN'),
+        payDate: getCurrentISTDate(),
         workingDays,
         presentDays: parseInt(payrollItem.present_days) || 0,
         absentDays,

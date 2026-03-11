@@ -5,6 +5,7 @@ import { Button } from '../common/Button';
 import { toast } from 'react-hot-toast';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../common/Table';
 import { formatCurrency } from '../../utils/formatters';
+import { formatDateInIST, getCurrentISTMonthYear, getMonthName } from '../../utils/dateTime';
 import { FileText, AlertTriangle, History, X, UserX, Calendar, Download, RefreshCw, CheckCircle, Lock, Trash2, Unlock, UserCheck, IndianRupee } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import './AdminPayrollTab.css';
@@ -12,8 +13,9 @@ import './AdminPayrollTab.css';
 export function AdminPayrollTab() {
     const { user } = useAuth();
     const isSupervisor = user?.role === 'SUPERVISOR';
-    const [month, setMonth] = useState(new Date().getMonth() + 1);
-    const [year, setYear] = useState(new Date().getFullYear());
+    const currentIST = getCurrentISTMonthYear();
+    const [month, setMonth] = useState(currentIST.month);
+    const [year, setYear] = useState(currentIST.year);
     const [preview, setPreview] = useState(null);
     const [loading, setLoading] = useState(false);
     const [generateLoading, setGenerateLoading] = useState(false);
@@ -168,7 +170,7 @@ export function AdminPayrollTab() {
                         >
                             {Array.from({ length: 12 }, (_, i) => (
                                 <option key={i + 1} value={i + 1}>
-                                    {new Date(0, i).toLocaleString('default', { month: 'long' })}
+                                    {getMonthName(i + 1)}
                                 </option>
                             ))}
                         </select>
@@ -213,7 +215,7 @@ export function AdminPayrollTab() {
                             </div>
                             <div className="payroll-stat-card__label">Total Employees</div>
                             <div className="payroll-stat-card__value">{preview.items.length}</div>
-                            <div className="payroll-stat-card__subtext">Active for {new Date(year, month - 1).toLocaleString('default', { month: 'short' })}</div>
+                            <div className="payroll-stat-card__subtext">Active for {getMonthName(month, 'short')}</div>
                         </Card>
                         <Card className="payroll-stat-card">
                             <div className="payroll-stat-card__icon" style={{ color: 'var(--color-primary)', opacity: 0.1 }}>
@@ -231,7 +233,7 @@ export function AdminPayrollTab() {
                         <Card className="payroll-table-card">
                             <div className="payroll-table-header">
                                 <div className="payroll-table-header__title">
-                                    <h3>{new Date(year, month - 1).toLocaleString('default', { month: 'long' })} {year} Preview</h3>
+                                    <h3>{getMonthName(month)} {year} Preview</h3>
                                     {preview.status && (
                                         <span className={`badge payroll-badge badge-${preview.status === 'LOCKED' ? 'success' : preview.status === 'APPROVED' ? 'info' : preview.status === 'CANCELLED' ? 'danger' : 'warning'}`}>
                                             {preview.status} {preview.version ? `(v${preview.version})` : ''}
@@ -432,7 +434,7 @@ export function AdminPayrollTab() {
                                             return (
                                                 <TableRow key={idx}>
                                                     <TableCell className="font-bold">
-                                                        {new Date(record.year, record.month - 1).toLocaleString('default', { month: 'short' })} {record.year}
+                                                        {getMonthName(record.month, 'short')} {record.year}
                                                     </TableCell>
                                                     <TableCell>{formatCurrency(parseFloat(record.base_salary))}</TableCell>
                                                     <TableCell>{record.present_days} / {details.working_days || '—'}</TableCell>
@@ -448,10 +450,9 @@ export function AdminPayrollTab() {
                                                         {formatCurrency(parseFloat(record.net_salary))}
                                                     </TableCell>
                                                     <TableCell className="text-muted text-xs">
-                                                        {record.generated_at ?
-                                                            new Date(record.generated_at).toLocaleDateString('en-IN', {
-                                                                day: '2-digit', month: 'short', year: 'numeric'
-                                                            }) : '—'}
+                                                        {record.generated_at ? formatDateInIST(record.generated_at, {
+                                                            day: '2-digit', month: 'short', year: 'numeric'
+                                                        }) : '—'}
                                                     </TableCell>
                                                 </TableRow>
                                             );

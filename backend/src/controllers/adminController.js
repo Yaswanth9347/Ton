@@ -1,6 +1,7 @@
 import * as userService from '../services/userService.js';
 import * as attendanceService from '../services/attendanceService.js';
 import * as payrollService from '../services/payrollService.js';
+import { getCurrentISTDate, getCurrentISTMonthYear, getISTDateDaysAgo } from '../utils/dateTime.js';
 import * as overtimeService from '../services/overtimeService.js';
 import { logAudit } from '../middleware/auditLogger.js';
 import db from '../models/db.js';
@@ -298,7 +299,7 @@ export const exportAttendanceCSV = async (req, res, next) => {
         const csvContent = [header, ...rows].join("\n");
 
         res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename=attendance_report_${new Date().toISOString().split('T')[0]}.csv`);
+        res.setHeader('Content-Disposition', `attachment; filename=attendance_report_${getCurrentISTDate()}.csv`);
         res.status(200).send(csvContent);
     } catch (error) {
         next(error);
@@ -347,8 +348,8 @@ export const getAttendanceAnalytics = async (req, res, next) => {
         const { startDate, endDate } = req.query;
 
         // Default to last 30 days if not specified
-        const end = endDate || new Date().toISOString().split('T')[0];
-        const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const end = endDate || getCurrentISTDate();
+        const start = startDate || getISTDateDaysAgo(30);
 
         const analytics = await attendanceService.getAttendanceAnalytics(start, end);
 
@@ -448,9 +449,9 @@ export const getEmployeeCalendar = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { month, year } = req.query;
-        const currentDate = new Date();
-        const targetMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
-        const targetYear = year ? parseInt(year) : currentDate.getFullYear();
+        const currentDate = getCurrentISTMonthYear();
+        const targetMonth = month ? parseInt(month) : currentDate.month;
+        const targetYear = year ? parseInt(year) : currentDate.year;
 
         const calendarData = await attendanceService.getMonthlyCalendarData(
             parseInt(id),

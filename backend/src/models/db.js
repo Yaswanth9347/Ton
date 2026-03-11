@@ -19,7 +19,10 @@ if (process.env.NODE_ENV === 'production') {
 // Test connection on startup (only once per pool creation)
 const connectListeners = pool.listenerCount('connect');
 if (connectListeners === 0) {
-    pool.on('connect', () => {
+    pool.on('connect', (client) => {
+        client.query("SET TIME ZONE 'Asia/Kolkata'").catch((err) => {
+            console.error('Failed to set PostgreSQL timezone:', err.message);
+        });
         console.log('Connected to PostgreSQL database');
     });
 

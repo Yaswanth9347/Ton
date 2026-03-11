@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { formatDate } from '../../utils/formatters';
+import { formatForDateTimeLocalInput, toISTSqlTimestamp } from '../../utils/dateTime';
 
 export function AttendanceEditModal({
     isOpen,
@@ -18,16 +19,9 @@ export function AttendanceEditModal({
 
     useEffect(() => {
         if (attendance) {
-            // Convert timestamps to datetime-local format
-            const formatForInput = (timestamp) => {
-                if (!timestamp) return '';
-                const date = new Date(timestamp);
-                return date.toISOString().slice(0, 16);
-            };
-
             setFormData({
-                checkIn: formatForInput(attendance.checkIn),
-                checkOut: formatForInput(attendance.checkOut),
+                checkIn: formatForDateTimeLocalInput(attendance.checkIn),
+                checkOut: formatForDateTimeLocalInput(attendance.checkOut),
             });
         }
     }, [attendance]);
@@ -40,8 +34,8 @@ export function AttendanceEditModal({
     const handleSubmit = (e) => {
         e.preventDefault();
         onSubmit({
-            checkIn: formData.checkIn ? new Date(formData.checkIn).toISOString() : null,
-            checkOut: formData.checkOut ? new Date(formData.checkOut).toISOString() : null,
+            checkIn: toISTSqlTimestamp(formData.checkIn),
+            checkOut: toISTSqlTimestamp(formData.checkOut),
         });
     };
 
