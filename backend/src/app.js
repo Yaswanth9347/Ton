@@ -13,6 +13,7 @@ import govtBoreRoutes from './routes/govtBoreRoutes.js';
 import payrollRoutes from './routes/payrollRoutes.js';
 import inventoryRoutes from './routes/inventory.js';
 import { ensureAuthSchema } from './utils/ensureAuthSchema.js';
+import { ensureInventorySchema } from './utils/ensureInventorySchema.js';
 import { ensureLoginAuditSchema } from './utils/ensureLoginAuditSchema.js';
 
 dotenv.config();
@@ -103,6 +104,10 @@ ensureLoginAuditSchema().catch((error) => {
   console.error('Login audit schema ensure failed:', error?.message || error);
 });
 
+ensureInventorySchema().catch((error) => {
+  console.error('Inventory schema ensure failed:', error?.message || error);
+});
+
 // Serve uploads from correct directory based on environment
 const uploadsDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadsDir));
@@ -114,7 +119,14 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/bores', boreRoutes);
 app.use('/api/govt-bores', govtBoreRoutes);
 app.use('/api/payroll', payrollRoutes);
-app.use('/api/inventory', inventoryRoutes);
+app.use('/api/inventory', async (req, res, next) => {
+  try {
+    await ensureInventorySchema();
+    next();
+  } catch (error) {
+    next(error);
+  }
+}, inventoryRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

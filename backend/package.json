@@ -7,7 +7,7 @@
     "scripts": {
         "start": "node src/server.js",
         "dev": "nodemon src/server.js",
-        "vercel-build": "if [ -n \"$DATABASE_URL\" ]; then node migrations/run_prod_migration.js || echo \"Migration warning: continuing build\"; else echo \"Skipping DB migration (DATABASE_URL not set)\"; fi && npx prisma generate",
+        "vercel-build": "if [ -n \"$DATABASE_URL\" ]; then npx prisma db push --schema=prisma/schema.prisma || echo \"Prisma schema sync warning: continuing build\"; node migrations/run_prod_migration.js || echo \"Migration warning: continuing build\"; else echo \"Skipping DB migration (DATABASE_URL not set)\"; fi && npx prisma generate",
         "migrate": "node migrations/run.js",
         "seed": "node seeds/run.js",
         "lint": "eslint src/",
