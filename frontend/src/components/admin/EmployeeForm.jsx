@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '../common/Button';
+import { PasswordInput } from '../common/PasswordInput';
+import { PasswordStrength } from '../common/PasswordStrength';
 import { adminApi } from '../../services/api';
 
 const ROLE_SALARIES = {
@@ -151,10 +153,9 @@ export function EmployeeForm({ employee, onSubmit, onCancel, loading = false, er
                 <label htmlFor="password" className="form-label">
                     Password {isEditing && <span className="text-muted">(leave blank to keep current)</span>}
                 </label>
-                <input
+                <PasswordInput
                     id="password"
                     name="password"
-                    type="password"
                     className="form-input"
                     value={formData.password}
                     onChange={handleChange}
@@ -162,9 +163,10 @@ export function EmployeeForm({ employee, onSubmit, onCancel, loading = false, er
                     minLength={8}
                     placeholder={isEditing ? '••••••••' : 'Minimum 8 characters'}
                 />
+                {!isEditing && <PasswordStrength password={formData.password} />}
             </div>
 
-            <div className="flex gap-4 mt-6">
+            <div className="form-actions flex gap-4 mt-6">
                 <Button type="button" variant="secondary" onClick={onCancel}>
                     Cancel
                 </Button>

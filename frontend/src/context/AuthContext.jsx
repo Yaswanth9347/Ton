@@ -1,11 +1,34 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { authApi } from '../services/api';
 
 const AuthContext = createContext(null);
 
+// Refresh token 1 hour before expiry (token is 24h, so refresh at 23h)
+const TOKEN_REFRESH_INTERVAL = 23 * 60 * 60 * 1000; // 23 hours in ms
+
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const refreshTimerRef = useRef(null);
+
+    // Schedule silent token refresh
+    const scheduleTokenRefresh = () => {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = setTimeout(async () => {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+                const res = await authApi.refreshToken();
+                const newToken = res.data.data.token;
+                localStorage.setItem('token', newToken);
+                // Schedule next refresh
+                scheduleTokenRefresh();
+            } catch (err) {
+                console.error('Token refresh failed:', err);
+                // Token is likely expired — will be caught by 401 interceptor
+            }
+        }, TOKEN_REFRESH_INTERVAL);
+    };
 
     useEffect(() => {
         // Check if user is logged in on mount
@@ -21,6 +44,7 @@ export function AuthProvider({ children }) {
                     if (isMounted) {
                         setUser(response.data.data);
                         localStorage.setItem('user', JSON.stringify(response.data.data));
+                        scheduleTokenRefresh();
                     }
                 })
                 .catch(() => {
@@ -39,6 +63,7 @@ export function AuthProvider({ children }) {
 
         return () => {
             isMounted = false;
+            clearTimeout(refreshTimerRef.current);
         };
     }, []);
 
@@ -49,6 +74,7 @@ export function AuthProvider({ children }) {
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(user));
         setUser(user);
+        scheduleTokenRefresh();
 
         return user;
     };
@@ -63,6 +89,7 @@ export function AuthProvider({ children }) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setUser(null);
+        clearTimeout(refreshTimerRef.current);
     };
 
     const refreshUser = async () => {
@@ -82,7 +109,11 @@ export function AuthProvider({ children }) {
         logout,
         refreshUser,
         isAuthenticated: !!user,
+        // isAdmin is true for both ADMIN and SUPERVISOR (both access admin panel)
         isAdmin: user?.role === 'ADMIN' || user?.role === 'SUPERVISOR',
+        // isStrictAdmin is ONLY true for the ADMIN role
+        isStrictAdmin: user?.role === 'ADMIN',
+        isSupervisor: user?.role === 'SUPERVISOR',
         isEmployee: user?.role === 'EMPLOYEE',
     };
 

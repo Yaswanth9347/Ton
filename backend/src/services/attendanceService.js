@@ -24,7 +24,10 @@ export const getTodayAttendance = async (userId) => {
     const today = getTodayDate();
 
     const result = await db.query(
-        `SELECT id, user_id, attendance_date, check_in, check_out, status, is_complete, created_at, updated_at
+        `SELECT id, user_id, attendance_date, check_in, check_out,
+                check_in_latitude, check_in_longitude, check_in_address,
+                check_out_latitude, check_out_longitude, check_out_address,
+                status, is_complete, regular_hours, overtime_hours, created_at, updated_at
      FROM attendance
      WHERE user_id = $1 AND attendance_date = $2`,
         [userId, today]
@@ -41,8 +44,21 @@ export const getTodayAttendance = async (userId) => {
         date: row.attendance_date,
         checkIn: row.check_in,
         checkOut: row.check_out,
+        checkInLocation: row.check_in_latitude ? {
+            latitude: parseFloat(row.check_in_latitude),
+            longitude: parseFloat(row.check_in_longitude),
+            address: row.check_in_address,
+        } : null,
+        checkOutLocation: row.check_out_latitude ? {
+            latitude: parseFloat(row.check_out_latitude),
+            longitude: parseFloat(row.check_out_longitude),
+            address: row.check_out_address,
+        } : null,
         status: row.status,
         isComplete: row.is_complete,
+        totalHours: calculateTotalHours(row.check_in, row.check_out),
+        regularHours: row.regular_hours ? parseFloat(row.regular_hours) : 0,
+        overtimeHours: row.overtime_hours ? parseFloat(row.overtime_hours) : 0,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
     };
@@ -121,13 +137,20 @@ export const checkOut = async (userId, location = null) => {
 
     const row = result.rows[0];
 
+    // Calculate total worked hours
+    const totalHours = calculateTotalHours(row.check_in, row.check_out) || 0;
+
     // Calculate and store overtime hours
+    let regularHours = 0;
+    let overtimeHours = 0;
     try {
         const hoursData = await overtimeService.calculateHoursWorked(
             row.check_in,
             row.check_out,
             row.attendance_date
         );
+        regularHours = hoursData.regularHours;
+        overtimeHours = hoursData.overtimeHours;
         await overtimeService.updateAttendanceHours(
             row.id,
             hoursData.regularHours,
@@ -148,6 +171,9 @@ export const checkOut = async (userId, location = null) => {
             longitude: parseFloat(row.check_out_longitude),
             address: row.check_out_address,
         } : null,
+        totalHours,
+        regularHours,
+        overtimeHours,
         status: row.status,
         isComplete: row.is_complete,
         updatedAt: row.updated_at,
@@ -213,6 +239,7 @@ const calculateTotalHours = (checkIn, checkOut) => {
 export const getAllAttendance = async ({ userId, startDate, endDate }) => {
     let query = `
     SELECT a.id, a.user_id, a.attendance_date, a.check_in, a.check_out, a.status, a.is_complete,
+           a.regular_hours, a.overtime_hours,
            a.created_at, a.updated_at, u.first_name, u.last_name, u.email
     FROM attendance a
     JOIN users u ON a.user_id = u.id
@@ -251,6 +278,8 @@ export const getAllAttendance = async ({ userId, startDate, endDate }) => {
         status: row.status,
         isComplete: row.is_complete,
         totalHours: calculateTotalHours(row.check_in, row.check_out),
+        regularHours: row.regular_hours ? parseFloat(row.regular_hours) : 0,
+        overtimeHours: row.overtime_hours ? parseFloat(row.overtime_hours) : 0,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
     }));

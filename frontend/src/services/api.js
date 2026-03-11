@@ -1,11 +1,19 @@
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
+
+const NO_CACHE_HEADERS = {
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0',
+};
 
 const api = axios.create({
     baseURL: API_URL,
     headers: {
         'Content-Type': 'application/json',
+        ...NO_CACHE_HEADERS,
     },
     withCredentials: true,
 });
@@ -17,6 +25,20 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+
+        config.headers = {
+            ...config.headers,
+            ...NO_CACHE_HEADERS,
+        };
+
+        const method = (config.method || 'get').toLowerCase();
+        if (method === 'get') {
+            config.params = {
+                ...(config.params || {}),
+                _t: Date.now(),
+            };
+        }
+
         // For FormData, remove Content-Type and let browser set it with boundary
         if (config.data instanceof FormData) {
             delete config.headers['Content-Type'];
@@ -37,7 +59,8 @@ api.interceptors.response.use(
             if (!isAuthAttempt) {
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
-                window.location.href = '/login';
+                toast.error('Session expired. Please log in again.');
+                setTimeout(() => { window.location.href = '/login'; }, 1500);
             }
         }
         return Promise.reject(error);
@@ -68,6 +91,7 @@ export const authApi = {
     login: (username, password) => api.post('/auth/login', { username, password }),
     logout: () => api.post('/auth/logout'),
     getCurrentUser: () => api.get('/auth/me'),
+    refreshToken: () => api.post('/auth/refresh'),
     updateProfile: (data) => api.put('/auth/profile', data),
     changePassword: (data) => api.put('/auth/change-password', data),
     forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
@@ -101,6 +125,8 @@ export const adminApi = {
     updateEmployee: (id, data) => api.put(`/admin/employees/${id}`, data),
     deactivateEmployee: (id) => api.patch(`/admin/employees/${id}/deactivate`),
     reactivateEmployee: (id) => api.patch(`/admin/employees/${id}/reactivate`),
+    unlockEmployee: (id) => api.patch(`/admin/employees/${id}/unlock`),
+    resetEmployeePassword: (id, newPassword) => api.put(`/auth/users/${id}/reset-password`, { newPassword }),
     getAllAttendance: (params) => api.get('/admin/attendance', { params }),
     getEmployeeAttendance: (userId, params) => api.get(`/admin/attendance/${userId}`, { params }),
     correctAttendance: (id, data) => api.put(`/admin/attendance/${id}`, data),
@@ -125,6 +151,8 @@ export const adminApi = {
     getEmployeeCalendar: (userId, month, year) => api.get(`/admin/employees/${userId}/calendar`, { params: { month, year } }),
     // Employee payroll history
     getEmployeePayrollHistory: (userId) => api.get(`/admin/employees/${userId}/payroll-history`),
+    // Login audit history
+    getLoginHistory: (params) => api.get('/admin/login-history', { params }),
 };
 
 // Leaves & Holidays API

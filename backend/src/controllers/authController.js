@@ -1,8 +1,15 @@
 import * as authService from '../services/authService.js';
 import * as userService from '../services/userService.js';
 import { logAudit } from '../middleware/auditLogger.js';
+import { logLoginEvent } from '../utils/ensureLoginAuditSchema.js';
 import fs from 'fs';
-import path from 'path';
+
+/** Extract client IP and user agent from request */
+function getClientInfo(req) {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress || '';
+    const userAgent = req.headers['user-agent'] || '';
+    return { ip, userAgent };
+}
 
 /**
  * Login user
@@ -11,8 +18,18 @@ import path from 'path';
 export const login = async (req, res, next) => {
     try {
         const { username, password } = req.body;
+        const { ip, userAgent } = getClientInfo(req);
 
         const result = await authService.authenticateUser(username, password);
+
+        // Log successful login
+        logLoginEvent({
+            userId: result.user.id,
+            username: result.user.username,
+            action: 'LOGIN_SUCCESS',
+            ip,
+            userAgent,
+        });
 
         // Set token in httpOnly cookie
         res.cookie('token', result.token, {
@@ -31,6 +48,17 @@ export const login = async (req, res, next) => {
             },
         });
     } catch (error) {
+        // Log failed login attempt
+        const { ip, userAgent } = getClientInfo(req);
+        const action = error.statusCode === 403 ? 'ACCOUNT_LOCKED' : 'LOGIN_FAILED';
+        logLoginEvent({
+            userId: null,
+            username: req.body?.username || '',
+            action,
+            ip,
+            userAgent,
+            details: error.message,
+        });
         next(error);
     }
 };
@@ -128,6 +156,16 @@ export const resetUserPassword = async (req, res, next) => {
  */
 export const logout = async (req, res, next) => {
     try {
+        // Log logout event
+        const { ip, userAgent } = getClientInfo(req);
+        logLoginEvent({
+            userId: req.user?.id || null,
+            username: req.user?.username || '',
+            action: 'LOGOUT',
+            ip,
+            userAgent,
+        });
+
         // Clear the token cookie
         res.cookie('token', '', {
             httpOnly: true,
@@ -156,6 +194,32 @@ export const getMe = async (req, res, next) => {
         res.json({
             success: true,
             data: user,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Refresh JWT token (silent renewal)
+ * POST /api/auth/refresh
+ * Requires a valid (non-expired) token. Issues a fresh token.
+ */
+export const refreshToken = async (req, res, next) => {
+    try {
+        const newToken = authService.generateToken(req.user.id);
+
+        // Set updated cookie
+        res.cookie('token', newToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 24 * 60 * 60 * 1000,
+        });
+
+        res.json({
+            success: true,
+            data: { token: newToken },
         });
     } catch (error) {
         next(error);
@@ -195,6 +259,16 @@ export const changePassword = async (req, res, next) => {
 
         await logAudit(req.user.id, 'UPDATE', 'PASSWORD', req.user.id, null, null);
 
+        // Log password change event
+        const { ip, userAgent } = getClientInfo(req);
+        logLoginEvent({
+            userId: req.user.id,
+            username: req.user.username,
+            action: 'PASSWORD_CHANGED',
+            ip,
+            userAgent,
+        });
+
         res.json({
             success: true,
             message: 'Password changed successfully'
@@ -227,7 +301,7 @@ export const uploadProfilePhoto = async (req, res, next) => {
         }
 
         const photoUrl = `/uploads/profiles/${req.file.filename}`;
-        const user = await userService.updateProfilePhoto(req.user.id, photoUrl);
+        await userService.updateProfilePhoto(req.user.id, photoUrl);
 
         res.json({
             success: true,

@@ -38,9 +38,15 @@ export const createPipe = async (req, res, next) => {
             cost_per_unit
         }, req.user.id);
 
+        const message = pipe.action === 'created'
+            ? 'Pipe type created successfully'
+            : pipe.action === 'reactivated'
+                ? 'Existing pipe type restored and stock added successfully'
+                : 'Existing pipe type found and stock added successfully';
+
         res.status(201).json({
             status: 'success',
-            message: 'Pipe type created successfully',
+            message,
             data: pipe
         });
     } catch (error) {
@@ -50,7 +56,7 @@ export const createPipe = async (req, res, next) => {
 
 export const addStock = async (req, res, next) => {
     try {
-        const { pipe_id, quantity, unit, supplier_name, purchase_mode, source_location, destination_location, remarks } = req.body;
+        const { pipe_id, quantity, unit, source_location, destination_location } = req.body;
 
         if (!pipe_id || !quantity || quantity <= 0) {
             return res.status(400).json({
@@ -65,11 +71,8 @@ export const addStock = async (req, res, next) => {
             unit || 'pipes',
             req.user.id,
             {
-                supplier_name,
-                purchase_mode,
                 source_location,
-                destination_location,
-                remarks
+                destination_location
             }
         );
 

@@ -8,20 +8,57 @@ import { useAuth } from '../../../context/AuthContext';
 import './InventoryPage.css';
 import './PipesInventory.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 const FEET_PER_PIPE = 20;
-const PAGE_SIZE = 15;
+const VISIBLE_TRANSACTION_ROWS = 10;
+const INVENTORY_SUMMARY_REFRESH_EVENT = 'inventory:summary-refresh';
 
 /* ── Conversion helpers ── */
 const toFeet = (qty, unit) => unit === 'feet' ? parseFloat(qty) : parseFloat(qty) * FEET_PER_PIPE;
 
-const fmtQty = (feet) => {
-    if (!feet || feet === 0) return '0 ft';
-    const pipes = Math.floor(feet / FEET_PER_PIPE);
-    const rem = feet % FEET_PER_PIPE;
-    if (rem === 0) return `${pipes} pipe${pipes !== 1 ? 's' : ''}`;
-    if (pipes === 0) return `${rem} ft`;
-    return `${pipes} pipe${pipes !== 1 ? 's' : ''} ${rem} ft`;
+const fmtQty = (val, lengthFeet) => {
+    const pipeFt = parseFloat(lengthFeet) || FEET_PER_PIPE;
+    const feet = parseFloat(val || 0);
+    if (!feet || feet === 0) return '0 pipes (0 ft)';
+    const pipes = Math.floor(feet / pipeFt);
+    const rem = Math.round((feet % pipeFt) * 100) / 100;
+    
+    const pipeStr = pipes === 1 ? '1 pipe' : `${pipes} pipes`;
+    const formattedFeet = rem === 0 ? `${feet} ft` : `${feet.toFixed(1)} ft`;
+    
+    if (pipes === 0) return `${formattedFeet}`;
+    return `${pipeStr} (${formattedFeet})`;
+};
+
+const getPipeCount = (feetValue, lengthFeet) => {
+    const totalFeet = parseFloat(feetValue || 0);
+    const pipeFt = parseFloat(lengthFeet) || FEET_PER_PIPE;
+    if (!pipeFt) return 0;
+    return totalFeet / pipeFt;
+};
+
+const formatPipeLabel = (company, size) => {
+    const pipeName = company || '—';
+    const pipeSize = size || '—';
+    return `${pipeName} (${pipeSize})`;
+};
+
+const formatVehicleDisplay = (value) => {
+    const raw = value?.trim();
+    if (!raw) return '—';
+
+    const normalized = raw
+        .replace(/½/g, '1/2')
+        .replace(/["“”]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (/^4\s*1\/2$/i.test(normalized) || /^4\s*1\/2\s*tyre$/i.test(normalized)) return '4 ½';
+    if (/^6\s*1\/2$/i.test(normalized) || /^6\s*1\/2\s*tyre$/i.test(normalized)) return '6 ½';
+    if (/^41\/2$/i.test(normalized)) return '4 ½';
+    if (/^61\/2$/i.test(normalized)) return '6 ½';
+
+    return raw.replace(/\b4\s*1\/2\b/g, '4 ½').replace(/\b6\s*1\/2\b/g, '6 ½');
 };
 
 const stockStatus = (qty) => {
@@ -69,7 +106,6 @@ export function PipesInventory() {
     const [pipes, setPipes] = useState([]);
     const [transactions, setTxns] = useState([]);
     const [allocations, setAllocations] = useState([]);
-    const [companies, setCompanies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [showModal, setShowModal] = useState(false);
@@ -78,20 +114,20 @@ export function PipesInventory() {
     const [selAllocation, setSelAllocation] = useState(null);
     const [toast, setToast] = useState(null);
     const [confirm, setConfirm] = useState(null);
-    const [page, setPage] = useState(1);
     const [formData, setFormData] = useState({
         quantity: '', unit: 'pipes',
         bore_type: '', bore_id: '',
         vehicle_name: '', supervisor_name: '', remarks: '',
         size: '', company: '',
         material_type: '', quality_grade: '', length_feet: '20', cost_per_unit: '',
-        supplier_name: '', purchase_mode: 'offline', allocation_id: ''
+        allocation_id: ''
     });
     const [filters, setFilters] = useState({
         dateFrom: '', dateTo: '', search: '', company: '', transactionType: ''
     });
 
     const showToast = (type, message) => setToast({ type, message });
+    const refreshInventorySummary = () => window.dispatchEvent(new Event(INVENTORY_SUMMARY_REFRESH_EVENT));
 
     const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
@@ -116,16 +152,9 @@ export function PipesInventory() {
         } catch { /* silent */ }
     }, []);
 
-    const fetchCompanies = useCallback(async () => {
-        try {
-            const r = await axios.get(`${API_URL}/inventory/pipes/companies`, { headers: authHeaders() });
-            setCompanies(r.data.data || []);
-        } catch { /* silent */ }
-    }, []);
-
     useEffect(() => {
-        Promise.all([fetchPipes(), fetchTxns(), fetchCompanies(), fetchAllocations()]).finally(() => setLoading(false));
-    }, [fetchPipes, fetchTxns, fetchCompanies, fetchAllocations]);
+        Promise.all([fetchPipes(), fetchTxns(), fetchAllocations()]).finally(() => setLoading(false));
+    }, [fetchPipes, fetchTxns, fetchAllocations]);
 
     const openModal = (type, pipe = null, allocation = null) => {
         setModalType(type);
@@ -135,7 +164,7 @@ export function PipesInventory() {
             quantity: '', unit: 'pipes', bore_type: allocation?.bore_type?.toUpperCase() || '', bore_id: allocation?.bore_id || '',
             vehicle_name: allocation?.vehicle_name || '', supervisor_name: allocation?.supervisor_name || '', remarks: '',
             size: '', company: '', material_type: '', quality_grade: '', length_feet: '20', cost_per_unit: '',
-            supplier_name: '', purchase_mode: 'offline', allocation_id: allocation?.id || ''
+            allocation_id: allocation?.id || ''
         });
         setShowModal(true);
     };
@@ -150,10 +179,7 @@ export function PipesInventory() {
                 await axios.post(`${API_URL}/inventory/pipes/add-stock`, {
                     pipe_id: selPipe.id,
                     quantity: parseFloat(formData.quantity),
-                    unit: formData.unit,
-                    supplier_name: formData.supplier_name || null,
-                    purchase_mode: formData.purchase_mode || null,
-                    remarks: formData.remarks || null
+                    unit: formData.unit
                 }, { headers });
                 showToast('success', 'Stock added successfully');
             } else if (modalType === 'issue') {
@@ -186,13 +212,11 @@ export function PipesInventory() {
                     length_feet: formData.length_feet ? parseFloat(formData.length_feet) : 20,
                     cost_per_unit: formData.cost_per_unit ? parseFloat(formData.cost_per_unit) : 0
                 };
-                console.log(`[Inventory - Pipes] Creating new pipe record...\nPayload:`, JSON.stringify(payload, null, 2));
-
                 const res = await axios.post(`${API_URL}/inventory/pipes`, payload, { headers });
-                console.log(`[Inventory - Pipes] Pipe created successfully. ID: ${res.data?.data?.id || 'Unknown'}`);
-                showToast('success', 'New pipe type created');
+                showToast('success', res.data?.message || 'Pipe record saved successfully');
             }
             await Promise.all([fetchPipes(), fetchTxns(), fetchAllocations()]);
+            refreshInventorySummary();
             closeModal();
         } catch (err) {
             const backendMsg = err.response?.data?.message || err.message;
@@ -212,6 +236,7 @@ export function PipesInventory() {
                     await axios.delete(`${API_URL}/inventory/pipes/${pipeId}`, { headers: authHeaders() });
                     showToast('success', 'Pipe type deleted');
                     fetchPipes();
+                    refreshInventorySummary();
                 } catch (err) {
                     showToast('error', err.response?.data?.message || 'Error deleting pipe');
                 }
@@ -260,11 +285,21 @@ export function PipesInventory() {
         return true;
     });
 
-    const totalPages = Math.max(1, Math.ceil(filtTxns.length / PAGE_SIZE));
-    const pageTxns = filtTxns.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    const activeAllocations = allocations.filter(allocation => {
+        const status = (allocation?.status || '').toLowerCase();
+        return status !== 'done' && status !== 'completed';
+    });
 
-    const setFilter = (key, val) => { setFilters(f => ({ ...f, [key]: val })); setPage(1); };
-    const clearFilters = () => { setFilters({ dateFrom: '', dateTo: '', search: '', company: '', transactionType: '' }); setPage(1); };
+    const existingCompanies = [...new Set(
+        pipes
+            .map(pipe => (pipe.company || '').trim())
+            .filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    const setFilter = (key, val) => { setFilters(f => ({ ...f, [key]: val })); };
+    const clearFilters = () => { setFilters({ dateFrom: '', dateTo: '', search: '', company: '', transactionType: '' }); };
+
+    const transactionTableHeight = `${(VISIBLE_TRANSACTION_ROWS + 1) * 48}px`;
 
     return (
         <div>
@@ -294,7 +329,7 @@ export function PipesInventory() {
                     </div>
                     <div className="inv-stat__value">{fmtQty(totalInUseFeet)}</div>
                     <div className="inv-stat__label">In Use</div>
-                    <div className="inv-stat__sub">{allocations.length} active bore allocation(s)</div>
+                    <div className="inv-stat__sub">{activeAllocations.length} active bore allocation(s)</div>
                 </div>
                 <div className="inv-stat">
                     <div className="inv-stat__icon-row">
@@ -340,7 +375,7 @@ export function PipesInventory() {
                                         const stockFeet = parseFloat((pipe.store_quantity ?? pipe.quantity) || 0);
                                         const st = stockStatus(stockFeet);
                                         const costPerUnit = parseFloat(pipe.cost_per_unit || 0);
-                                        const totalValue = stockFeet * costPerUnit;
+                                        const totalValue = getPipeCount(stockFeet, pipe.length_feet) * costPerUnit;
                                         return (
                                             <tr key={pipe.id} style={st === 'critical' ? { background: 'rgba(239,68,68,0.04)' } : st === 'low' ? { background: 'rgba(245,158,11,0.04)' } : {}}>
                                                 <td style={{ textAlign: 'center' }}>
@@ -361,7 +396,7 @@ export function PipesInventory() {
                                                         }}>{pipe.quality_grade}</span>
                                                     ) : '—'}
                                                 </td>
-                                                <td style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', textAlign: 'center' }}>{fmtQty(stockFeet)}</td>
+                                                <td style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', textAlign: 'center' }}>{fmtQty(stockFeet, pipe.length_feet)}</td>
                                                 <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem', textAlign: 'center' }}>
                                                     {costPerUnit > 0 ? `₹${costPerUnit.toLocaleString('en-IN')}` : '—'}
                                                 </td>
@@ -398,35 +433,35 @@ export function PipesInventory() {
             <div style={{ marginBottom: 'var(--spacing-6)' }}>
                 <div className="inv-section-header">
                     <span className="inv-section-title">Active Bore Allocations</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>{allocations.length} active</span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>{activeAllocations.length} active</span>
                 </div>
-                <div className="inv-table-wrap">
+                <div className="inv-table-wrap" style={{ maxHeight: transactionTableHeight, overflowY: 'auto' }}>
                     <table className="inv-table">
                         <thead>
                             <tr>
-                                <th>Bore</th>
-                                <th>Type</th>
-                                <th>Vehicle</th>
-                                <th>Pipe</th>
-                                <th>Issued</th>
-                                <th>Returned</th>
-                                <th>Open</th>
-                                <th>Action</th>
+                                <th style={{ textAlign: 'center' }}>Village</th>
+                                <th style={{ textAlign: 'center' }}>Type</th>
+                                <th style={{ textAlign: 'center' }}>Vehicle</th>
+                                <th style={{ textAlign: 'center' }}>Pipe</th>
+                                <th style={{ textAlign: 'center' }}>Issued</th>
+                                <th style={{ textAlign: 'center' }}>Returned</th>
+                                <th style={{ textAlign: 'center' }}>Open</th>
+                                <th style={{ textAlign: 'center' }}>Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {allocations.length === 0 ? (
-                                <tr><td colSpan="8" className="inv-table__empty">No active bore allocations. Store stock is fully available.</td></tr>
-                            ) : allocations.map((allocation) => (
+                            {activeAllocations.length === 0 ? (
+                                <tr><td colSpan="8" className="inv-table__empty" style={{ textAlign: 'center' }}>No active bore allocations. Store stock is fully available.</td></tr>
+                            ) : activeAllocations.map((allocation) => (
                                 <tr key={allocation.id}>
-                                    <td style={{ fontWeight: 600 }}>{allocation.bore_reference}</td>
-                                    <td style={{ textTransform: 'capitalize' }}>{allocation.bore_type}</td>
-                                    <td>{allocation.vehicle_name || '—'}</td>
-                                    <td>{allocation.pipe_company} · {allocation.pipe_size}</td>
-                                    <td>{fmtQty(allocation.issued_quantity)}</td>
-                                    <td>{allocation.returned_quantity > 0 ? fmtQty(allocation.returned_quantity) : '—'}</td>
-                                    <td style={{ fontWeight: 700, color: 'var(--color-warning)' }}>{fmtQty(allocation.open_quantity)}</td>
-                                    <td>
+                                    <td style={{ fontWeight: 600, textAlign: 'center' }}>{allocation.bore_reference}</td>
+                                    <td style={{ textTransform: 'capitalize', textAlign: 'center' }}>{allocation.bore_type}</td>
+                                    <td style={{ textAlign: 'center' }}>{formatVehicleDisplay(allocation.vehicle_name)}</td>
+                                    <td style={{ textAlign: 'center' }}>{formatPipeLabel(allocation.pipe_company, allocation.pipe_size)}</td>
+                                    <td style={{ textAlign: 'center' }}>{fmtQty(allocation.issued_quantity, allocation.length_feet)}</td>
+                                    <td style={{ textAlign: 'center' }}>{allocation.returned_quantity > 0 ? fmtQty(allocation.returned_quantity, allocation.length_feet) : '—'}</td>
+                                    <td style={{ fontWeight: 700, color: 'var(--color-warning)', textAlign: 'center' }}>{fmtQty(allocation.open_quantity, allocation.length_feet)}</td>
+                                    <td style={{ textAlign: 'center' }}>
                                         <button className="inv-btn inv-btn--ghost inv-btn--sm" onClick={() => openModal('return', pipes.find(p => p.id === allocation.pipe_inventory_id) || null, allocation)}>
                                             <RotateCcw size={13} /> Return
                                         </button>
@@ -448,7 +483,7 @@ export function PipesInventory() {
                 </div>
 
                 {/* Filters */}
-                <div className="inv-controls" style={{ marginBottom: 'var(--spacing-3)' }}>
+                <div className="inv-controls inv-controls--right" style={{ marginBottom: 'var(--spacing-3)' }}>
                     <div className="inv-filters">
                         <Filter size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                         <input type="date" className="inv-filter-input" value={filters.dateFrom}
@@ -467,6 +502,7 @@ export function PipesInventory() {
                         <select className="inv-filter-input" value={filters.transactionType}
                             onChange={e => setFilter('transactionType', e.target.value)}>
                             <option value="">All Types</option>
+                            <option value="PURCHASE">Purchase</option>
                             <option value="LOAD">Load</option>
                             <option value="ISSUE">Issue</option>
                             <option value="RETURN">Return</option>
@@ -483,63 +519,64 @@ export function PipesInventory() {
                     <table className="inv-table">
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>Type</th>
-                                <th>Size</th>
-                                <th>Brand</th>
-                                <th>Quantity</th>
-                                <th>Bore Type</th>
-                                <th>Vehicle</th>
-                                <th>Flow</th>
-                                <th>Remarks</th>
+                                <th style={{ textAlign: 'center' }}>Date</th>
+                                <th style={{ textAlign: 'center' }}>Type</th>
+                                <th style={{ textAlign: 'center' }}>Size</th>
+                                <th style={{ textAlign: 'center' }}>Brand</th>
+                                <th style={{ textAlign: 'center' }}>Quantity</th>
+                                <th style={{ textAlign: 'center' }}>Bore Type</th>
+                                <th style={{ textAlign: 'center' }}>Vehicle</th>
+                                <th style={{ textAlign: 'center' }}>Flow</th>
+                                <th style={{ textAlign: 'center' }}>Remarks</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {pageTxns.length === 0 ? (
-                                <tr><td colSpan="9" className="inv-table__empty">No transactions match current filters.</td></tr>
+                            {filtTxns.length === 0 ? (
+                                <tr><td colSpan="9" className="inv-table__empty" style={{ textAlign: 'center' }}>No transactions match current filters.</td></tr>
                             ) : (
-                                pageTxns.map(tx => (
+                                filtTxns.map(tx => (
                                     <tr key={tx.id}>
-                                        <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                                        <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem', textAlign: 'center' }}>
                                             {new Date(tx.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                                         </td>
-                                        <td>
-                                            <span className={`status-badge status-badge--${tx.transaction_type.toLowerCase()}`}>
-                                                {tx.transaction_type === 'LOAD' && <TrendingUp size={12} />}
+                                        <td style={{ textAlign: 'center' }}>
+                                            <span className={`status-badge status-badge--${tx.transaction_type.toLowerCase()}`} style={{ justifyContent: 'center' }}>
+                                                {tx.transaction_type === 'PURCHASE' && <TrendingUp size={12} />}
+                                                {tx.transaction_type === 'LOAD' && <TrendingDown size={12} />}
                                                 {tx.transaction_type === 'ISSUE' && <TrendingDown size={12} />}
                                                 {tx.transaction_type === 'RETURN' && <RotateCcw size={12} />}
                                                 {tx.transaction_type}
                                             </span>
                                         </td>
-                                        <td style={{ fontWeight: 600 }}>{tx.size}</td>
-                                        <td>{tx.company}</td>
-                                        <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{fmtQty(tx.quantity)}</td>
-                                        <td style={{ color: 'var(--text-muted)' }}>{tx.bore_type || '—'}</td>
-                                        <td>{tx.vehicle_name || '—'}</td>
-                                        <td style={{ color: 'var(--text-muted)', fontSize: '0.76rem' }}>{tx.source_location || '—'} → {tx.destination_location || '—'}</td>
-                                        <td style={{ color: 'var(--text-muted)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.remarks || '—'}</td>
+                                        <td style={{ fontWeight: 600, textAlign: 'center' }}>{tx.size}</td>
+                                        <td style={{ textAlign: 'center' }}>{tx.company}</td>
+                                        <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, textAlign: 'center' }}>{fmtQty(tx.quantity, tx.length_feet)}</td>
+                                        <td style={{ color: 'var(--text-muted)', textAlign: 'center' }}>
+                                            {(() => {
+                                                const val = tx.bore_type;
+                                                if (!val) return '—';
+                                                if (val === 'govt') return 'Government';
+                                                if (val === 'private') return 'Private';
+                                                return val;
+                                            })()}
+                                        </td>
+                                        <td style={{ textAlign: 'center' }}>
+                                            {formatVehicleDisplay(tx.vehicle_name)}
+                                        </td>
+                                        <td style={{ color: 'var(--text-muted)', fontSize: '0.76rem', textAlign: 'center' }}>
+                                            {(() => {
+                                                const src = (tx.source_location || '').replace(/^MAIN_STORE$/, 'Store').replace(/^SUPPLIER$/, 'Supplier').replace(/^VEHICLE:/, 'Vehicle ');
+                                                const dst = (tx.destination_location || '').replace(/^MAIN_STORE$/, 'Store').replace(/^SUPPLIER$/, 'Supplier').replace(/^VEHICLE:/, 'Vehicle ');
+                                                if (!src && !dst) return '—';
+                                                return `${src || '—'} → ${dst || '—'}`;
+                                            })()}
+                                        </td>
+                                        <td style={{ color: 'var(--text-muted)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>{tx.remarks || '—'}</td>
                                     </tr>
                                 ))
                             )}
                         </tbody>
                     </table>
-
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                        <div className="inv-pagination">
-                            <span>Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtTxns.length)} of {filtTxns.length}</span>
-                            <div className="inv-pagination__btns">
-                                <button className="inv-pagination__btn" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>‹</button>
-                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                    const pg = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
-                                    return (
-                                        <button key={pg} className={`inv-pagination__btn ${page === pg ? 'inv-pagination__btn--active' : ''}`} onClick={() => setPage(pg)}>{pg}</button>
-                                    );
-                                })}
-                                <button className="inv-pagination__btn" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>›</button>
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -572,9 +609,9 @@ export function PipesInventory() {
                                             </div>
                                             <div className="inv-form-group">
                                                 <label>Company / Brand *</label>
-                                                <input type="text" value={formData.company} onChange={e => setFormData(f => ({ ...f, company: e.target.value }))} placeholder="e.g. Sudar, Nandi…" required list="pipe-companies" />
+                                                <input type="text" value={formData.company} onChange={e => setFormData(f => ({ ...f, company: e.target.value }))} placeholder="Select existing company" required list="pipe-companies" />
                                                 <datalist id="pipe-companies">
-                                                    {companies.map(c => <option key={c.id} value={c.company_name} />)}
+                                                    {existingCompanies.map(company => <option key={company} value={company} />)}
                                                 </datalist>
                                             </div>
                                         </div>
@@ -584,11 +621,7 @@ export function PipesInventory() {
                                                 <select value={formData.material_type} onChange={e => setFormData(f => ({ ...f, material_type: e.target.value }))}>
                                                     <option value="">Select material</option>
                                                     <option value="PVC">PVC</option>
-                                                    <option value="HDPE">HDPE</option>
-                                                    <option value="GI">GI (Galvanised Iron)</option>
-                                                    <option value="MS">MS (Mild Steel)</option>
-                                                    <option value="UPVC">UPVC</option>
-                                                    <option value="CI">CI (Cast Iron)</option>
+                                                    <option value="Mild Steel">Mild Steel</option>
                                                 </select>
                                             </div>
                                             <div className="inv-form-group">
@@ -597,7 +630,6 @@ export function PipesInventory() {
                                                     <option value="">Select quality</option>
                                                     <option value="Premium">Premium</option>
                                                     <option value="Standard">Standard</option>
-                                                    <option value="Economy">Economy</option>
                                                 </select>
                                             </div>
                                         </div>
@@ -640,29 +672,6 @@ export function PipesInventory() {
                                                 </div>
                                             )}
                                         </div>
-                                        {modalType === 'add' && (
-                                            <>
-                                                <div className="inv-form-row">
-                                                    <div className="inv-form-group">
-                                                        <label>Supplier / Dealer</label>
-                                                        <input type="text" value={formData.supplier_name} onChange={e => setFormData(f => ({ ...f, supplier_name: e.target.value }))} placeholder="Dealer or source" />
-                                                    </div>
-                                                    <div className="inv-form-group">
-                                                        <label>Purchase Mode</label>
-                                                        <select value={formData.purchase_mode} onChange={e => setFormData(f => ({ ...f, purchase_mode: e.target.value }))}>
-                                                            <option value="offline">Offline</option>
-                                                            <option value="online">Online</option>
-                                                            <option value="local">Local Market</option>
-                                                            <option value="unknown">Unknown</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                                <div className="inv-form-group">
-                                                    <label>Remarks</label>
-                                                    <textarea value={formData.remarks} onChange={e => setFormData(f => ({ ...f, remarks: e.target.value }))} rows={2} placeholder="Optional receiving note…" />
-                                                </div>
-                                            </>
-                                        )}
                                         {(modalType === 'issue' || modalType === 'return') && (
                                             <>
                                                 {modalType === 'return' && (
@@ -681,11 +690,11 @@ export function PipesInventory() {
                                                             }));
                                                         }} required>
                                                             <option value="">Select active bore allocation</option>
-                                                            {allocations
+                                                            {activeAllocations
                                                                 .filter(a => !selPipe || a.pipe_inventory_id === selPipe.id)
                                                                 .map(a => (
                                                                     <option key={a.id} value={a.id}>
-                                                                        {a.bore_reference} · {a.vehicle_name || 'No vehicle'} · Open {fmtQty(a.open_quantity)}
+                                                                        {a.bore_reference} · {a.vehicle_name || 'No vehicle'} · Open {fmtQty(a.open_quantity, a.length_feet)}
                                                                     </option>
                                                                 ))}
                                                         </select>

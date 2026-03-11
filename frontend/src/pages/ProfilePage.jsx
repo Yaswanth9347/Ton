@@ -5,6 +5,8 @@ import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Camera, Trash2, User, Lock, Mail } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { PasswordInput } from '../components/common/PasswordInput';
+import { PasswordStrength } from '../components/common/PasswordStrength';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -93,8 +95,9 @@ const ProfilePage = () => {
         e.preventDefault();
         setLoading(true);
         try {
-            const { data } = await authApi.updateProfile(profileData);
+            await authApi.updateProfile(profileData);
             toast.success('Profile updated successfully');
+            if (refreshUser) refreshUser();
         } catch (error) {
             console.error(error);
             toast.error(error.response?.data?.message || 'Failed to update profile');
@@ -329,8 +332,7 @@ const ProfilePage = () => {
                                     <form onSubmit={handlePasswordChange}>
                                         <div className="form-group">
                                             <label className="form-label">Current Password</label>
-                                            <input
-                                                type="password"
+                                            <PasswordInput
                                                 className="form-input"
                                                 value={passwordData.currentPassword}
                                                 onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
@@ -340,26 +342,24 @@ const ProfilePage = () => {
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">New Password</label>
-                                            <input
-                                                type="password"
+                                            <PasswordInput
                                                 className="form-input"
                                                 value={passwordData.newPassword}
                                                 onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                                                 required
-                                                minLength={6}
+                                                minLength={8}
                                                 placeholder="Enter new password"
                                             />
-                                            <p className="form-hint">Minimum 6 characters</p>
+                                            <PasswordStrength password={passwordData.newPassword} />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Confirm New Password</label>
-                                            <input
-                                                type="password"
+                                            <PasswordInput
                                                 className="form-input"
                                                 value={passwordData.confirmPassword}
                                                 onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                                                 required
-                                                minLength={6}
+                                                minLength={8}
                                                 placeholder="Confirm new password"
                                             />
                                         </div>

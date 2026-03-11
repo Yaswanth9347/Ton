@@ -44,7 +44,9 @@ export function AttendanceDetailsModal({
                                 <TableHeader>Date</TableHeader>
                                 <TableHeader>Check In</TableHeader>
                                 <TableHeader>Check Out</TableHeader>
-                                <TableHeader>Hours</TableHeader>
+                                <TableHeader>Regular</TableHeader>
+                                <TableHeader>Overtime</TableHeader>
+                                <TableHeader>Total</TableHeader>
                                 <TableHeader>Status</TableHeader>
                                 <TableHeader>Actions</TableHeader>
                             </TableRow>
@@ -55,7 +57,13 @@ export function AttendanceDetailsModal({
                                     <TableCell>{formatDate(record.date)}</TableCell>
                                     <TableCell>{formatTime(record.checkIn)}</TableCell>
                                     <TableCell>{formatTime(record.checkOut)}</TableCell>
-                                    <TableCell>{formatHours(record.totalHours)}</TableCell>
+                                    <TableCell>{record.regularHours ? `${parseFloat(record.regularHours).toFixed(1)}h` : '-'}</TableCell>
+                                    <TableCell>
+                                        {record.overtimeHours && parseFloat(record.overtimeHours) > 0
+                                            ? <span style={{ color: 'var(--color-warning)' }}>{parseFloat(record.overtimeHours).toFixed(1)}h</span>
+                                            : '-'}
+                                    </TableCell>
+                                    <TableCell className="font-semibold">{formatHours(record.totalHours)}</TableCell>
                                     <TableCell>
                                         <span className={`badge ${getStatusBadgeClass(record.status, record.isComplete)}`}>
                                             {getStatusText(record.status, record.isComplete)}

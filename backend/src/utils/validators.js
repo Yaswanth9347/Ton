@@ -1,5 +1,16 @@
 import { body, param, query } from 'express-validator';
 
+/**
+ * Password complexity regex:
+ *  - At least 8 characters
+ *  - At least 1 uppercase letter
+ *  - At least 1 lowercase letter
+ *  - At least 1 digit
+ *  - At least 1 special character (!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`)
+ */
+export const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~])/;
+export const PASSWORD_RULES = 'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character';
+
 export const loginValidator = [
     body('username')
         .trim()
@@ -23,7 +34,9 @@ export const createEmployeeValidator = [
         .withMessage('Username can only contain letters, numbers, and underscores'),
     body('password')
         .isLength({ min: 8 })
-        .withMessage('Password must be at least 8 characters'),
+        .withMessage('Password must be at least 8 characters')
+        .matches(PASSWORD_REGEX)
+        .withMessage(PASSWORD_RULES),
     body('firstName')
         .trim()
         .notEmpty()
@@ -112,4 +125,15 @@ export const dateFilterValidator = [
         .optional()
         .isInt()
         .withMessage('User ID must be an integer'),
+];
+
+export const changePasswordValidator = [
+    body('currentPassword')
+        .notEmpty()
+        .withMessage('Current password is required'),
+    body('newPassword')
+        .isLength({ min: 8 })
+        .withMessage('New password must be at least 8 characters')
+        .matches(PASSWORD_REGEX)
+        .withMessage(PASSWORD_RULES),
 ];

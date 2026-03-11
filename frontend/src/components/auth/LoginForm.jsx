@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../common/Button';
+import { PasswordInput } from '../common/PasswordInput';
 
 export function LoginForm({ onSubmit, error, showForgotPassword = false }) {
     const [username, setUsername] = useState('');
@@ -56,9 +57,8 @@ export function LoginForm({ onSubmit, error, showForgotPassword = false }) {
                 <label htmlFor="password" className="form-label">
                     Password
                 </label>
-                <input
+                <PasswordInput
                     id="password"
-                    type="password"
                     className="form-input"
                     placeholder="Enter your password"
                     value={password}

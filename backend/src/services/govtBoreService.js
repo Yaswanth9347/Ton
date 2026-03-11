@@ -10,6 +10,21 @@ import prisma from '../config/prisma.js';
 import { ensureGovtBoreSchema, hasPipeCompanyColumn } from '../utils/ensureGovtBoreSchema.js';
 import { releaseBorePipeAllocations, syncGovtBorePipeInventory } from './pipeAllocationService.js';
 
+// Safe numeric parsers: return null for empty/invalid values, undefined for missing keys.
+// Prevents NaN from reaching Prisma which would crash the query.
+const safeInt = (v) => {
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  const n = parseInt(v, 10);
+  return Number.isNaN(n) ? null : n;
+};
+const safeFloat = (v) => {
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  const n = parseFloat(v);
+  return Number.isNaN(n) ? null : n;
+};
+
 // =============================================
 // ERROR DETECTION
 // =============================================
@@ -350,10 +365,10 @@ function buildUpdateData(data, includePipeCols) {
     pumpset_rate: data.pumpset_rate !== undefined ? parseFloat(data.pumpset_rate) : undefined,
     pumpset_amount: data.pumpset_amount !== undefined ? parseFloat(data.pumpset_amount) : undefined,
 
-    gi_pipes_qty: data.gi_pipes_qty !== undefined ? parseInt(data.gi_pipes_qty) : undefined,
-    gi_pipes_rate: data.gi_pipes_rate !== undefined ? parseFloat(data.gi_pipes_rate) : undefined,
-    gi_pipes_amount: data.gi_pipes_amount !== undefined ? parseFloat(data.gi_pipes_amount) : undefined,
-    gi_pipes_returned_qty: data.gi_pipes_returned_qty !== undefined ? parseInt(data.gi_pipes_returned_qty) : undefined,
+    gi_pipes_qty: safeInt(data.gi_pipes_qty),
+    gi_pipes_rate: safeFloat(data.gi_pipes_rate),
+    gi_pipes_amount: safeFloat(data.gi_pipes_amount),
+    gi_pipes_returned_qty: safeInt(data.gi_pipes_returned_qty),
 
     plotfarm_qty: data.plotfarm_qty !== undefined ? parseInt(data.plotfarm_qty) : undefined,
     plotfarm_rate: data.plotfarm_rate !== undefined ? parseFloat(data.plotfarm_rate) : undefined,
@@ -538,7 +553,7 @@ export const createRecord = async (data, userId = null) => {
           where: { id: work.id },
           include: { mandal: true, village: true, pipe_company_ref: true, pipe_inventory_ref: true }
         });
-        await syncGovtBorePipeInventory({ currentRecord: record, createdBy: userId });
+        await syncGovtBorePipeInventory({ tx, currentRecord: record, createdBy: userId });
         return record;
       });
     } catch (error) {
@@ -606,7 +621,7 @@ export const updateRecord = async (id, data, userId = null) => {
           data: updateData,
           include: { mandal: true, village: true, pipe_company_ref: true, pipe_inventory_ref: true }
         });
-        await syncGovtBorePipeInventory({ currentRecord: record, previousRecord, createdBy: userId });
+        await syncGovtBorePipeInventory({ tx, currentRecord: record, previousRecord, createdBy: userId });
         return record;
       });
     } catch (error) {

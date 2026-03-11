@@ -5,8 +5,9 @@ import { Button } from '../common/Button';
 import { toast } from 'react-hot-toast';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../common/Table';
 import { formatCurrency } from '../../utils/formatters';
-import { FileText, AlertTriangle, History, X, UserX } from 'lucide-react';
+import { FileText, AlertTriangle, History, X, UserX, Calendar, Download, RefreshCw, CheckCircle, Lock, Trash2, Unlock, UserCheck, IndianRupee } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import './AdminPayrollTab.css';
 
 export function AdminPayrollTab() {
     const { user } = useAuth();
@@ -127,53 +128,67 @@ export function AdminPayrollTab() {
     };
 
     return (
-        <div>
-            <h2 className="mb-4">Company Payroll Management</h2>
-
-            <Card className="mb-6">
-                <div className="flex gap-3 items-end flex-wrap">
-                    <div className="form-group mb-0">
-                        <label className="form-label">Month</label>
-                        <select className="form-input" value={month} onChange={(e) => setMonth(parseInt(e.target.value))}
-                            style={{ padding: '6px 10px', fontSize: '0.85rem' }}>
-                            {Array.from({ length: 12 }, (_, i) => (
-                                <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString('default', { month: 'long' })}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="form-group mb-0">
-                        <label className="form-label">Year</label>
-                        <input type="number" className="form-input" value={year} onChange={(e) => setYear(parseInt(e.target.value))}
-                            style={{ padding: '6px 10px', fontSize: '0.85rem' }} />
-                    </div>
-                    <div className="flex gap-2 items-center flex-wrap" style={{ marginLeft: '4px' }}>
-                        <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={handlePreview}
-                            loading={loading}
-                            style={{ padding: '5px 10px', minHeight: '32px', lineHeight: 1.1, whiteSpace: 'nowrap' }}
-                        >
-                            Load Preview
-                        </Button>
+        <div className="payroll-tab">
+            <div className="payroll-header">
+                <div className="payroll-header__title">
+                    <h2>Payroll Management</h2>
+                </div>
+                <div className="payroll-header__actions">
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleExport}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                        <Download size={14} />
+                        Export CSV
+                    </Button>
+                    {preview && (
                         <Button
                             variant="secondary"
                             size="sm"
-                            onClick={handleExport}
-                            style={{ padding: '5px 10px', minHeight: '32px', lineHeight: 1.1, whiteSpace: 'nowrap' }}
+                            onClick={handleBulkDownload}
+                            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                         >
-                            📥 Export CSV
+                            <FileText size={14} />
+                            Bulk Payslips
                         </Button>
-                        {preview && (
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={handleBulkDownload}
-                                style={{ padding: '5px 10px', minHeight: '32px', lineHeight: 1.1, whiteSpace: 'nowrap' }}
-                            >
-                                📄 Bulk PDF Download
-                            </Button>
-                        )}
+                    )}
+                </div>
+            </div>
+
+            <Card className="payroll-controls">
+                <div className="payroll-controls__group">
+                    <div className="payroll-filter">
+                        <label className="payroll-filter__label">Payroll Period</label>
+                        <select
+                            className="form-input payroll-filter__select"
+                            value={month}
+                            onChange={(e) => setMonth(parseInt(e.target.value))}
+                        >
+                            {Array.from({ length: 12 }, (_, i) => (
+                                <option key={i + 1} value={i + 1}>
+                                    {new Date(0, i).toLocaleString('default', { month: 'long' })}
+                                </option>
+                            ))}
+                        </select>
+                        <input
+                            type="number"
+                            className="form-input payroll-filter__input"
+                            value={year}
+                            onChange={(e) => setYear(parseInt(e.target.value))}
+                        />
+                    </div>
+
+                    <div className="payroll-controls__actions">
+                        <Button
+                            variant="primary"
+                            onClick={handlePreview}
+                            loading={loading}
+                            style={{ minWidth: '120px' }}
+                        >
+                            {loading ? 'Loading...' : 'Load Review'}
+                        </Button>
                     </div>
                 </div>
             </Card>
@@ -181,251 +196,234 @@ export function AdminPayrollTab() {
             {preview && (
                 <div className="fade-in">
                     {/* Summary Cards */}
-                    <div className="flex gap-4 mb-4 flex-wrap">
-                        {/* Summary Stats */}
-                        <Card style={{ flex: 1, minWidth: '180px', textAlign: 'center' }}>
-                            <div className="text-muted text-xs mb-1">Working Days</div>
-                            <div className="text-xl font-bold">{preview.working_days}</div>
-                            <div className="text-muted text-xs">
-                                {preview.days_in_month} days − {preview.sundays} Sun − {preview.public_holidays} holidays
+                    <div className="payroll-stats">
+                        <Card className="payroll-stat-card">
+                            <div className="payroll-stat-card__icon text-muted">
+                                <Calendar size={56} />
+                            </div>
+                            <div className="payroll-stat-card__label">Working Days</div>
+                            <div className="payroll-stat-card__value">{preview.working_days}</div>
+                            <div className="payroll-stat-card__subtext">
+                                {preview.days_in_month}d total − {preview.sundays} Sun − {preview.public_holidays} Hol
                             </div>
                         </Card>
-                        <Card style={{ flex: 1, minWidth: '180px', textAlign: 'center' }}>
-                            <div className="text-muted text-xs mb-1">Total Employees</div>
-                            <div className="text-xl font-bold">{preview.items.length}</div>
+                        <Card className="payroll-stat-card">
+                            <div className="payroll-stat-card__icon text-muted">
+                                <UserCheck size={56} />
+                            </div>
+                            <div className="payroll-stat-card__label">Total Employees</div>
+                            <div className="payroll-stat-card__value">{preview.items.length}</div>
+                            <div className="payroll-stat-card__subtext">Active for {new Date(year, month - 1).toLocaleString('default', { month: 'short' })}</div>
                         </Card>
-                        <Card style={{ flex: 1, minWidth: '180px', textAlign: 'center' }}>
-                            <div className="text-muted text-xs mb-1">Total Payout</div>
-                            <div className="text-xl font-bold" style={{ color: 'var(--color-primary)' }}>
+                        <Card className="payroll-stat-card">
+                            <div className="payroll-stat-card__icon" style={{ color: 'var(--color-primary)', opacity: 0.1 }}>
+                                <IndianRupee size={56} />
+                            </div>
+                            <div className="payroll-stat-card__label">Total Salary Payout</div>
+                            <div className="payroll-stat-card__value" style={{ color: 'var(--color-primary)' }}>
                                 {formatCurrency(preview.total_payout)}
                             </div>
+                            <div className="payroll-stat-card__subtext">Net amount to be disbursed</div>
                         </Card>
                     </div>
 
-                    <div className="flex justify-between items-center mb-4">
-                        <div className="flex items-center gap-3">
-                            <h3 style={{ margin: 0 }}>Preview: {new Date(year, month - 1).toLocaleString('default', { month: 'long' })} {year}</h3>
-                            {preview.status && (
-                                <span className={`badge badge-${preview.status === 'LOCKED' ? 'success' : preview.status === 'APPROVED' ? 'info' : preview.status === 'CANCELLED' ? 'danger' : 'warning'}`}>
-                                    {preview.status} {preview.version ? `(v${preview.version})` : ''}
-                                </span>
-                            )}
-                        </div>
-                        <div className="flex gap-4 items-center flex-wrap justify-end">
-                            {(!preview.status || preview.status === 'CANCELLED') && (
-                                <Button variant="primary" size="sm" onClick={() => handleGenerate('generate')} loading={generateLoading}>
-                                    Generate Draft
-                                </Button>
-                            )}
+                    <div style={{ marginTop: 'var(--spacing-6)' }}>
+                        <Card className="payroll-table-card">
+                            <div className="payroll-table-header">
+                                <div className="payroll-table-header__title">
+                                    <h3>{new Date(year, month - 1).toLocaleString('default', { month: 'long' })} {year} Preview</h3>
+                                    {preview.status && (
+                                        <span className={`badge payroll-badge badge-${preview.status === 'LOCKED' ? 'success' : preview.status === 'APPROVED' ? 'info' : preview.status === 'CANCELLED' ? 'danger' : 'warning'}`}>
+                                            {preview.status} {preview.version ? `(v${preview.version})` : ''}
+                                        </span>
+                                    )}
+                                </div>
 
-                            {preview.status === 'DRAFT' && (
-                                <>
-                                    <Button variant="success" size="sm" onClick={() => handleGenerate('approve')} loading={generateLoading}>
-                                        Approve
-                                    </Button>
-                                    <Button variant="danger" size="sm" onClick={() => handleGenerate('cancel')} loading={generateLoading}>
-                                        Cancel
-                                    </Button>
-                                </>
-                            )}
+                                <div className="payroll-table-actions">
+                                    {(!preview.status || preview.status === 'CANCELLED') && (
+                                        <Button variant="primary" size="sm" onClick={() => handleGenerate('generate')} loading={generateLoading}>
+                                            <RefreshCw size={14} style={{ marginRight: '6px' }} />
+                                            Generate Draft
+                                        </Button>
+                                    )}
 
-                            {preview.status === 'APPROVED' && (
-                                <>
-                                    <Button variant="success" size="sm" onClick={() => handleGenerate('lock')} loading={generateLoading}>
-                                        Lock (Finalize)
-                                    </Button>
-                                    <Button variant="danger" size="sm" onClick={() => handleGenerate('cancel')} loading={generateLoading}>
-                                        Cancel
-                                    </Button>
-                                </>
-                            )}
+                                    {preview.status === 'DRAFT' && (
+                                        <>
+                                            <Button variant="success" size="sm" onClick={() => handleGenerate('approve')} loading={generateLoading}>
+                                                <CheckCircle size={14} style={{ marginRight: '6px' }} />
+                                                Approve
+                                            </Button>
+                                            <Button variant="danger" size="sm" onClick={() => handleGenerate('cancel')} loading={generateLoading}>
+                                                <X size={14} style={{ marginRight: '6px' }} />
+                                                Cancel
+                                            </Button>
+                                        </>
+                                    )}
 
-                            {preview.status === 'LOCKED' && (
-                                <>
-                                    <Button variant="warning" size="sm" onClick={() => handleGenerate('reopen')} loading={generateLoading}>
-                                        Reopen (Admin)
-                                    </Button>
-                                </>
-                            )}
-                        </div>
-                    </div>
+                                    {preview.status === 'APPROVED' && (
+                                        <>
+                                            <Button variant="success" size="sm" onClick={() => handleGenerate('lock')} loading={generateLoading}>
+                                                <Lock size={14} style={{ marginRight: '6px' }} />
+                                                Lock (Finalize)
+                                            </Button>
+                                            <Button variant="danger" size="sm" onClick={() => handleGenerate('cancel')} loading={generateLoading}>
+                                                <Trash2 size={14} style={{ marginRight: '6px' }} />
+                                                Cancel
+                                            </Button>
+                                        </>
+                                    )}
 
-                    <Card>
-                        <Table>
-                            <TableHead>
-                                <TableRow>
-                                    <TableHeader>Employee</TableHeader>
-                                    <TableHeader>Role</TableHeader>
-                                    <TableHeader>Base Salary</TableHeader>
-                                    <TableHeader>Present / Working</TableHeader>
-                                    <TableHeader>Absent Days</TableHeader>
-                                    <TableHeader>LOP Deduction</TableHeader>
-                                    <TableHeader>Overtime</TableHeader>
-                                    <TableHeader>Net Salary</TableHeader>
-                                    <TableHeader>Actions</TableHeader>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {preview.items.map((item) => (
-                                    <TableRow key={item.user_id}>
-                                        <TableCell>
-                                            <div
-                                                style={{ cursor: 'pointer', color: 'var(--color-primary)' }}
-                                                onClick={() => handleViewHistory(item.user_id, item.first_name, item.last_name)}
-                                                title="View payroll history"
-                                            >
-                                                {item.first_name} {item.last_name}
-                                            </div>
-                                            <div className="text-muted text-xs">
-                                                @{item.username}
-                                                {item.employee_status === 'deactivated' && (
-                                                    <span style={{ color: 'var(--color-danger)', marginLeft: '6px', fontWeight: 600 }}>
-                                                        <UserX size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '2px' }} />
-                                                        Deactivated
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>
-                                                {item.role}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell>
-                                            {formatCurrency(item.base_salary)}
-                                            {item.pro_rated_salary !== undefined && item.pro_rated_salary !== item.base_salary && (
-                                                <div className="text-muted text-xs" style={{ color: 'var(--color-warning)' }}>
-                                                    Pro-rated: {formatCurrency(item.pro_rated_salary)}
-                                                </div>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {item.present_days} / {item.working_days}
-                                            {item.total_working_days && item.working_days !== item.total_working_days && (
-                                                <div className="text-muted text-xs">(of {item.total_working_days} total)</div>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {item.absent_days > 0 ? (
-                                                <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                    <AlertTriangle size={12} /> {item.absent_days}
-                                                </span>
-                                            ) : (
-                                                <span className="badge badge-success">0</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {item.lop_deduction > 0 ? (
-                                                <span style={{ color: 'var(--color-danger)' }}>
-                                                    −{formatCurrency(item.lop_deduction)}
-                                                </span>
-                                            ) : '—'}
-                                            {item.lop_deduction > 0 && (
-                                                <div className="text-muted text-xs">
-                                                    {item.absent_days} × ₹{item.lop_rate}
-                                                </div>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {item.overtime_hours > 0 ? (
-                                                <span className="badge badge-info">
-                                                    {item.overtime_hours}h ({formatCurrency(item.overtime_amount)})
-                                                </span>
-                                            ) : '—'}
-                                        </TableCell>
-                                        <TableCell className="font-bold">{formatCurrency(item.net_salary)}</TableCell>
-                                        <TableCell>
-                                            <div className="flex gap-4">
-                                                <button
-                                                    onClick={() => handleDownloadPayslip(item.user_id)}
-                                                    disabled={downloadingId === item.user_id}
-                                                    title="Download Payslip"
-                                                    style={{
-                                                        background: 'transparent', border: 'none', padding: 0,
-                                                        color: 'var(--color-primary)', cursor: 'pointer',
-                                                        opacity: downloadingId === item.user_id ? 0.5 : 1,
-                                                        transition: 'transform 0.15s',
-                                                    }}
-                                                    onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.15)'}
-                                                    onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                                                >
-                                                    {downloadingId === item.user_id ? '⏳' : <FileText size={18} />}
-                                                </button>
-                                                <button
-                                                    onClick={() => handleViewHistory(item.user_id, item.first_name, item.last_name)}
-                                                    title="View Payroll History"
-                                                    style={{
-                                                        background: 'transparent', border: 'none', padding: 0,
-                                                        color: 'var(--color-primary)', cursor: 'pointer',
-                                                        transition: 'transform 0.15s',
-                                                    }}
-                                                    onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.15)'}
-                                                    onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                                                >
-                                                    <History size={18} />
-                                                </button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </Card>
-                </div>
-            )
-            }
-
-            {/* Payroll History Modal — solid opaque background */}
-            {
-                historyModal && (
-                    <div
-                        style={{
-                            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                            background: 'rgba(0, 0, 0, 0.85)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            zIndex: 1000, backdropFilter: 'blur(4px)',
-                        }}
-                        onClick={() => setHistoryModal(null)}
-                    >
-                        <div
-                            style={{
-                                background: 'var(--color-bg-card, #1a1d2e)',
-                                borderRadius: '12px', padding: '24px',
-                                maxWidth: '800px', width: '90%', maxHeight: '80vh',
-                                overflow: 'auto',
-                                border: '1px solid var(--color-border, #2a2d3e)',
-                                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 style={{ margin: 0 }}>Payroll History — {historyModal.name}</h3>
-                                <button
-                                    onClick={() => setHistoryModal(null)}
-                                    style={{
-                                        background: 'transparent', border: 'none', cursor: 'pointer',
-                                        color: 'var(--color-primary)',
-                                    }}
-                                >
-                                    <X size={22} />
-                                </button>
+                                    {preview.status === 'LOCKED' && (
+                                        <Button variant="warning" size="sm" onClick={() => handleGenerate('reopen')} loading={generateLoading}>
+                                            <Unlock size={14} style={{ marginRight: '6px' }} />
+                                            Reopen (Admin)
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
 
+                            <Table>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableHeader>Employee</TableHeader>
+                                        <TableHeader>Role</TableHeader>
+                                        <TableHeader>Base Salary</TableHeader>
+                                        <TableHeader>Attendance</TableHeader>
+                                        <TableHeader>Absence/LOP</TableHeader>
+                                        <TableHeader>Overtime</TableHeader>
+                                        <TableHeader>Net Salary</TableHeader>
+                                        <TableHeader style={{ textAlign: 'center' }}>Actions</TableHeader>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {preview.items.map((item) => (
+                                        <TableRow key={item.user_id} className="payroll-table-row">
+                                            <TableCell>
+                                                <div className="employee-cell">
+                                                    <span
+                                                        className="employee-name text-sm"
+                                                        onClick={() => handleViewHistory(item.user_id, item.first_name, item.last_name)}
+                                                    >
+                                                        {item.first_name} {item.last_name}
+                                                    </span>
+                                                    <span className="text-muted text-xs">
+                                                        @{item.username}
+                                                        {item.employee_status === 'deactivated' && (
+                                                            <span style={{ color: 'var(--color-danger)', marginLeft: '6px' }}>
+                                                                <UserX size={11} style={{ verticalAlign: 'middle', marginRight: '2px' }} />
+                                                                Inactive
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="badge badge-info" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                                    {item.role}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="font-medium">{formatCurrency(item.base_salary)}</div>
+                                                {item.pro_rated_salary !== undefined && item.pro_rated_salary !== item.base_salary && (
+                                                    <span className="pro-rated-badge">
+                                                        Pro-rated: {formatCurrency(item.pro_rated_salary)}
+                                                    </span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="text-sm">{item.present_days} / {item.working_days}</div>
+                                                <div className="text-muted text-xs">days present</div>
+                                            </TableCell>
+                                            <TableCell>
+                                                {item.absent_days > 0 ? (
+                                                    <div>
+                                                        <span className="badge badge-warning text-xs">
+                                                            {item.absent_days} Abs
+                                                        </span>
+                                                        <div className="text-danger text-xs font-medium mt-1">
+                                                            −{formatCurrency(item.lop_deduction)}
+                                                        </div>
+                                                    </div>
+                                                ) : <span className="text-muted">—</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                {item.overtime_hours > 0 ? (
+                                                    <div>
+                                                        <div className="text-sm font-medium">{item.overtime_hours}h</div>
+                                                        <div className="text-success text-xs">
+                                                            +{formatCurrency(item.overtime_amount)}
+                                                        </div>
+                                                    </div>
+                                                ) : <span className="text-muted">—</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="font-bold text-base" style={{ color: 'var(--color-primary)' }}>
+                                                    {formatCurrency(item.net_salary)}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex gap-2 justify-center">
+                                                    <button
+                                                        className="payroll-action-btn"
+                                                        onClick={() => handleDownloadPayslip(item.user_id)}
+                                                        disabled={downloadingId === item.user_id}
+                                                        title="Download Payslip"
+                                                    >
+                                                        {downloadingId === item.user_id ?
+                                                            <div className="spinner spinner--sm" /> :
+                                                            <FileText size={16} />
+                                                        }
+                                                    </button>
+                                                    <button
+                                                        className="payroll-action-btn"
+                                                        onClick={() => handleViewHistory(item.user_id, item.first_name, item.last_name)}
+                                                        title="Payroll History"
+                                                    >
+                                                        <History size={16} />
+                                                    </button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Card>
+                    </div>
+                </div>
+            )}
+
+            {/* Payroll History Modal */}
+            {historyModal && (
+                <div className="payroll-history-overlay" onClick={() => setHistoryModal(null)}>
+                    <div className="payroll-history-modal shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="payroll-history-header">
+                            <h3 className="m-0">Payroll Record History — {historyModal.name}</h3>
+                            <button
+                                onClick={() => setHistoryModal(null)}
+                                className="payroll-action-btn"
+                                style={{ border: 'none', background: 'transparent' }}
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div className="payroll-history-body">
                             {historyModal.records.length === 0 ? (
-                                <div className="text-muted text-center" style={{ padding: '32px' }}>
-                                    No payroll records found. Payroll history will appear here once payroll is generated.
+                                <div className="text-center py-12">
+                                    <div className="text-muted mb-2"><History size={48} className="mx-auto opacity-20" /></div>
+                                    <p className="text-muted">No historical records found for this employee.</p>
                                 </div>
                             ) : (
                                 <Table>
                                     <TableHead>
                                         <TableRow>
-                                            <TableHeader>Period</TableHeader>
+                                            <TableHeader>Month / Year</TableHeader>
                                             <TableHeader>Base Salary</TableHeader>
-                                            <TableHeader>Present Days</TableHeader>
+                                            <TableHeader>Attendance</TableHeader>
                                             <TableHeader>Deductions</TableHeader>
                                             <TableHeader>Overtime</TableHeader>
                                             <TableHeader>Net Salary</TableHeader>
-                                            <TableHeader>Generated</TableHeader>
+                                            <TableHeader>Processed On</TableHeader>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
@@ -438,25 +436,22 @@ export function AdminPayrollTab() {
                                                     </TableCell>
                                                     <TableCell>{formatCurrency(parseFloat(record.base_salary))}</TableCell>
                                                     <TableCell>{record.present_days} / {details.working_days || '—'}</TableCell>
-                                                    <TableCell>
-                                                        {parseFloat(record.total_attendance_deduction) > 0 ? (
-                                                            <span style={{ color: 'var(--color-danger)' }}>
-                                                                −{formatCurrency(parseFloat(record.total_attendance_deduction))}
-                                                            </span>
-                                                        ) : '—'}
+                                                    <TableCell className="text-danger">
+                                                        {parseFloat(record.total_attendance_deduction) > 0 ?
+                                                            `−${formatCurrency(parseFloat(record.total_attendance_deduction))}` : '—'}
                                                     </TableCell>
-                                                    <TableCell>
-                                                        {parseFloat(record.overtime_amount) > 0
-                                                            ? formatCurrency(parseFloat(record.overtime_amount))
-                                                            : '—'}
+                                                    <TableCell className="text-success">
+                                                        {parseFloat(record.overtime_amount) > 0 ?
+                                                            `+${formatCurrency(parseFloat(record.overtime_amount))}` : '—'}
                                                     </TableCell>
-                                                    <TableCell className="font-bold">
+                                                    <TableCell className="font-bold text-main">
                                                         {formatCurrency(parseFloat(record.net_salary))}
                                                     </TableCell>
                                                     <TableCell className="text-muted text-xs">
-                                                        {record.generated_at
-                                                            ? new Date(record.generated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                                                            : '—'}
+                                                        {record.generated_at ?
+                                                            new Date(record.generated_at).toLocaleDateString('en-IN', {
+                                                                day: '2-digit', month: 'short', year: 'numeric'
+                                                            }) : '—'}
                                                     </TableCell>
                                                 </TableRow>
                                             );
@@ -466,8 +461,8 @@ export function AdminPayrollTab() {
                             )}
                         </div>
                     </div>
-                )
-            }
-        </div >
+                </div>
+            )}
+        </div>
     );
 }

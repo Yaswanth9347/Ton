@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
     LayoutDashboard,
@@ -9,6 +9,7 @@ import {
     LogOut,
     ChevronLeft,
     ChevronRight,
+    X,
     Droplets,
     Wallet,
     Landmark,
@@ -17,19 +18,34 @@ import {
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
-export function Sidebar() {
+export function Sidebar({ mobileOpen = false, onMobileClose }) {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const [collapsed, setCollapsed] = useState(false);
     const [imgError, setImgError] = useState(false);
+    const effectiveCollapsed = collapsed && !mobileOpen;
 
     useEffect(() => {
         setImgError(false);
     }, [user?.profilePhotoUrl]);
 
+    useEffect(() => {
+        if (mobileOpen) {
+            onMobileClose?.();
+        }
+    }, [location.pathname]);
+
     const handleLogout = async () => {
+        onMobileClose?.();
         await logout();
         navigate('/login');
+    };
+
+    const handleNavLinkClick = () => {
+        if (mobileOpen) {
+            onMobileClose?.();
+        }
     };
 
     const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
@@ -67,23 +83,34 @@ export function Sidebar() {
     };
 
     return (
-        <aside className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}>
+        <aside className={`sidebar ${effectiveCollapsed ? 'sidebar--collapsed' : ''} ${mobileOpen ? 'sidebar--mobile-open' : ''}`}>
             {/* Brand */}
             {/* ... (keep existing brand code) ... */}
             <div
                 className="sidebar__brand"
-                onClick={() => collapsed && setCollapsed(false)}
-                style={{ cursor: collapsed ? 'pointer' : 'default' }}
+                onClick={() => effectiveCollapsed && setCollapsed(false)}
+                style={{ cursor: effectiveCollapsed ? 'pointer' : 'default' }}
             >
                 <div className="sidebar__brand-link">
                     <span className="sidebar__logo">
                         <img src="/logo.png" alt="JMJ Logo" className="sidebar__logo-img" />
                     </span>
-                    {!collapsed && (
+                    {!effectiveCollapsed && (
                         <span className="sidebar__brand-text">Management</span>
                     )}
                 </div>
-                {!collapsed && (
+                <button
+                    type="button"
+                    className="sidebar__mobile-close"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onMobileClose?.();
+                    }}
+                    aria-label="Close navigation menu"
+                >
+                    <X size={18} />
+                </button>
+                {!effectiveCollapsed && !mobileOpen && (
                     <button
                         className="sidebar__toggle"
                         onClick={(e) => {
@@ -104,13 +131,14 @@ export function Sidebar() {
                         key={link.path}
                         to={link.path}
                         end={link.end || false}
+                        onClick={handleNavLinkClick}
                         className={({ isActive }) =>
                             `sidebar__link ${isActive ? 'sidebar__link--active' : ''}`
                         }
-                        title={collapsed ? link.label : undefined}
+                        title={effectiveCollapsed ? link.label : undefined}
                     >
                         <span className="sidebar__link-icon">{link.icon}</span>
-                        {!collapsed && <span className="sidebar__link-text">{link.label}</span>}
+                        {!effectiveCollapsed && <span className="sidebar__link-text">{link.label}</span>}
                     </NavLink>
                 ))}
             </nav>
@@ -119,6 +147,7 @@ export function Sidebar() {
             <div className="sidebar__footer">
                 <NavLink
                     to="/profile"
+                    onClick={handleNavLinkClick}
                     className={({ isActive }) =>
                         `sidebar__user ${isActive ? 'sidebar__user--active' : ''}`
                     }
@@ -136,7 +165,7 @@ export function Sidebar() {
                             <>{user?.firstName?.[0]}{user?.lastName?.[0]}</>
                         )}
                     </div>
-                    {!collapsed && (
+                    {!effectiveCollapsed && (
                         <div className="sidebar__user-info">
                             <div className="sidebar__user-name">
                                 {user?.firstName} {user?.lastName}
@@ -152,7 +181,7 @@ export function Sidebar() {
                     <span className="sidebar__link-icon">
                         <LogOut size={20} />
                     </span>
-                    {!collapsed && <span className="sidebar__link-text">Logout</span>}
+                    {!effectiveCollapsed && <span className="sidebar__link-text">Logout</span>}
                 </button>
             </div>
         </aside>

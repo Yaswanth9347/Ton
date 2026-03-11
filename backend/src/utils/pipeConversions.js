@@ -52,22 +52,24 @@ export const formatQuantityDisplay = (feet) => {
  * Convert quantity to feet based on unit type
  * @param {number} quantity - The quantity value
  * @param {string} unit - Either 'pipes' or 'feet'
+ * @param {number} lengthFeet - Feet per pipe (default 20)
  * @returns {number} - Quantity in feet
  */
-export const convertToFeet = (quantity, unit) => {
+export const convertToFeet = (quantity, unit, lengthFeet = FEET_PER_PIPE) => {
     if (unit === 'feet') {
         return parseFloat(quantity);
     }
-    return pipesToFeet(parseFloat(quantity));
+    return parseFloat(quantity) * lengthFeet;
 };
 
 /**
  * Parse and validate quantity input
  * @param {number|string} quantity - Input quantity
  * @param {string} unit - Either 'pipes' or 'feet'
+ * @param {number} lengthFeet - Feet per pipe (default 20)
  * @returns {{valid: boolean, feet: number, error: string|null}}
  */
-export const validateQuantity = (quantity, unit) => {
+export const validateQuantity = (quantity, unit, lengthFeet = FEET_PER_PIPE) => {
     const num = parseFloat(quantity);
 
     if (isNaN(num) || num <= 0) {
@@ -86,7 +88,7 @@ export const validateQuantity = (quantity, unit) => {
         };
     }
 
-    const feet = convertToFeet(num, unit);
+    const feet = convertToFeet(num, unit, lengthFeet);
 
     return {
         valid: true,

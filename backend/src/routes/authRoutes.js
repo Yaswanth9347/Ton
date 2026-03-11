@@ -2,7 +2,7 @@ import express from 'express';
 import * as authController from '../controllers/authController.js';
 import { authenticate } from '../middleware/auth.js';
 import { validateRequest } from '../middleware/validateRequest.js';
-import { loginValidator } from '../utils/validators.js';
+import { loginValidator, changePasswordValidator } from '../utils/validators.js';
 import { profileUpload } from '../middleware/upload.js';
 import { roleGuard } from '../middleware/roleGuard.js';
 
@@ -27,11 +27,14 @@ router.post('/logout', authenticate, authController.logout);
 // GET /api/auth/me - Get current user
 router.get('/me', authenticate, authController.getMe);
 
+// POST /api/auth/refresh - Refresh JWT token (silent renewal)
+router.post('/refresh', authenticate, authController.refreshToken);
+
 // PUT /api/auth/profile - Update user profile
 router.put('/profile', authenticate, authController.updateProfile);
 
 // PUT /api/auth/change-password - Change password
-router.put('/change-password', authenticate, authController.changePassword);
+router.put('/change-password', authenticate, changePasswordValidator, validateRequest, authController.changePassword);
 
 // PUT /api/auth/users/:id/reset-password - Admin/Supervisor reset user password
 router.put(

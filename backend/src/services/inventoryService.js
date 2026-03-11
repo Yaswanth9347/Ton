@@ -3,6 +3,7 @@ import prisma from '../config/prisma.js';
 import {
     getOpenPipeAllocations,
     issuePipeAllocation,
+    reconcileGovtBoreAllocationStatuses,
     returnPipeAllocation,
 } from './pipeAllocationService.js';
 
@@ -44,14 +45,73 @@ export const getAllPipes = async () => {
 
 export const createNewPipe = async (data, userId) => {
     return await prisma.$transaction(async (tx) => {
-        console.log(`[Inventory - Pipes] Initiating creation of new pipe type...`, JSON.stringify({ size: data.size, company: data.company }));
+        const normalizedCompany = (data.company || '').trim();
+        const normalizedSize = (data.size || '').trim();
+        const lengthFeet = data.length_feet ? parseFloat(data.length_feet) : 20;
+        const validation = validateQuantity(data.quantity || 0, data.unit || 'pipes', lengthFeet);
+        if (!validation.valid) {
+            throw new Error(validation.error);
+        }
+        const quantityInFeet = validation.feet;
+
         const existing = await tx.pipes_master.findFirst({
-            where: { pipe_type_name: data.company, pipe_size: data.size, is_active: true }
+            where: {
+                pipe_type_name: { equals: normalizedCompany, mode: 'insensitive' },
+                pipe_size: { equals: normalizedSize, mode: 'insensitive' }
+            },
+            include: { stock: true }
         });
 
         if (existing) {
-            console.error("[Inventory - Pipes] Failed to create pipe. Reason: Duplicate pipe mapping.");
-            throw new Error('Pipe type and size combination already exists.');
+            await tx.pipes_master.update({
+                where: { id: existing.id },
+                data: {
+                    is_active: true,
+                    unit: data.unit || existing.unit || 'pieces',
+                    material_type: data.material_type || existing.material_type || null,
+                    quality_grade: data.quality_grade || existing.quality_grade || null,
+                    length_feet: lengthFeet,
+                    cost_per_unit: data.cost_per_unit !== undefined ? parseFloat(data.cost_per_unit || 0) : (existing.cost_per_unit ? parseFloat(existing.cost_per_unit) : 0)
+                },
+                include: { stock: true }
+            });
+
+            if (quantityInFeet > 0) {
+                await tx.pipes_stock.upsert({
+                    where: { pipe_master_id: existing.id },
+                    update: { available_quantity: { increment: quantityInFeet } },
+                    create: { pipe_master_id: existing.id, available_quantity: quantityInFeet }
+                });
+
+                await tx.pipes_stock_transactions.create({
+                    data: {
+                        pipe_master_id: existing.id,
+                        transaction_type: 'PURCHASE',
+                        quantity: quantityInFeet,
+                        reference_type: 'INVENTORY_ENTRY',
+                        created_by: userId,
+                        source_location: 'SUPPLIER',
+                        destination_location: 'MAIN_STORE',
+                        remarks: existing.is_active
+                            ? 'Stock added to existing pipe type'
+                            : 'Stock restored with reactivated pipe type'
+                    }
+                });
+            }
+
+            const updatedPipe = await tx.pipes_master.findUnique({
+                where: { id: existing.id },
+                include: { stock: true }
+            });
+
+            return {
+                id: updatedPipe.id,
+                size: updatedPipe.pipe_size,
+                company: updatedPipe.pipe_type_name,
+                quantity: updatedPipe.stock?.available_quantity || 0,
+                unit: updatedPipe.unit,
+                action: existing.is_active ? 'restocked' : 'reactivated'
+            };
         }
 
         // Auto-create company in global master if it doesn't exist
@@ -60,7 +120,6 @@ export const createNewPipe = async (data, userId) => {
         });
 
         if (!existingCompany) {
-            console.log(`[Inventory - Pipes] Auto-creating new company master global entry for: ${data.company}`);
             await tx.pipes_company_master.create({
                 data: {
                     company_name: data.company,
@@ -76,37 +135,37 @@ export const createNewPipe = async (data, userId) => {
                 unit: data.unit || 'pieces',
                 material_type: data.material_type || null,
                 quality_grade: data.quality_grade || null,
-                length_feet: data.length_feet ? parseFloat(data.length_feet) : 20,
+                length_feet: lengthFeet,
                 cost_per_unit: data.cost_per_unit ? parseFloat(data.cost_per_unit) : 0,
                 stock: {
-                    create: { available_quantity: data.quantity || 0 }
+                    create: { available_quantity: quantityInFeet }
                 }
             },
             include: { stock: true }
         });
 
-        if (parseFloat(data.quantity || 0) > 0) {
+        if (quantityInFeet > 0) {
             await tx.pipes_stock_transactions.create({
                 data: {
                     pipe_master_id: pipe.id,
-                    transaction_type: 'ADD',
-                    quantity: parseFloat(data.quantity || 0),
+                    transaction_type: 'PURCHASE',
+                    quantity: quantityInFeet,
                     reference_type: 'INVENTORY_ENTRY',
                     created_by: userId,
-                    source_location: 'PURCHASE',
+                    source_location: 'SUPPLIER',
                     destination_location: 'MAIN_STORE',
                     remarks: 'Opening stock created with new pipe type'
                 }
             });
         }
 
-        console.log(`[Inventory - Pipes] Pipe type created successfully. Master ID: ${pipe.id}`);
         return {
             id: pipe.id,
             size: pipe.pipe_size,
             company: pipe.pipe_type_name,
             quantity: pipe.stock?.available_quantity || 0,
-            unit: pipe.unit
+            unit: pipe.unit,
+            action: 'created'
         };
     });
 };
@@ -116,7 +175,8 @@ export const addPipeStock = async (pipeId, quantity, unit, userId, options = {})
         const pipeMaster = await tx.pipes_master.findUnique({ where: { id: parseInt(pipeId) }, include: { stock: true } });
         if (!pipeMaster) throw new Error('Pipe not found');
 
-        const validation = validateQuantity(quantity, unit || 'pipes');
+        const lengthFeet = pipeMaster.length_feet ? parseFloat(pipeMaster.length_feet) : 20;
+        const validation = validateQuantity(quantity, unit || 'pipes', lengthFeet);
         if (!validation.valid) throw new Error(validation.error);
         const quantityInFeet = validation.feet;
 
@@ -128,15 +188,13 @@ export const addPipeStock = async (pipeId, quantity, unit, userId, options = {})
         await tx.pipes_stock_transactions.create({
             data: {
                 pipe_master_id: pipeMaster.id,
-                transaction_type: 'ADD',
+                transaction_type: 'PURCHASE',
                 quantity: quantityInFeet,
                 reference_type: 'INVENTORY_ENTRY',
                 created_by: userId,
-                source_location: options.source_location || 'PURCHASE',
+                source_location: options.source_location || 'SUPPLIER',
                 destination_location: options.destination_location || 'MAIN_STORE',
-                supplier_name: options.supplier_name || null,
-                purchase_mode: options.purchase_mode || null,
-                remarks: options.remarks || 'Stock received into main store'
+                remarks: 'Stock received into main store'
             }
         });
 
@@ -152,7 +210,10 @@ export const addPipeStock = async (pipeId, quantity, unit, userId, options = {})
 
 export const issuePipesToBore = async (data, userId) => {
     return await prisma.$transaction(async (tx) => {
-        const validation = validateQuantity(data.quantity, data.unit || 'pipes');
+        const pipeMaster = await tx.pipes_master.findUnique({ where: { id: parseInt(data.pipe_inventory_id) } });
+        if (!pipeMaster) throw new Error('Pipe not found');
+        const lengthFeet = pipeMaster.length_feet ? parseFloat(pipeMaster.length_feet) : 20;
+        const validation = validateQuantity(data.quantity, data.unit || 'pipes', lengthFeet);
         if (!validation.valid) throw new Error(validation.error);
 
         const allocation = await issuePipeAllocation({
@@ -186,13 +247,19 @@ export const issuePipesToBore = async (data, userId) => {
 
 export const returnPipesFromBore = async (data, userId) => {
     return await prisma.$transaction(async (tx) => {
-        const validation = validateQuantity(data.quantity, data.unit || 'pipes');
-        if (!validation.valid) throw new Error(validation.error);
         if (!data.allocation_id) {
             throw new Error('Allocation ID is required for returning pipes from bore');
         }
+        const allocation = await tx.pipe_bore_allocations.findUnique({
+            where: { id: parseInt(data.allocation_id) },
+            include: { pipe_master: true }
+        });
+        if (!allocation) throw new Error('Allocation not found');
+        const lengthFeet = allocation.pipe_master?.length_feet ? parseFloat(allocation.pipe_master.length_feet) : 20;
+        const validation = validateQuantity(data.quantity, data.unit || 'pipes', lengthFeet);
+        if (!validation.valid) throw new Error(validation.error);
 
-        const allocation = await returnPipeAllocation({
+        const updatedAllocation = await returnPipeAllocation({
             tx,
             allocationId: parseInt(data.allocation_id),
             quantity: validation.feet,
@@ -202,7 +269,7 @@ export const returnPipesFromBore = async (data, userId) => {
         });
 
         const updatedPipe = await tx.pipes_master.findUnique({
-            where: { id: allocation.pipe_master_id },
+            where: { id: updatedAllocation.pipe_master_id },
             include: { stock: true }
         });
 
@@ -212,7 +279,7 @@ export const returnPipesFromBore = async (data, userId) => {
             company: updatedPipe.pipe_type_name,
             quantity: updatedPipe.stock?.available_quantity || 0,
             unit: updatedPipe.unit,
-            allocation_id: allocation.id
+            allocation_id: updatedAllocation.id
         };
     });
 };
@@ -248,8 +315,18 @@ export const getPipeTransactions = async (filters) => {
         if (filters.endDate) whereClause.created_at.lte = new Date(filters.endDate);
     }
 
-    if (filters.transactionType === 'ISSUE') {
-        whereClause.transaction_type = 'DEDUCT';
+    // Map filter values to actual DB transaction types (including legacy support)
+    if (filters.transactionType) {
+        const typeMap = {
+            'PURCHASE': { in: ['PURCHASE', 'ADD'] },
+            'LOAD': { in: ['LOAD', 'DEDUCT'] },
+            'ISSUE': { equals: 'ISSUE' },
+            'RETURN': { equals: 'RETURN' },
+        };
+        const mapped = typeMap[filters.transactionType];
+        if (mapped) {
+            whereClause.transaction_type = mapped;
+        }
     }
 
     const txns = await prisma.pipes_stock_transactions.findMany({
@@ -261,33 +338,50 @@ export const getPipeTransactions = async (filters) => {
         orderBy: { created_at: 'desc' }
     });
 
-    const mapped = txns.map(t => ({
-        id: t.id,
-        pipe_inventory_id: t.pipe_master_id,
-        size: t.pipe_master.pipe_size,
-        company: t.pipe_master.pipe_type_name,
-        transaction_type: t.transaction_type === 'DEDUCT' ? 'ISSUE' : (t.reference_type?.includes('RETURN') ? 'RETURN' : 'LOAD'),
-        quantity: t.quantity,
-        unit_type: t.pipe_master.unit,
-        bore_type: t.reference_type?.includes('GOVT') ? 'govt' : (t.reference_type?.includes('PRIVATE') ? 'private' : null),
-        bore_id: t.reference_id,
-        created_by_name: t.user?.username || 'System',
-        created_at: t.created_at,
-        remarks: t.remarks,
-        vehicle_name: t.vehicle_name,
-        supervisor_name: t.supervisor_name,
-        source_location: t.source_location,
-        destination_location: t.destination_location,
-        supplier_name: t.supplier_name,
-        purchase_mode: t.purchase_mode,
-        allocation_id: t.allocation_id
-    }));
+    // Normalize legacy transaction types to new standard names
+    const normalizeTransactionType = (t) => {
+        const dbType = t.transaction_type;
+        const refType = t.reference_type || '';
 
-    if (filters.transactionType) {
-        return mapped.filter((item) => item.transaction_type === filters.transactionType);
-    }
+        // Already using new naming convention
+        if (['PURCHASE', 'LOAD', 'ISSUE', 'RETURN'].includes(dbType)) return dbType;
 
-    return mapped;
+        // Legacy: ADD could be PURCHASE (stock inward) or RETURN (bore return)
+        if (dbType === 'ADD') {
+            if (refType.includes('RETURN')) return 'RETURN';
+            return 'PURCHASE';
+        }
+
+        // Legacy: DEDUCT was used for bore allocations
+        if (dbType === 'DEDUCT') return 'LOAD';
+
+        return dbType;
+    };
+
+    return txns.map(t => {
+        const transactionType = normalizeTransactionType(t);
+        const lengthFeet = t.pipe_master.length_feet ? parseFloat(t.pipe_master.length_feet) : 20;
+        return {
+            id: t.id,
+            pipe_inventory_id: t.pipe_master_id,
+            size: t.pipe_master.pipe_size,
+            company: t.pipe_master.pipe_type_name,
+            transaction_type: transactionType,
+            quantity: t.quantity,
+            length_feet: lengthFeet,
+            unit_type: t.pipe_master.unit,
+            bore_type: t.reference_type?.includes('GOVT') ? 'govt' : (t.reference_type?.includes('PRIVATE') ? 'private' : null),
+            bore_id: t.reference_id,
+            created_by_name: t.user?.username || 'System',
+            created_at: t.created_at,
+            remarks: t.remarks,
+            vehicle_name: t.vehicle_name,
+            supervisor_name: t.supervisor_name,
+            source_location: t.source_location,
+            destination_location: t.destination_location,
+            allocation_id: t.allocation_id
+        };
+    });
 };
 
 export const getPipeAllocations = async () => {
@@ -758,6 +852,8 @@ export const getDieselSummary = async (startDate, endDate) => {
 // =============================================
 
 export const getInventorySummary = async () => {
+    await reconcileGovtBoreAllocationStatuses(prisma);
+
     // Pipes summary
     const pipes = await prisma.pipes_master.findMany({
         where: { is_active: true },
@@ -771,9 +867,10 @@ export const getInventorySummary = async () => {
     pipes.forEach(p => {
         const qty = parseFloat(p.stock?.available_quantity || 0);
         const cost = parseFloat(p.cost_per_unit || 0);
+        const lengthFeet = parseFloat(p.length_feet || 20) || 20;
+        const pipeCount = lengthFeet > 0 ? qty / lengthFeet : 0;
         totalPipeStock += qty;
-        totalPipeValue += qty * cost;
-        const pipeCount = qty / 20;
+        totalPipeValue += pipeCount * cost;
         if (pipeCount > 0 && pipeCount < (p.reorder_level || 10)) {
             lowStockPipes++;
         }
@@ -797,7 +894,7 @@ export const getInventorySummary = async () => {
     spares.forEach(s => {
         const qty = parseFloat(s.stock?.available_quantity || 0);
         const cost = parseFloat(s.cost_per_unit || 0);
-        totalSparesValue += cost;
+        totalSparesValue += qty * cost;
         if (qty > 0) sparesAvailable++;
         else sparesInUse++;
     });

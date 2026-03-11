@@ -8,6 +8,7 @@ import { AttendanceCalendar } from '../components/employee/AttendanceCalendar';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
 import { attendanceApi } from '../services/api';
+import toast from 'react-hot-toast';
 
 export function EmployeeDashboard() {
     const { user, logout } = useAuth();
@@ -39,8 +40,34 @@ export function EmployeeDashboard() {
     const handleCheckOut = async () => {
         setActionLoading(true);
         setActionError(null);
+
+        // Calculate how long the employee has worked
+        let workedHours = 0;
+        if (todayStatus?.checkIn) {
+            const checkInTime = new Date(todayStatus.checkIn).getTime();
+            workedHours = (Date.now() - checkInTime) / (1000 * 60 * 60);
+        }
+
         try {
             await checkOut();
+
+            // Show warning notifications AFTER successful checkout (non-blocking)
+            const FULL_DAY_HOURS = 8;
+            const HALF_DAY_HOURS = 3.5;
+
+            if (workedHours < HALF_DAY_HOURS) {
+                toast(
+                    `⚠️ You worked only ${workedHours.toFixed(1)} hrs. Minimum 3.5 hours required for half-day.`,
+                    { duration: 5000, icon: '⏰', style: { background: '#fef3c7', color: '#92400e', border: '1px solid #f59e0b', fontWeight: '500' } }
+                );
+            } else if (workedHours < FULL_DAY_HOURS) {
+                toast(
+                    `⚠️ You have not completed the required 8 hours of working time. (Worked: ${workedHours.toFixed(1)} hrs)`,
+                    { duration: 5000, icon: '⏰', style: { background: '#fef3c7', color: '#92400e', border: '1px solid #f59e0b', fontWeight: '500' } }
+                );
+            } else {
+                toast.success(`Great job! You completed ${workedHours.toFixed(1)} hours today.`, { duration: 4000 });
+            }
         } catch (err) {
             setActionError(err.message);
         } finally {
@@ -116,7 +143,14 @@ export function EmployeeDashboard() {
                     {todayStatus?.checkInLocation && (
                         <Card className="text-center p-4">
                             <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Check-in Location</div>
-                            <div style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>📍 {todayStatus.checkInLocation.address}</div>
+                            <div style={{ fontSize: '0.875rem', fontWeight: '600', marginTop: '0.5rem' }}>
+                                📍 {todayStatus.checkInLocation.address || `${todayStatus.checkInLocation.latitude?.toFixed(4)}, ${todayStatus.checkInLocation.longitude?.toFixed(4)}`}
+                            </div>
+                            {todayStatus.checkInLocation.latitude && todayStatus.checkInLocation.address && (
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                                    {Number(todayStatus.checkInLocation.latitude).toFixed(4)}°N, {Number(todayStatus.checkInLocation.longitude).toFixed(4)}°E
+                                </div>
+                            )}
                         </Card>
                     )}
                 </div>

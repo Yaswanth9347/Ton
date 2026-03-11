@@ -7,7 +7,7 @@ import axios from 'axios';
 import './InventoryPage.css';
 import './SparesInventory.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 const PAGE_SIZE = 12;
 
 /* ── Toast ── */
@@ -224,43 +224,44 @@ export function SparesInventory() {
                     <table className="inv-table">
                         <thead>
                             <tr>
-                                <th>Type</th>
-                                <th>Spare #</th>
-                                <th>Brand</th>
-                                <th>Cost</th>
-                                <th>Status</th>
-                                <th>Location</th>
-                                <th>Vehicle</th>
-                                <th>Actions</th>
+                                <th style={{ textAlign: 'center' }}>Type</th>
+                                <th style={{ textAlign: 'center' }}>Spare #</th>
+                                <th style={{ textAlign: 'center' }}>Brand</th>
+                                <th style={{ textAlign: 'center' }}>Cost</th>
+                                <th style={{ textAlign: 'center' }}>Status</th>
+                                <th style={{ textAlign: 'center' }}>Location</th>
+                                <th style={{ textAlign: 'center' }}>Vehicle</th>
+                                <th style={{ textAlign: 'center' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {spares.length === 0 ? (
-                                <tr><td colSpan="8" className="inv-table__empty">No spares found. Add one to get started.</td></tr>
+                                <tr><td colSpan="8" className="inv-table__empty" style={{ textAlign: 'center' }}>No spares found. Add one to get started.</td></tr>
                             ) : (
                                 spares.map(spare => (
                                     <tr key={spare.id}>
-                                        <td>
+                                        <td style={{ textAlign: 'center' }}>
                                             <span style={{
                                                 display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: '0.8rem',
                                                 color: spare.spare_type === 'OB' ? 'var(--color-primary)' : 'var(--color-warning)',
                                                 background: spare.spare_type === 'OB' ? 'rgba(37,99,235,0.1)' : 'rgba(245,158,11,0.1)',
-                                                padding: '3px 10px', borderRadius: 'var(--radius-full)'
+                                                padding: '3px 10px', borderRadius: 'var(--radius-full)',
+                                                justifyContent: 'center'
                                             }}>
                                                 {spare.spare_type === 'OB' ? <Wrench size={12} /> : <Settings size={12} />}
                                                 {spare.spare_type}
                                             </span>
                                         </td>
-                                        <td style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{spare.spare_number}</td>
-                                        <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>{spare.brand || '—'}</td>
-                                        <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem' }}>
+                                        <td style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', textAlign: 'center' }}>{spare.spare_number}</td>
+                                        <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem', textAlign: 'center' }}>{spare.brand || '—'}</td>
+                                        <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem', textAlign: 'center' }}>
                                             {spare.cost_per_unit > 0 ? `₹${parseFloat(spare.cost_per_unit).toLocaleString('en-IN')}` : '—'}
                                         </td>
-                                        <td><span className={`status-badge status-badge--${STATUS_KEY[spare.status]}`}><span className="status-badge__dot" />{STATUS_LABEL[spare.status]}</span></td>
-                                        <td style={{ color: 'var(--text-muted)' }}>{spare.current_location || 'HOME'}</td>
-                                        <td>{spare.vehicle_name || '—'}</td>
+                                        <td style={{ textAlign: 'center' }}><span className={`status-badge status-badge--${STATUS_KEY[spare.status]}`} style={{ justifyContent: 'center' }}><span className="status-badge__dot" />{STATUS_LABEL[spare.status]}</span></td>
+                                        <td style={{ color: 'var(--text-muted)', textAlign: 'center' }}>{spare.current_location || 'HOME'}</td>
+                                        <td style={{ textAlign: 'center' }}>{spare.vehicle_name || '—'}</td>
                                         <td>
-                                            <div className="inv-actions">
+                                            <div className="inv-actions" style={{ justifyContent: 'center' }}>
                                                 {spare.status === 'AVAILABLE' && (
                                                     <button className="inv-action-btn inv-action-btn--issue" title="Issue to Vehicle" onClick={() => openModal('issue', spare)}><Send size={13} /></button>
                                                 )}
@@ -318,30 +319,30 @@ export function SparesInventory() {
                     <table className="inv-table">
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>Type</th>
-                                <th>Spare #</th>
-                                <th>Action</th>
-                                <th>Vehicle</th>
-                                <th>Supervisor</th>
-                                <th>Remarks</th>
+                                <th style={{ textAlign: 'center' }}>Date</th>
+                                <th style={{ textAlign: 'center' }}>Type</th>
+                                <th style={{ textAlign: 'center' }}>Spare #</th>
+                                <th style={{ textAlign: 'center' }}>Action</th>
+                                <th style={{ textAlign: 'center' }}>Vehicle</th>
+                                <th style={{ textAlign: 'center' }}>Supervisor</th>
+                                <th style={{ textAlign: 'center' }}>Remarks</th>
                             </tr>
                         </thead>
                         <tbody>
                             {pageTxns.length === 0 ? (
-                                <tr><td colSpan="7" className="inv-table__empty">No transactions found.</td></tr>
+                                <tr><td colSpan="7" className="inv-table__empty" style={{ textAlign: 'center' }}>No transactions found.</td></tr>
                             ) : (
                                 pageTxns.map(tx => (
                                     <tr key={tx.id}>
-                                        <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                                        <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem', textAlign: 'center' }}>
                                             {new Date(tx.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                                         </td>
-                                        <td>{tx.spare_type}</td>
-                                        <td style={{ fontWeight: 600 }}>{tx.spare_number}</td>
-                                        <td><span className={`status-badge status-badge--${tx.transaction_type.toLowerCase()}`}>{tx.transaction_type}</span></td>
-                                        <td>{tx.vehicle_name || '—'}</td>
-                                        <td>{tx.supervisor_name || '—'}</td>
-                                        <td style={{ color: 'var(--text-muted)' }}>{tx.remarks || '—'}</td>
+                                        <td style={{ textAlign: 'center' }}>{tx.spare_type}</td>
+                                        <td style={{ fontWeight: 600, textAlign: 'center' }}>{tx.spare_number}</td>
+                                        <td style={{ textAlign: 'center' }}><span className={`status-badge status-badge--${tx.transaction_type.toLowerCase()}`} style={{ justifyContent: 'center' }}>{tx.transaction_type}</span></td>
+                                        <td style={{ textAlign: 'center' }}>{tx.vehicle_name || '—'}</td>
+                                        <td style={{ textAlign: 'center' }}>{tx.supervisor_name || '—'}</td>
+                                        <td style={{ color: 'var(--text-muted)', textAlign: 'center' }}>{tx.remarks || '—'}</td>
                                     </tr>
                                 ))
                             )}

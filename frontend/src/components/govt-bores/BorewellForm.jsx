@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Plus, Calculator, AlertCircle, Calendar, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { govtBoreApi, inventoryApi } from '../../services/api';
@@ -365,7 +365,7 @@ const TaxRow = ({ label, prefix, formData, handleChange, viewMode = false }) => 
                 placeholder="Amount"
                 readOnly={viewMode}
                 className={`qty-rate-row__input ${viewMode ? 'qty-rate-row__input--readonly' : 'qty-rate-row__input--editable'}`}
-                style={{ textAlign: 'right' }}
+                style={{ textAlign: 'center' }}
                 min="0"
             />
         </div>
@@ -373,7 +373,7 @@ const TaxRow = ({ label, prefix, formData, handleChange, viewMode = false }) => 
 };
 
 
-export default function BorewellForm({ record, onClose, onSave, saving, viewMode = false }) {
+function BorewellForm({ record, onClose, onSave, saving, viewMode = false }) {
 
     // Helper to map record to form data
     const mapRecordToFormData = (rec) => {
@@ -492,6 +492,33 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
             console.error('Failed to fetch inventory pipes:', err);
         }
     };
+
+    const uniqueInventoryPipes = useMemo(() => {
+        const deduped = new Map();
+
+        inventoryPipes.forEach((pipe) => {
+            const company = (pipe.company || '').trim();
+            const size = (pipe.size || '').trim();
+            const key = `${company.toLowerCase()}::${size.toLowerCase()}`;
+            const lengthFt = parseFloat(pipe.length_feet || 20) || 20;
+            const storeQty = parseFloat(pipe.store_quantity || pipe.quantity || 0);
+            const pipeCount = lengthFt > 0 ? storeQty / lengthFt : 0;
+            const existing = deduped.get(key);
+
+            if (!existing || pipeCount > existing.pipeCount) {
+                deduped.set(key, {
+                    ...pipe,
+                    pipeCount
+                });
+            }
+        });
+
+        return Array.from(deduped.values()).sort((a, b) => {
+            const companyCompare = (a.company || '').localeCompare(b.company || '', undefined, { sensitivity: 'base' });
+            if (companyCompare !== 0) return companyCompare;
+            return (a.size || '').localeCompare(b.size || '', undefined, { numeric: true, sensitivity: 'base' });
+        });
+    }, [inventoryPipes]);
 
     // Calculations removed to support manual entry
 
@@ -807,9 +834,9 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
                             <div className="qty-rate-table">
                                 <div className="qty-rate-table__header">
                                     <span>Type</span>
-                                    <span style={{ textAlign: 'center' }}>per feet</span>
-                                    <span style={{ textAlign: 'center' }}>Rate</span>
-                                    <span style={{ textAlign: 'center' }}>Amount</span>
+                                    <span>Per Feet</span>
+                                    <span>Rate</span>
+                                    <span>Amount</span>
                                 </div>
                                 <QtyRateAmountRow label="140mm (5 inches)" prefix="casing140" formData={formData} handleChange={handleChange} viewMode={viewMode} />
                                 <QtyRateAmountRow label="180mm (7 inches)" prefix="casing180" formData={formData} handleChange={handleChange} viewMode={viewMode} />
@@ -842,9 +869,9 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
                         <div className="qty-rate-table">
                             <div className="qty-rate-table__header">
                                 <span>Item</span>
-                                <span style={{ textAlign: 'center' }}>Qty</span>
-                                <span style={{ textAlign: 'center' }}>Rate</span>
-                                <span style={{ textAlign: 'center' }}>Amount</span>
+                                <span>Qty</span>
+                                <span>Rate</span>
+                                <span>Amount</span>
                             </div>
 
                             <QtyRateAmountRow label="Bore Cap" prefix="borecap" formData={formData} handleChange={handleChange} viewMode={viewMode} className="qty-rate-row--no-border qty-rate-row--compact" />
@@ -918,14 +945,12 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
                                     <label className="form-field__label">Company</label>
                                     <select name="pipe_inventory_id" value={formData.pipe_inventory_id || ''} onChange={handleChange} className="form-field__input" disabled={viewMode}>
                                         <option value="">Select Company</option>
-                                        {inventoryPipes.map(pipe => {
-                                            const storeQty = parseFloat(pipe.store_quantity || pipe.quantity || 0);
-                                            const lengthFt = parseFloat(pipe.length_feet || 20) || 20;
-                                            const pipeCount = Math.round((storeQty / lengthFt) * 100) / 100;
+                                        {uniqueInventoryPipes.map(pipe => {
+                                            const pipeCount = Math.round((pipe.pipeCount || 0) * 100) / 100;
                                             const isLowStock = pipeCount <= 0;
                                             return (
                                                 <option key={pipe.id} value={pipe.id} disabled={isLowStock}>
-                                                    {pipe.company} ({pipe.size} inch){isLowStock ? ' - No Stock' : ''}
+                                                    {pipe.company} ({pipe.size}){isLowStock ? ' - No Stock' : ''}
                                                 </option>
                                             );
                                         })}
@@ -1185,3 +1210,6 @@ export default function BorewellForm({ record, onClose, onSave, saving, viewMode
         </div >
     );
 }
+
+export { BorewellForm };
+export default BorewellForm;

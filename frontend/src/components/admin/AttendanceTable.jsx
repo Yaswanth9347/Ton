@@ -52,11 +52,15 @@ export function AttendanceTable({
                     email: record.employeeEmail || emp?.email || '',
                     records: [],
                     totalHours: 0,
+                    regularHours: 0,
+                    overtimeHours: 0,
                     presentDays: 0,
                 };
             }
             grouped[record.userId].records.push(record);
             grouped[record.userId].totalHours += parseFloat(record.totalHours || 0);
+            grouped[record.userId].regularHours += parseFloat(record.regularHours || 0);
+            grouped[record.userId].overtimeHours += parseFloat(record.overtimeHours || 0);
             if (record.status === 'present' || record.status === 'late') {
                 grouped[record.userId].presentDays += 1;
             }
@@ -132,7 +136,7 @@ export function AttendanceTable({
                     className="attendance-filter-input"
                 />
 
-                <div className="flex gap-2 ml-auto">
+                <div className="attendance-filter-actions flex gap-2 ml-auto">
                     <Button variant="primary" size="sm" onClick={handleApplyFilters}>
                         Apply
                     </Button>
@@ -157,6 +161,8 @@ export function AttendanceTable({
                             <TableHeader>Employee</TableHeader>
                             <TableHeader>Period</TableHeader>
                             <TableHeader>Attendance %</TableHeader>
+                            <TableHeader>Regular Hrs</TableHeader>
+                            <TableHeader>Overtime</TableHeader>
                             <TableHeader>Total Hours</TableHeader>
                             <TableHeader>Overall Status</TableHeader>
                             <TableHeader align="right">Actions</TableHeader>
@@ -181,7 +187,13 @@ export function AttendanceTable({
                                         </div>
                                     </div>
                                 </TableCell>
-                                <TableCell className="font-medium">{emp.totalHours.toFixed(1)} hrs</TableCell>
+                                <TableCell className="font-medium">{emp.regularHours.toFixed(1)} hrs</TableCell>
+                                <TableCell>
+                                    {emp.overtimeHours > 0
+                                        ? <span style={{ color: 'var(--color-warning)', fontWeight: '600' }}>{emp.overtimeHours.toFixed(1)} hrs</span>
+                                        : <span className="text-muted">0.0 hrs</span>}
+                                </TableCell>
+                                <TableCell className="font-semibold">{emp.totalHours.toFixed(1)} hrs</TableCell>
                                 <TableCell>
                                     <div className={`flex items-center gap-1.5 font-medium ${emp.status === 'Good' ? 'attendance-status-good' : emp.status === 'Attention' ? 'attendance-status-avg' : 'attendance-status-poor'}`}>
                                         {emp.status === 'Good' && <CheckCircle2 size={16} />}

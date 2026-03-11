@@ -7,7 +7,7 @@ import axios from 'axios';
 import './InventoryPage.css';
 import './DieselTracking.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 const PAGE_SIZE = 15;
 
 /* ── Toast ── */
@@ -63,13 +63,11 @@ export function DieselTracking() {
 
     const fetchRecords = useCallback(async () => {
         try {
-            console.log('[Inventory] Fetching Diesel data...');
             const r = await axios.get(`${API_URL}/inventory/diesel`, {
                 params: { start_date: dateRange.start, end_date: dateRange.end },
                 headers: authH()
             });
             setRecords(r.data.data);
-            console.log(`[Inventory] Diesel data fetched successfully. Count: ${r.data.data.length}`);
         } catch (err) {
             console.error('[Inventory] Error fetching Diesel data:', err);
         }
@@ -110,14 +108,11 @@ export function DieselTracking() {
         setSubmitting(true);
         try {
             const payload = { ...formData, amount: parseFloat(formData.amount), liters: formData.liters ? parseFloat(formData.liters) : null };
-            console.log(`[Inventory] Attempting to execute ${editingRecord ? 'update' : 'add'} on Diesel...`);
             if (editingRecord) {
                 await axios.put(`${API_URL}/inventory/diesel/${editingRecord.id}`, payload, { headers: authH() });
-                console.log(`[Inventory] Diesel item updated successfully. ID: ${editingRecord.id}`);
                 showToast('success', 'Diesel record updated');
             } else {
                 const res = await axios.post(`${API_URL}/inventory/diesel`, payload, { headers: authH() });
-                console.log(`[Inventory] Diesel stock added successfully. ID: ${res.data?.data?.id || 'Unknown'}`);
                 showToast('success', 'Diesel record added');
             }
             await Promise.all([fetchRecords(), fetchSummary()]);
@@ -136,9 +131,7 @@ export function DieselTracking() {
             onConfirm: async () => {
                 setConfirm(null);
                 try {
-                    console.log(`[Inventory] Attempting to execute delete on Diesel...`);
                     await axios.delete(`${API_URL}/inventory/diesel/${record.id}`, { headers: authH() });
-                    console.log(`[Inventory] Diesel item deleted successfully. ID: ${record.id}`);
                     showToast('success', 'Record deleted');
                     await Promise.all([fetchRecords(), fetchSummary()]);
                 } catch (err) {
@@ -232,20 +225,20 @@ export function DieselTracking() {
                     <table className="inv-table">
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>Vehicle</th>
-                                <th>Supervisor</th>
-                                <th>Amount (₹)</th>
-                                <th>Liters</th>
-                                <th>Price/L</th>
-                                <th>Bill</th>
-                                <th>Remarks</th>
-                                <th>Actions</th>
+                                <th style={{ textAlign: 'center' }}>Date</th>
+                                <th style={{ textAlign: 'center' }}>Vehicle</th>
+                                <th style={{ textAlign: 'center' }}>Supervisor</th>
+                                <th style={{ textAlign: 'center' }}>Amount (₹)</th>
+                                <th style={{ textAlign: 'center' }}>Liters</th>
+                                <th style={{ textAlign: 'center' }}>Price/L</th>
+                                <th style={{ textAlign: 'center' }}>Bill</th>
+                                <th style={{ textAlign: 'center' }}>Remarks</th>
+                                <th style={{ textAlign: 'center' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {pageRecs.length === 0 ? (
-                                <tr><td colSpan="9" className="inv-table__empty">No diesel records for this period.</td></tr>
+                                <tr><td colSpan="9" className="inv-table__empty" style={{ textAlign: 'center' }}>No diesel records for this period.</td></tr>
                             ) : (
                                 pageRecs.map(rec => {
                                     const pricePerL = rec.liters && parseFloat(rec.liters) > 0
@@ -253,29 +246,29 @@ export function DieselTracking() {
                                         : null;
                                     return (
                                         <tr key={rec.id}>
-                                            <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                                            <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem', textAlign: 'center' }}>
                                                 {new Date(rec.purchase_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                                             </td>
-                                            <td style={{ fontWeight: 600 }}>{rec.vehicle_name}</td>
-                                            <td style={{ color: 'var(--text-muted)' }}>{rec.supervisor_name || '—'}</td>
-                                            <td style={{ fontWeight: 700, color: 'var(--color-warning)', fontVariantNumeric: 'tabular-nums' }}>
+                                            <td style={{ fontWeight: 600, textAlign: 'center' }}>{rec.vehicle_name}</td>
+                                            <td style={{ color: 'var(--text-muted)', textAlign: 'center' }}>{rec.supervisor_name || '—'}</td>
+                                            <td style={{ fontWeight: 700, color: 'var(--color-warning)', fontVariantNumeric: 'tabular-nums', textAlign: 'center' }}>
                                                 ₹{parseFloat(rec.amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                                             </td>
-                                            <td style={{ fontVariantNumeric: 'tabular-nums' }}>{rec.liters ? `${parseFloat(rec.liters).toFixed(2)} L` : '—'}</td>
-                                            <td style={{ color: pricePerL ? 'var(--text-secondary)' : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                                            <td style={{ fontVariantNumeric: 'tabular-nums', textAlign: 'center' }}>{rec.liters ? `${parseFloat(rec.liters).toFixed(2)} L` : '—'}</td>
+                                            <td style={{ color: pricePerL ? 'var(--text-secondary)' : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', textAlign: 'center' }}>
                                                 {pricePerL ? `₹${pricePerL}` : '—'}
                                             </td>
-                                            <td>
+                                            <td style={{ textAlign: 'center' }}>
                                                 {rec.bill_url ? (
                                                     <a href={rec.bill_url} target="_blank" rel="noopener noreferrer"
-                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--color-primary)', fontSize: '0.78rem' }}>
+                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--color-primary)', fontSize: '0.78rem', justifyContent: 'center' }}>
                                                         <FileText size={13} /> View
                                                     </a>
                                                 ) : '—'}
                                             </td>
-                                            <td style={{ color: 'var(--text-muted)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rec.remarks || '—'}</td>
+                                            <td style={{ color: 'var(--text-muted)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>{rec.remarks || '—'}</td>
                                             <td>
-                                                <div className="inv-actions">
+                                                <div className="inv-actions" style={{ justifyContent: 'center' }}>
                                                     <button className="inv-action-btn inv-action-btn--edit" title="Edit" onClick={() => openModal(rec)}><Edit size={13} /></button>
                                                     <button className="inv-action-btn inv-action-btn--delete" title="Delete" onClick={() => handleDelete(rec)}><Trash2 size={13} /></button>
                                                 </div>

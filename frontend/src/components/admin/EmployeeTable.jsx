@@ -2,7 +2,7 @@ import { Card } from '../common/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../common/Table';
 import { Button } from '../common/Button';
 import { formatDate, formatCurrency } from '../../utils/formatters';
-import { Edit2, CalendarDays, UserX, UserCheck, Users } from 'lucide-react';
+import { Edit2, CalendarDays, UserX, UserCheck, Users, Lock, Unlock, KeyRound } from 'lucide-react';
 
 export function EmployeeTable({
     employees,
@@ -10,7 +10,9 @@ export function EmployeeTable({
     onEdit,
     onToggleActive,
     onViewCalendar,
-    onViewPayroll
+    onViewPayroll,
+    onResetPassword,
+    onUnlock,
 }) {
     if (loading) {
         return (
@@ -64,13 +66,20 @@ export function EmployeeTable({
                                 </TableCell>
                                 <TableCell>{formatCurrency(employee.baseSalary)}</TableCell>
                                 <TableCell>
-                                    <span className={`badge ${employee.isActive ? 'badge-success' : 'badge-danger'}`}>
-                                        {employee.isActive ? 'Active' : 'Inactive'}
-                                    </span>
+                                    <div className="flex gap-1 flex-wrap items-center">
+                                        <span className={`badge ${employee.isActive ? 'badge-success' : 'badge-danger'}`}>
+                                            {employee.isActive ? 'Active' : 'Inactive'}
+                                        </span>
+                                        {employee.accountLocked && (
+                                            <span className="badge" style={{ background: '#fef3c7', color: '#92400e', fontSize: '0.65rem', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                                <Lock size={10} /> Locked
+                                            </span>
+                                        )}
+                                    </div>
                                 </TableCell>
                                 <TableCell>{formatDate(employee.createdAt)}</TableCell>
                                 <TableCell>
-                                    <div className="flex gap-4">
+                                    <div className="flex gap-4 items-center">
                                         <button
                                             className="btn-icon-blue"
                                             onClick={() => onEdit(employee)}
@@ -85,6 +94,26 @@ export function EmployeeTable({
                                                 title="View attendance calendar"
                                             >
                                                 <CalendarDays size={18} className="icon-action-blue" />
+                                            </button>
+                                        )}
+                                        {onResetPassword && (
+                                            <button
+                                                className="btn-icon-blue"
+                                                onClick={() => onResetPassword(employee)}
+                                                title="Reset password"
+                                                style={{ color: '#6366f1' }}
+                                            >
+                                                <KeyRound size={18} />
+                                            </button>
+                                        )}
+                                        {onUnlock && employee.accountLocked && (
+                                            <button
+                                                className="btn-icon-blue"
+                                                onClick={() => onUnlock(employee)}
+                                                title="Unlock account"
+                                                style={{ color: '#d97706' }}
+                                            >
+                                                <Unlock size={18} />
                                             </button>
                                         )}
                                         <button

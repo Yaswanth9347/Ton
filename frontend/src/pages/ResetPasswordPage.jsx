@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../services/api';
+import { PasswordInput } from '../components/common/PasswordInput';
+import { PasswordStrength } from '../components/common/PasswordStrength';
 
 export default function ResetPasswordPage() {
     const { token } = useParams();
@@ -15,8 +17,8 @@ export default function ResetPasswordPage() {
         e.preventDefault();
         setError('');
 
-        if (newPassword.length < 6) {
-            setError('Password must be at least 6 characters long.');
+        if (newPassword.length < 8) {
+            setError('Password must be at least 8 characters long.');
             return;
         }
 
@@ -85,32 +87,31 @@ export default function ResetPasswordPage() {
                                 <label htmlFor="newPassword" className="form-label">
                                     New Password
                                 </label>
-                                <input
+                                <PasswordInput
                                     id="newPassword"
-                                    type="password"
                                     className="form-input"
                                     placeholder="Enter new password"
                                     value={newPassword}
                                     onChange={(e) => setNewPassword(e.target.value)}
                                     required
-                                    minLength={6}
+                                    minLength={8}
                                     autoComplete="new-password"
                                 />
+                                <PasswordStrength password={newPassword} />
                             </div>
 
                             <div className="form-group">
                                 <label htmlFor="confirmPassword" className="form-label">
                                     Confirm Password
                                 </label>
-                                <input
+                                <PasswordInput
                                     id="confirmPassword"
-                                    type="password"
                                     className="form-input"
                                     placeholder="Confirm new password"
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     required
-                                    minLength={6}
+                                    minLength={8}
                                     autoComplete="new-password"
                                 />
                             </div>

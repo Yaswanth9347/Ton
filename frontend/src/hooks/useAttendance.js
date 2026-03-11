@@ -25,26 +25,54 @@ export function useAttendance() {
         }
     }, []);
 
+    const reverseGeocode = async (latitude, longitude) => {
+        try {
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1&zoom=16`,
+                {
+                    headers: {
+                        'Accept-Language': 'en',
+                        'User-Agent': 'JMJManagementSystem/1.0',
+                    },
+                }
+            );
+            if (!response.ok) throw new Error('Geocoding failed');
+            const data = await response.json();
+            const addr = data.address || {};
+            // Build a concise, readable location string
+            const parts = [
+                addr.neighbourhood || addr.suburb || addr.hamlet || '',
+                addr.city || addr.town || addr.village || addr.county || '',
+                addr.state || '',
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.slice(0, 2).join(', ') : data.display_name?.split(',').slice(0, 2).join(',').trim() || null;
+        } catch (err) {
+            console.warn('Reverse geocoding failed:', err.message);
+            return null;
+        }
+    };
+
     const getCurrentLocation = () => {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             if (!navigator.geolocation) {
                 resolve(null); // Geolocation not supported
                 return;
             }
 
             navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    resolve({
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude,
-                        address: 'Current Location' // In a real app, use reverse geocoding
-                    });
+                async (position) => {
+                    const latitude = position.coords.latitude;
+                    const longitude = position.coords.longitude;
+                    // Attempt reverse geocoding; fall back to coordinate string
+                    const placeName = await reverseGeocode(latitude, longitude);
+                    const address = placeName || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+                    resolve({ latitude, longitude, address });
                 },
                 (error) => {
                     console.error('Geolocation error:', error);
                     resolve(null); // Proceed without location if denied
                 },
-                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         });
     };

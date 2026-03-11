@@ -12,6 +12,24 @@ dotenv.config();
 
 let transporter = null;
 
+function resolveFrontendUrl() {
+  const configuredUrl = process.env.FRONTEND_URL?.trim();
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/$/, '');
+  }
+
+  const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  if (process.env.NODE_ENV === 'production') {
+    if (vercelUrl) {
+      return `https://${vercelUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}`;
+    }
+
+    throw new Error('FRONTEND_URL is required in production to generate password reset links');
+  }
+
+  return 'http://localhost:5173';
+}
+
 // Only create transporter if SMTP credentials are configured
 if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     transporter = nodemailer.createTransport({
@@ -32,42 +50,109 @@ if (process.env.SMTP_USER && process.env.SMTP_PASS) {
  * @param {string} adminName — admin's display name
  */
 export async function sendAdminResetEmail(toEmail, resetToken, adminName) {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const frontendUrl = resolveFrontendUrl();
     const resetLink = `${frontendUrl}/reset-password/${resetToken}`;
 
     const subject = '🔐 JMJ Management — Admin Password Reset';
     const html = `
-        <div style="font-family: 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: #1e40af; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
-                <h1 style="margin: 0; font-size: 24px;">JMJ Management System</h1>
-            </div>
-            <div style="background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
-                <h2 style="color: #1e293b; margin-top: 0;">Password Reset Request</h2>
-                <p style="color: #475569;">Hello <strong>${adminName}</strong>,</p>
-                <p style="color: #475569;">
-                    A password reset was triggered for your Admin account because of multiple failed login attempts.
-                    Click the button below to set a new password:
-                </p>
-                <div style="text-align: center; margin: 30px 0;">
-                    <a href="${resetLink}"
-                       style="background: #1e40af; color: white; padding: 12px 32px; border-radius: 6px;
-                              text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">
-                        Reset Password
-                    </a>
-                </div>
-                <p style="color: #64748b; font-size: 14px;">
-                    This link will expire in <strong>1 hour</strong>. If you did not request this reset,
-                    someone may be trying to access your account. Please secure your credentials.
-                </p>
-                <p style="color: #64748b; font-size: 14px;">
-                    Direct link: <a href="${resetLink}" style="color: #1e40af; word-break: break-all;">${resetLink}</a>
-                </p>
-                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-                <p style="color: #94a3b8; font-size: 12px; text-align: center;">
-                    JMJ Bore Wells — Management System &bull; This is an automated message
-                </p>
-            </div>
-        </div>
+        <!doctype html>
+        <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>Reset your password — JMJ Management System</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+          </style>
+        </head>
+        <body style="margin:0; padding:0; background-color:#f3f4f6; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">
+
+          <!-- Neutral Outer Background -->
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f3f4f6;">
+            <tr>
+              <td align="center" style="padding:40px 16px;">
+
+                <!-- Center Container (600px) -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%; margin:0 auto;">
+                  
+                  <!-- Main Content Card (Application Theme) -->
+                  <tr>
+                    <td style="background-color:#0f172a; border-radius:12px; padding:32px; border:1px solid rgba(255,255,255,0.08); box-shadow:0 10px 25px -5px rgba(0,0,0,0.3);">
+                      
+                      <!-- Header Section -->
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                        <tr>
+                          <td align="center" style="background:linear-gradient(90deg,#2563eb,#3b82f6); background-color:#2563eb; padding:16px; border-radius:10px;">
+                            <h1 style="margin:0; font-family:'Inter', sans-serif; font-size:20px; font-weight:700; color:#ffffff; letter-spacing:-0.5px;">
+                              JMJ Management System
+                            </h1>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <!-- Body Content -->
+                      <h2 style="margin:0 0 16px 0; font-family:'Inter', sans-serif; font-size:18px; font-weight:600; color:#f1f5f9; text-align:center;">
+                        Password Reset Request
+                      </h2>
+                      
+                      <p style="margin:0 0 12px 0; font-family:'Inter', sans-serif; font-size:15px; line-height:1.6; color:#cbd5e1;">
+                        Hi <strong>${adminName}</strong>,
+                      </p>
+                      
+                      <p style="margin:0 0 24px 0; font-family:'Inter', sans-serif; font-size:15px; line-height:1.6; color:#cbd5e1;">
+                        We received a request to reset your password for the JMJ Management Admin account. If you didn't request this, you can safely ignore this email.
+                      </p>
+
+                      <!-- Reset Button -->
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                        <tr>
+                          <td align="center">
+                            <a href="${resetLink}" target="_blank" rel="noopener"
+                               style="display:inline-block; background:linear-gradient(90deg,#2563eb,#3b82f6); background-color:#2563eb; color:#ffffff; padding:12px 32px; border-radius:8px; font-family:'Inter', sans-serif; font-size:15px; font-weight:600; text-decoration:none; box-shadow:0 4px 12px rgba(37,99,235,0.25);">
+                              Reset Password
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <p style="margin:0 0 12px 0; font-family:'Inter', sans-serif; font-size:13px; color:#94a3b8; text-align:center; line-height:1.4;">
+                         This link will expire in <strong>1 hour</strong> for your security.
+                      </p>
+
+                      <!-- Fallback Link -->
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid rgba(255,255,255,0.05); padding-top:20px;">
+                        <tr>
+                          <td>
+                            <p style="margin:0; font-family:'Inter', sans-serif; font-size:12px; color:#64748b; text-align:center;">
+                              If the button above doesn't work, copy and paste this link into your browser:<br>
+                              <a href="${resetLink}" style="color:#3b82f6; text-decoration:none;">${resetLink}</a>
+                            </p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  <!-- Footer (Neutral) -->
+                  <tr>
+                    <td align="center" style="padding-top:24px;">
+                      <p style="margin:0; font-family:'Inter', sans-serif; font-size:12px; line-height:1.5; color:#6b7280;">
+                        JMJ Bore Wells — Management System<br>
+                        &copy; ${new Date().getFullYear()} All rights reserved.
+                      </p>
+                      <p style="margin:8px 0 0 0; font-family:'Inter', sans-serif; font-size:11px; color:#9ca3af;">
+                        This is an automated notification, please do not reply to this email.
+                      </p>
+                    </td>
+                  </tr>
+
+                </table>
+              </td>
+            </tr>
+          </table>
+
+        </body>
+        </html>
     `;
 
     const text = `Password Reset for Admin Account\n\nHello ${adminName},\n\nA password reset was triggered. Click the link below to set a new password:\n\n${resetLink}\n\nThis link expires in 1 hour.\n\nJMJ Management System`;
@@ -102,31 +187,93 @@ export async function sendAdminResetEmail(toEmail, resetToken, adminName) {
  * Send a warning email when failed login attempts are detected.
  */
 export async function sendLoginWarningEmail(toEmail, adminName, attempts) {
-    const subject = '⚠️ JMJ Management — Suspicious Login Activity';
+    const subject = '⚠️ Security Alert — JMJ Management System';
     const html = `
-        <div style="font-family: 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: #dc2626; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
-                <h1 style="margin: 0; font-size: 24px;">⚠️ Security Alert</h1>
-            </div>
-            <div style="background: #fef2f2; padding: 30px; border: 1px solid #fecaca; border-top: none; border-radius: 0 0 8px 8px;">
-                <p style="color: #991b1b;">Hello <strong>${adminName}</strong>,</p>
-                <p style="color: #991b1b;">
-                    There have been <strong>${attempts} failed login attempts</strong> on your Admin account.
-                    Your account has been temporarily locked for security.
-                </p>
-                <p style="color: #991b1b;">
-                    A password reset link has been sent to this email. Please use it to regain access
-                    and set a new secure password.
-                </p>
-                <p style="color: #991b1b; font-size: 14px;">
-                    If this wasn't you, please investigate immediately.
-                </p>
-                <hr style="border: none; border-top: 1px solid #fecaca; margin: 20px 0;" />
-                <p style="color: #94a3b8; font-size: 12px; text-align: center;">
-                    JMJ Bore Wells — Management System &bull; Security Notification
-                </p>
-            </div>
-        </div>
+        <!doctype html>
+        <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>Security Alert — JMJ Management System</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+          </style>
+        </head>
+        <body style="margin:0; padding:0; background-color:#f3f4f6; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">
+
+          <!-- Neutral Outer Background -->
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f3f4f6;">
+            <tr>
+              <td align="center" style="padding:40px 16px;">
+
+                <!-- Center Container (600px) -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%; margin:0 auto;">
+                  
+                  <!-- Main Content Card (Application Theme) -->
+                  <tr>
+                    <td style="background-color:#0f172a; border-radius:12px; padding:32px; border:1px solid rgba(255,255,255,0.08); box-shadow:0 10px 25px -5px rgba(0,0,0,0.3);">
+                      
+                      <!-- Header Section (Red Alert Style) -->
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                        <tr>
+                          <td align="center" style="background:linear-gradient(90deg,#dc2626,#ef4444); background-color:#dc2626; padding:16px; border-radius:10px;">
+                            <h1 style="margin:0; font-family:'Inter', sans-serif; font-size:20px; font-weight:700; color:#ffffff; letter-spacing:-0.5px;">
+                              Security Alert
+                            </h1>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <!-- Body Content -->
+                      <h2 style="margin:0 0 16px 0; font-family:'Inter', sans-serif; font-size:18px; font-weight:600; color:#ef4444; text-align:center;">
+                        Unusual Activity Detected
+                      </h2>
+                      
+                      <p style="margin:0 0 12px 0; font-family:'Inter', sans-serif; font-size:15px; line-height:1.6; color:#cbd5e1;">
+                        Hi <strong>${adminName}</strong>,
+                      </p>
+                      
+                      <p style="margin:0 0 16px 0; font-family:'Inter', sans-serif; font-size:15px; line-height:1.6; color:#cbd5e1;">
+                        There have been <strong>${attempts} failed login attempts</strong> on your JMJ Management Admin account. As a safety precaution, your account has been temporarily locked.
+                      </p>
+
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:rgba(255,255,255,0.03); border-radius:8px; margin-bottom:24px;">
+                        <tr>
+                          <td style="padding:16px;">
+                            <p style="margin:0; font-family:'Inter', sans-serif; font-size:14px; color:#cbd5e1; text-align:center;">
+                              A password reset email has been sent to you. Please follow those instructions to secure your account.
+                            </p>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <p style="margin:0; font-family:'Inter', sans-serif; font-size:14px; font-weight:500; color:#eab308; text-align:center;">
+                        ⚠️ If this wasn't you, please investigate or contact IT support immediately.
+                      </p>
+
+                    </td>
+                  </tr>
+
+                  <!-- Footer (Neutral) -->
+                  <tr>
+                    <td align="center" style="padding-top:24px;">
+                      <p style="margin:0; font-family:'Inter', sans-serif; font-size:12px; line-height:1.5; color:#6b7280;">
+                        JMJ Bore Wells — Management System<br>
+                        &copy; ${new Date().getFullYear()} All rights reserved.
+                      </p>
+                      <p style="margin:8px 0 0 0; font-family:'Inter', sans-serif; font-size:11px; color:#9ca3af;">
+                        This is an automated security notification.
+                      </p>
+                    </td>
+                  </tr>
+
+                </table>
+              </td>
+            </tr>
+          </table>
+
+        </body>
+        </html>
     `;
 
     if (transporter) {

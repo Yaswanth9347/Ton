@@ -37,6 +37,9 @@ router.patch('/employees/:id/deactivate', adminController.deactivateEmployee);
 // PATCH /api/admin/employees/:id/reactivate - Reactivate employee
 router.patch('/employees/:id/reactivate', adminController.reactivateEmployee);
 
+// PATCH /api/admin/employees/:id/unlock - Unlock locked employee account
+router.patch('/employees/:id/unlock', adminController.unlockEmployee);
+
 // Attendance Management
 // GET /api/admin/attendance - Get all attendance records
 router.get('/attendance', dateFilterValidator, validateRequest, adminController.getAllAttendance);
@@ -69,5 +72,8 @@ router.get('/employees/:id/calendar', adminController.getEmployeeCalendar);
 
 // Employee payroll history
 router.get('/employees/:id/payroll-history', adminController.getEmployeePayrollHistory);
+
+// Login audit history
+router.get('/login-history', adminController.getLoginHistory);
 
 export default router;

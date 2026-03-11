@@ -13,6 +13,7 @@ import govtBoreRoutes from './routes/govtBoreRoutes.js';
 import payrollRoutes from './routes/payrollRoutes.js';
 import inventoryRoutes from './routes/inventory.js';
 import { ensureAuthSchema } from './utils/ensureAuthSchema.js';
+import { ensureLoginAuditSchema } from './utils/ensureLoginAuditSchema.js';
 
 dotenv.config();
 
@@ -29,6 +30,23 @@ const allowedOrigins = [
   process.env.FRONTEND_URL,
   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
 ].filter(Boolean);
+
+function isAllowedLocalDevOrigin(origin) {
+  if (process.env.NODE_ENV === 'production') return false;
+
+  try {
+    const { protocol, hostname, port } = new URL(origin);
+    if (protocol !== 'http:') return false;
+
+    const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
+    const isPrivateLanIp = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(hostname);
+    const isFrontendPort = port === '5173' || port === '3000';
+
+    return isFrontendPort && (isLocalHost || isPrivateLanIp);
+  } catch {
+    return false;
+  }
+}
 
 function isAllowedVercelPreviewOrigin(origin) {
   try {
@@ -48,7 +66,7 @@ const corsOptions = {
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.includes(origin) || isAllowedVercelPreviewOrigin(origin)) {
+    if (allowedOrigins.includes(origin) || isAllowedVercelPreviewOrigin(origin) || isAllowedLocalDevOrigin(origin)) {
       return callback(null, true);
     }
 
@@ -69,8 +87,20 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  next();
+});
+
 ensureAuthSchema().catch((error) => {
   console.error('Auth schema ensure failed:', error?.message || error);
+});
+
+ensureLoginAuditSchema().catch((error) => {
+  console.error('Login audit schema ensure failed:', error?.message || error);
 });
 
 // Serve uploads from correct directory based on environment

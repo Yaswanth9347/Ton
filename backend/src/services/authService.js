@@ -16,6 +16,7 @@ import jwtConfig from '../config/jwt.js';
 import { UnauthorizedError, ValidationError, ForbiddenError, NotFoundError } from '../utils/errors.js';
 import { sendAdminResetEmail, sendLoginWarningEmail } from './emailService.js';
 import { ensureAuthSchema } from '../utils/ensureAuthSchema.js';
+import { PASSWORD_REGEX, PASSWORD_RULES } from '../utils/validators.js';
 
 const SALT_ROUNDS = 10;
 const MAX_FAILED_ATTEMPTS = 3;
@@ -46,7 +47,7 @@ export const generateToken = (userId) => {
 export const authenticateUser = async (username, password) => {
     const authSchema = await ensureAuthSchema();
 
-    // Find user
+    // Find user (case-insensitive username match)
     const result = await db.query(
         `SELECT u.id, u.username, u.email, u.password_hash, u.first_name, u.last_name,
                 u.is_active,
@@ -55,7 +56,7 @@ export const authenticateUser = async (username, password) => {
                 r.name as role
          FROM users u
          JOIN roles r ON u.role_id = r.id
-         WHERE u.username = $1`,
+         WHERE LOWER(u.username) = LOWER($1)`,
         [username]
     );
 
@@ -298,8 +299,11 @@ export const resetPasswordWithToken = async (token, newPassword) => {
     }
 
     // Validate new password
-    if (!newPassword || newPassword.length < 6) {
-        throw new ValidationError('New password must be at least 6 characters long.');
+    if (!newPassword || newPassword.length < 8) {
+        throw new ValidationError('New password must be at least 8 characters long.');
+    }
+    if (!PASSWORD_REGEX.test(newPassword)) {
+        throw new ValidationError(PASSWORD_RULES);
     }
 
     const newHash = await hashPassword(newPassword);
@@ -383,8 +387,11 @@ export const resetUserPassword = async (requesterId, targetUserId, newPassword) 
     }
 
     // Validate new password
-    if (!newPassword || newPassword.length < 6) {
-        throw new ValidationError('New password must be at least 6 characters long.');
+    if (!newPassword || newPassword.length < 8) {
+        throw new ValidationError('New password must be at least 8 characters long.');
+    }
+    if (!PASSWORD_REGEX.test(newPassword)) {
+        throw new ValidationError(PASSWORD_RULES);
     }
 
     const newHash = await hashPassword(newPassword);

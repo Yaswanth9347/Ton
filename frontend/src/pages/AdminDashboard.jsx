@@ -15,11 +15,14 @@ import { toast } from 'react-hot-toast';
 import { OvertimeRulesConfig } from '../components/admin/OvertimeRulesConfig';
 import { AdminPayrollTab } from '../components/admin/AdminPayrollTab';
 import { AttendanceCalendarView } from '../components/admin/AttendanceCalendarView';
+import { LoginHistoryPanel } from '../components/admin/LoginHistoryPanel';
 import {
     Users, UserCheck, UserX, Clock,
     Droplets, IndianRupee, TrendingUp, Landmark,
-    UserPlus, Upload, Download
+    UserPlus, Upload, Download, KeyRound
 } from 'lucide-react';
+import { PasswordInput } from '../components/common/PasswordInput';
+import { PasswordStrength } from '../components/common/PasswordStrength';
 
 export function AdminDashboard({ tab = 'dashboard' }) {
     const { user, logout } = useAuth();
@@ -37,6 +40,13 @@ export function AdminDashboard({ tab = 'dashboard' }) {
     const [editingEmployee, setEditingEmployee] = useState(null);
     const [employeeFormError, setEmployeeFormError] = useState(null);
     const [employeeFormLoading, setEmployeeFormLoading] = useState(false);
+
+    // Reset password modal state
+    const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+    const [resetTargetEmployee, setResetTargetEmployee] = useState(null);
+    const [resetPasswordValue, setResetPasswordValue] = useState('');
+    const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+    const [resetPasswordError, setResetPasswordError] = useState('');
 
     // Attendance state
     const [attendance, setAttendance] = useState([]);
@@ -175,6 +185,42 @@ export function AdminDashboard({ tab = 'dashboard' }) {
         } catch (error) {
             console.error('Failed to toggle employee status:', error);
             toast.error(error.response?.data?.message || 'Failed to update employee status');
+        }
+    };
+
+    const handleResetEmployee = (employee) => {
+        setResetTargetEmployee(employee);
+        setResetPasswordValue('');
+        setResetPasswordError('');
+        setShowResetPasswordModal(true);
+    };
+
+    const handleResetPasswordSubmit = async () => {
+        if (!resetPasswordValue || resetPasswordValue.length < 8) {
+            setResetPasswordError('Password must be at least 8 characters.');
+            return;
+        }
+        setResetPasswordLoading(true);
+        setResetPasswordError('');
+        try {
+            await adminApi.resetEmployeePassword(resetTargetEmployee.id, resetPasswordValue);
+            toast.success(`Password reset for ${resetTargetEmployee.firstName} ${resetTargetEmployee.lastName}`);
+            setShowResetPasswordModal(false);
+            fetchEmployees();
+        } catch (error) {
+            setResetPasswordError(error.response?.data?.message || 'Failed to reset password');
+        } finally {
+            setResetPasswordLoading(false);
+        }
+    };
+
+    const handleUnlockEmployee = async (employee) => {
+        try {
+            await adminApi.unlockEmployee(employee.id);
+            toast.success(`${employee.firstName} ${employee.lastName}'s account unlocked`);
+            fetchEmployees();
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to unlock account');
         }
     };
 
@@ -328,11 +374,13 @@ export function AdminDashboard({ tab = 'dashboard' }) {
                 {/* Employees Tab */}
                 {activeTab === 'employees' && (
                     <div>
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="admin-page-toolbar mb-4">
                             <h3>Employee Management</h3>
-                            <Button variant="primary" onClick={handleAddEmployee} className="flex items-center gap-2">
-                                <UserPlus size={18} fill="currentColor" /> Add Employee
-                            </Button>
+                            <div className="admin-page-toolbar__actions">
+                                <Button variant="primary" onClick={handleAddEmployee} className="flex items-center gap-2">
+                                    <UserPlus size={18} fill="currentColor" /> Add Employee
+                                </Button>
+                            </div>
                         </div>
                         <EmployeeTable
                             employees={employees}
@@ -340,6 +388,8 @@ export function AdminDashboard({ tab = 'dashboard' }) {
                             loading={employeesLoading}
                             onEdit={handleEditEmployee}
                             onToggleActive={handleToggleActive}
+                            onResetPassword={handleResetEmployee}
+                            onUnlock={handleUnlockEmployee}
                             onViewCalendar={(employee) => {
                                 setCalendarEmployee(employee);
                                 setShowCalendarModal(true);
@@ -351,9 +401,9 @@ export function AdminDashboard({ tab = 'dashboard' }) {
                 {/* Attendance Tab */}
                 {activeTab === 'attendance' && (
                     <div>
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="admin-page-toolbar mb-4">
                             <h3>Attendance Records</h3>
-                            <div className="flex gap-2">
+                            <div className="admin-page-toolbar__actions">
                                 <Button variant="primary" onClick={() => setShowBulkUpload(true)} className="flex items-center gap-2">
                                     <Upload size={18} fill="currentColor" /> Bulk Upload
                                 </Button>
@@ -390,6 +440,9 @@ export function AdminDashboard({ tab = 'dashboard' }) {
                 {activeTab === 'settings' && (
                     <div>
                         <OvertimeRulesConfig />
+                        <div style={{ marginTop: '1.5rem' }}>
+                            <LoginHistoryPanel />
+                        </div>
                     </div>
                 )}
             </main>
@@ -442,6 +495,44 @@ export function AdminDashboard({ tab = 'dashboard' }) {
             >
                 {calendarEmployee && (
                     <AttendanceCalendarView userId={calendarEmployee.id} />
+                )}
+            </Modal>
+
+            {/* Reset Password Modal */}
+            <Modal
+                isOpen={showResetPasswordModal}
+                onClose={() => setShowResetPasswordModal(false)}
+                title={resetTargetEmployee ? `Reset Password — ${resetTargetEmployee.firstName} ${resetTargetEmployee.lastName}` : 'Reset Password'}
+            >
+                {resetTargetEmployee && (
+                    <div>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1rem' }}>
+                            Set a new password for <strong>{resetTargetEmployee.username}</strong>. The user will need to use this password on their next login.
+                        </p>
+                        {resetPasswordError && (
+                            <div className="alert alert-error" style={{ marginBottom: '0.75rem' }}>
+                                {resetPasswordError}
+                            </div>
+                        )}
+                        <div className="form-group">
+                            <label className="form-label"><KeyRound size={14} style={{ display: 'inline', marginRight: 4 }} /> New Password</label>
+                            <PasswordInput
+                                className="form-input"
+                                placeholder="Minimum 8 characters"
+                                value={resetPasswordValue}
+                                onChange={(e) => setResetPasswordValue(e.target.value)}
+                                minLength={8}
+                                autoComplete="new-password"
+                            />
+                            <PasswordStrength password={resetPasswordValue} />
+                        </div>
+                        <div className="flex gap-3 mt-4">
+                            <Button variant="secondary" onClick={() => setShowResetPasswordModal(false)}>Cancel</Button>
+                            <Button variant="primary" loading={resetPasswordLoading} onClick={handleResetPasswordSubmit}>
+                                Reset Password
+                            </Button>
+                        </div>
+                    </div>
                 )}
             </Modal>
         </div>

@@ -54,6 +54,20 @@ const shouldIssueForGovtStatus = (status) => {
     return GOVT_STATUS_ISSUE_ELIGIBLE.includes(status);
 };
 
+const isGovtStatusActive = (status) => status === 'To be recording';
+const isGovtStatusClosed = (status) => status === 'Done' || status === 'Completed';
+
+export const reconcileGovtBoreAllocationStatuses = async (tx = prisma) => {
+    await tx.$executeRawUnsafe(`
+        UPDATE pipe_bore_allocations AS pba
+        SET status = 'CLOSED', updated_at = NOW()
+        FROM "BorewellWork" AS bw
+        WHERE pba.govt_bore_id = bw.id
+          AND pba.status = 'OPEN'
+          AND bw.status IN ('Done', 'Completed')
+    `);
+};
+
 const getPipeMasterWithStock = async (tx, pipeMasterId) => {
     const pipeMaster = await tx.pipes_master.findUnique({
         where: { id: parseInt(pipeMasterId) },
@@ -95,7 +109,8 @@ export const issuePipeAllocation = async ({
     supervisorName,
     createdBy,
     remarks,
-    autoCreated = false
+    autoCreated = false,
+    transactionType = 'LOAD'
 }) => {
     const pipeMaster = await getPipeMasterWithStock(tx, pipeMasterId);
     const quantityFeet = unit === 'feet' ? parseDecimal(quantity) : parseDecimal(quantity) * getPipeLengthFeet(pipeMaster);
@@ -103,7 +118,12 @@ export const issuePipeAllocation = async ({
         throw new Error('Issue quantity must be greater than 0');
     }
 
-    const currentStock = parseDecimal(pipeMaster.stock?.available_quantity);
+    // Pessimistic lock: SELECT ... FOR UPDATE to prevent concurrent stock races
+    const lockedStock = await tx.$queryRawUnsafe(
+        `SELECT available_quantity FROM pipes_stock WHERE pipe_master_id = $1 FOR UPDATE`,
+        parseInt(pipeMasterId)
+    );
+    const currentStock = lockedStock.length > 0 ? parseDecimal(lockedStock[0].available_quantity) : 0;
     if (currentStock < quantityFeet) {
         throw new Error(`Insufficient store stock. Available ${currentStock.toFixed(2)} ft, requested ${quantityFeet.toFixed(2)} ft.`);
     }
@@ -153,7 +173,7 @@ export const issuePipeAllocation = async ({
 
     await createPipeTransaction(tx, {
         pipeMasterId: parseInt(pipeMasterId),
-        transactionType: 'DEDUCT',
+        transactionType,
         quantity: quantityFeet,
         referenceType: boreType === 'govt' ? 'GOVT_BORE' : 'PRIVATE_BORE',
         referenceId: parseInt(boreId),
@@ -211,7 +231,7 @@ export const returnPipeAllocation = async ({
 
     await createPipeTransaction(tx, {
         pipeMasterId: allocation.pipe_master_id,
-        transactionType: 'ADD',
+        transactionType: 'RETURN',
         quantity: quantityFeet,
         referenceType: allocation.bore_type === 'govt' ? 'GOVT_BORE_RETURN' : 'PRIVATE_BORE_RETURN',
         referenceId: allocation.govt_bore_id || allocation.private_bore_id,
@@ -279,6 +299,18 @@ const updateAllocationVehicleOnly = async ({ tx = prisma, boreType, boreId, pipe
             supervisor_name: supervisorName || allocation.supervisor_name,
             destination_location: toVehicleLocation(vehicleName || allocation.vehicle_name)
         }
+    });
+};
+
+const updateAllocationStatus = async ({ tx = prisma, boreType, boreId, pipeMasterId, status }) => {
+    const where = {
+        ...resolveBoreWhere(boreType, boreId),
+        ...(pipeMasterId ? { pipe_master_id: parseInt(pipeMasterId) } : {})
+    };
+
+    await tx.pipe_bore_allocations.updateMany({
+        where,
+        data: { status }
     });
 };
 
@@ -409,6 +441,7 @@ const syncBorePipeInventoryInternal = async ({ tx = prisma, boreType, boreId, cu
     if (previousPipeId === currentPipeId) {
         const deltaFeet = desiredIssuedFeet - previousIssuedFeet;
         if (deltaFeet > 0.0001) {
+            // Adjustment: use ISSUE for mid-job quantity increases (not initial LOAD)
             await issuePipeAllocation({
                 tx,
                 pipeMasterId: currentPipeId,
@@ -419,8 +452,9 @@ const syncBorePipeInventoryInternal = async ({ tx = prisma, boreType, boreId, cu
                 vehicleName: currentRecord.vehicle || currentRecord.vehicle_name,
                 supervisorName: currentRecord.location || currentRecord.supervisor_name,
                 createdBy,
-                remarks: `Auto-issued after ${boreType} bore update #${boreId}`,
-                autoCreated: true
+                remarks: `Adjustment: increased pipe qty on ${boreType} bore #${boreId}`,
+                autoCreated: true,
+                transactionType: previousIssuedFeet > 0 ? 'ISSUE' : 'LOAD'
             });
         } else if (deltaFeet < -0.0001) {
             const allocation = await tx.pipe_bore_allocations.findFirst({
@@ -448,10 +482,30 @@ const syncBorePipeInventoryInternal = async ({ tx = prisma, boreType, boreId, cu
                 vehicleName: currentRecord.vehicle || currentRecord.vehicle_name,
                 supervisorName: currentRecord.location || currentRecord.supervisor_name
             });
+
+            if (boreType === 'govt' && isGovtStatusActive(currentRecord?.status)) {
+                await updateAllocationStatus({
+                    tx,
+                    boreType,
+                    boreId,
+                    pipeMasterId: currentPipeId,
+                    status: 'OPEN'
+                });
+            }
         }
 
         // --- HANDLE PIPE RETURNS (govt Done/Completed) ---
         await processReturnFromRecord({ tx, boreType, boreId, currentRecord, currentPipeMaster, createdBy });
+
+        if (boreType === 'govt' && isGovtStatusClosed(currentRecord?.status)) {
+            await updateAllocationStatus({
+                tx,
+                boreType,
+                boreId,
+                pipeMasterId: currentPipeId,
+                status: 'CLOSED'
+            });
+        }
 
         return true;
     }
@@ -474,13 +528,24 @@ const syncBorePipeInventoryInternal = async ({ tx = prisma, boreType, boreId, cu
     // --- HANDLE PIPE RETURNS (govt Done/Completed) ---
     await processReturnFromRecord({ tx, boreType, boreId, currentRecord, currentPipeMaster, createdBy });
 
+    if (boreType === 'govt' && isGovtStatusClosed(currentRecord?.status)) {
+        await updateAllocationStatus({
+            tx,
+            boreType,
+            boreId,
+            pipeMasterId: currentPipeId,
+            status: 'CLOSED'
+        });
+    }
+
     return true;
 };
 
-export const syncPrivateBorePipeInventory = async ({ currentRecord, previousRecord = null, createdBy }) => {
+export const syncPrivateBorePipeInventory = async ({ tx, currentRecord, previousRecord = null, createdBy }) => {
     const boreId = currentRecord?.id || previousRecord?.id;
     if (!boreId) return null;
     return syncBorePipeInventoryInternal({
+        tx: tx || prisma,
         boreType: 'private',
         boreId,
         currentRecord,
@@ -489,10 +554,11 @@ export const syncPrivateBorePipeInventory = async ({ currentRecord, previousReco
     });
 };
 
-export const syncGovtBorePipeInventory = async ({ currentRecord, previousRecord = null, createdBy }) => {
+export const syncGovtBorePipeInventory = async ({ tx, currentRecord, previousRecord = null, createdBy }) => {
     const boreId = currentRecord?.id || previousRecord?.id;
     if (!boreId) return null;
     return syncBorePipeInventoryInternal({
+        tx: tx || prisma,
         boreType: 'govt',
         boreId,
         currentRecord,
@@ -502,6 +568,8 @@ export const syncGovtBorePipeInventory = async ({ currentRecord, previousRecord 
 };
 
 export const getOpenPipeAllocations = async () => {
+    await reconcileGovtBoreAllocationStatuses(prisma);
+
     const allocations = await prisma.pipe_bore_allocations.findMany({
         where: { status: 'OPEN' },
         include: {

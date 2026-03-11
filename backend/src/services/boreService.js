@@ -88,7 +88,13 @@ export const createRecord = async (data, userId) => {
     ]
   );
   const record = result.rows[0];
-  await syncPrivateBorePipeInventory({ currentRecord: record, createdBy: userId });
+  try {
+    await syncPrivateBorePipeInventory({ currentRecord: record, createdBy: userId });
+  } catch (syncErr) {
+    console.error(`[Private Bore] Inventory sync failed for bore #${record.id}:`, syncErr.message);
+    // Bore record is already committed via raw SQL; log the sync failure.
+    // Admin can manually reconcile in Inventory → Stock Levels.
+  }
   return record;
 };
 
@@ -142,7 +148,11 @@ export const updateRecord = async (id, data, userId) => {
   );
   const record = result.rows[0];
   if (record) {
-    await syncPrivateBorePipeInventory({ currentRecord: record, previousRecord, createdBy: userId });
+    try {
+      await syncPrivateBorePipeInventory({ currentRecord: record, previousRecord, createdBy: userId });
+    } catch (syncErr) {
+      console.error(`[Private Bore] Inventory sync failed for bore #${record.id}:`, syncErr.message);
+    }
   }
   return record;
 };
@@ -153,12 +163,16 @@ export const updateRecord = async (id, data, userId) => {
 export const deleteRecord = async (id, userId) => {
   const result = await db.query('DELETE FROM borewell_data WHERE id = $1 RETURNING *', [id]);
   if (result.rows[0]) {
-    await releaseBorePipeAllocations({
-      boreType: 'private',
-      boreId: id,
-      createdBy: userId,
-      remarks: `Auto-returned to store after deleting private bore #${id}`
-    });
+    try {
+      await releaseBorePipeAllocations({
+        boreType: 'private',
+        boreId: id,
+        createdBy: userId,
+        remarks: `Auto-returned to store after deleting private bore #${id}`
+      });
+    } catch (syncErr) {
+      console.error(`[Private Bore] Inventory release failed for bore #${id}:`, syncErr.message);
+    }
   }
   return result.rows[0];
 };

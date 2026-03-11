@@ -224,14 +224,19 @@ export const generatePayroll = async (adminId, month, year, callerUser) => {
     );
 
     let nextVersion = 1;
+    let reusePayrollId = null;
 
     if (existingRes.rows.length > 0) {
         const latest = existingRes.rows[0];
-        if (latest.status !== 'CANCELLED') {
-            throw new ConflictError('An active payroll already exists for this month. Cancel it first to regenerate.');
+
+        // If there's already a payroll row for the month, regenerate in-place for DRAFT/CANCELLED.
+        if (latest.status === 'DRAFT' || latest.status === 'CANCELLED') {
+            reusePayrollId = latest.id;
+            nextVersion = latest.version || 1;
+        } else {
+            // Don't allow regeneration if APPROVED or LOCKED
+            throw new ConflictError(`Cannot regenerate: An ${latest.status} payroll already exists for this month. Cancel it first.`);
         }
-        // If it exists but is cancelled, we create a new version
-        nextVersion = (latest.version || 1) + 1;
     }
 
     // 2. Calculate
@@ -242,13 +247,38 @@ export const generatePayroll = async (adminId, month, year, callerUser) => {
     try {
         await client.query('BEGIN');
 
-        const payrollRes = await client.query(
-            `INSERT INTO payroll (month, year, status, version, total_payout, generated_by)
-             VALUES ($1, $2, 'DRAFT', $3, $4, $5)
-             RETURNING id`,
-            [month, year, nextVersion, preview.total_payout, adminId]
-        );
-        const payrollId = payrollRes.rows[0].id;
+        let payrollId = reusePayrollId;
+        if (payrollId) {
+            // Update existing payroll row and clear soft-delete fields if present.
+            await client.query(
+                `UPDATE payroll
+                 SET status = 'DRAFT', total_payout = $1, generated_by = $2
+                 WHERE id = $3`,
+                [preview.total_payout, adminId, payrollId]
+            );
+
+            try {
+                await client.query(
+                    `UPDATE payroll
+                     SET is_deleted = false, deleted_by = NULL, deleted_at = NULL, cancellation_reason = NULL
+                     WHERE id = $1`,
+                    [payrollId]
+                );
+            } catch (e) {
+                // Ignore if columns don't exist in older schemas
+            }
+
+            // Replace items
+            await client.query('DELETE FROM payroll_items WHERE payroll_id = $1', [payrollId]);
+        } else {
+            const payrollRes = await client.query(
+                `INSERT INTO payroll (month, year, status, version, total_payout, generated_by)
+                 VALUES ($1, $2, 'DRAFT', $3, $4, $5)
+                 RETURNING id`,
+                [month, year, nextVersion, preview.total_payout, adminId]
+            );
+            payrollId = payrollRes.rows[0].id;
+        }
 
         // 4. Insert Items
         for (const item of preview.items) {

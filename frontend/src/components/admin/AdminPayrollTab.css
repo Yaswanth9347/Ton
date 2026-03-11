@@ -1,0 +1,292 @@
+/* Scoped Styles for Admin Payroll Tab */
+
+.payroll-tab {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-6);
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.payroll-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-4);
+}
+
+.payroll-header__title h2 {
+    margin: 0;
+    font-size: var(--font-size-2xl);
+    letter-spacing: -0.01em;
+}
+
+.payroll-header__actions {
+    display: flex;
+    gap: var(--spacing-3);
+    align-items: center;
+}
+
+/* Controls Card */
+.payroll-controls {
+    padding: var(--spacing-4) var(--spacing-5) !important;
+}
+
+.payroll-controls__group {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-6);
+    flex-wrap: wrap;
+}
+
+.payroll-filter {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+}
+
+.payroll-filter__label {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.payroll-filter__select,
+.payroll-filter__input {
+    min-width: 140px;
+    padding: 8px 12px !important;
+    font-size: var(--font-size-sm) !important;
+    background: var(--bg-tertiary) !important;
+    border-color: var(--border-color) !important;
+}
+
+.payroll-controls__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    margin-left: auto;
+    padding-left: var(--spacing-4);
+    border-left: 1px solid var(--border-color);
+}
+
+/* Stats Grid */
+.payroll-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--spacing-4);
+}
+
+.payroll-stat-card {
+    position: relative;
+    overflow: hidden;
+    padding: var(--spacing-5) !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.payroll-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.payroll-stat-card__icon {
+    position: absolute;
+    right: -10px;
+    bottom: -10px;
+    opacity: 0.05;
+    transform: rotate(-15deg);
+}
+
+.payroll-stat-card__label {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--spacing-1);
+}
+
+.payroll-stat-card__value {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.payroll-stat-card__subtext {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: var(--spacing-1);
+}
+
+/* Table Section */
+.payroll-table-card {
+    padding: 0 !important;
+    overflow: hidden;
+}
+
+.payroll-table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-4) var(--spacing-5);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.payroll-table-header__title {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+}
+
+.payroll-table-header__title h3 {
+    margin: 0;
+    font-size: var(--font-size-lg);
+}
+
+.payroll-table-actions {
+    display: flex;
+    gap: var(--spacing-2);
+}
+
+/* Status Badges refinement */
+.payroll-badge {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+/* Table Enhancements */
+.payroll-table-row:hover {
+    background: var(--bg-tertiary) !important;
+}
+
+.employee-cell {
+    display: flex;
+    flex-direction: column;
+}
+
+.employee-name {
+    font-weight: 600;
+    color: var(--color-primary);
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.employee-name:hover {
+    color: var(--color-primary-dark);
+    text-decoration: underline;
+}
+
+.pro-rated-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--color-warning);
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+/* Action Buttons Overlay */
+.payroll-action-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    color: var(--color-primary);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.payroll-action-btn:hover:not(:disabled) {
+    background: var(--color-primary);
+    color: white;
+    transform: translateY(-2px);
+}
+
+.payroll-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Modal Styling */
+.payroll-history-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    padding: var(--spacing-4);
+    animation: fadeIn 0.2s ease-out;
+}
+
+.payroll-history-modal {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    width: 100%;
+    max-width: 900px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+/* Dark mode specific for the modal if vars aren't enough */
+[data-theme="dark"] .payroll-history-modal {
+    background: #111827;
+}
+
+.payroll-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-5) var(--spacing-6);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.payroll-history-body {
+    padding: var(--spacing-6);
+    overflow-y: auto;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .payroll-controls__group {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--spacing-4);
+    }
+    
+    .payroll-controls__actions {
+        margin-left: 0;
+        padding-left: 0;
+        border-left: none;
+        border-top: 1px solid var(--border-color);
+        padding-top: var(--spacing-4);
+        justify-content: center;
+    }
+    
+    .payroll-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

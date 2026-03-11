@@ -2,6 +2,8 @@
 import db from '../models/db.js';
 import { hashPassword, comparePassword } from './authService.js';
 import { NotFoundError, ConflictError, ValidationError, UnauthorizedError } from '../utils/errors.js';
+import { ensureAuthSchema } from '../utils/ensureAuthSchema.js';
+import { PASSWORD_REGEX, PASSWORD_RULES } from '../utils/validators.js';
 
 // Role-based default salary mapping
 const ROLE_SALARIES = {
@@ -13,9 +15,13 @@ const ROLE_SALARIES = {
  * Get all employees (excludes admins, includes supervisors)
  */
 export const getAllEmployees = async () => {
+    const authSchema = await ensureAuthSchema();
+
     const result = await db.query(
         `SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.is_active,
-                u.base_salary, u.created_at, u.updated_at, r.name as role
+                u.base_salary, u.created_at, u.updated_at, r.name as role,
+                ${authSchema.account_locked ? 'u.account_locked' : 'false'} as account_locked,
+                ${authSchema.failed_login_attempts ? 'u.failed_login_attempts' : '0'} as failed_login_attempts
          FROM users u
          JOIN roles r ON u.role_id = r.id
          WHERE r.name IN ('EMPLOYEE', 'SUPERVISOR')
@@ -31,6 +37,8 @@ export const getAllEmployees = async () => {
         role: row.role,
         baseSalary: parseFloat(row.base_salary) || 0,
         isActive: row.is_active,
+        accountLocked: row.account_locked || false,
+        failedLoginAttempts: parseInt(row.failed_login_attempts) || 0,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
     }));
@@ -72,8 +80,8 @@ export const getEmployeeById = async (id) => {
  * Create a new employee
  */
 export const createEmployee = async ({ username, password, firstName, lastName, email, role }) => {
-    // Check if username already exists
-    const existing = await db.query('SELECT id FROM users WHERE username = $1', [username]);
+    // Check if username already exists (case-insensitive)
+    const existing = await db.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
     if (existing.rows.length > 0) {
         throw new ConflictError('Username already taken');
     }
@@ -135,8 +143,8 @@ export const updateEmployee = async (id, updates) => {
     let newRole = employee.role; // Track the final role
 
     if (updates.username !== undefined) {
-        // Check if new username is already taken by another user
-        const existing = await db.query('SELECT id FROM users WHERE username = $1 AND id != $2', [updates.username, id]);
+        // Check if new username is already taken by another user (case-insensitive)
+        const existing = await db.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1) AND id != $2', [updates.username, id]);
         if (existing.rows.length > 0) {
             throw new ConflictError('Username already taken');
         }
@@ -167,11 +175,16 @@ export const updateEmployee = async (id, updates) => {
         const passwordHash = await hashPassword(updates.password);
         fields.push(`password_hash = $${paramCount++} `);
         values.push(passwordHash);
-        // Unlock account and reset failed attempts when password is changed by admin
-        fields.push(`failed_login_attempts = $${paramCount++} `);
-        values.push(0);
-        fields.push(`account_locked = $${paramCount++} `);
-        values.push(false);
+        // Unlock account and reset failed attempts when password is changed by admin (schema-aware)
+        const authSchema = await ensureAuthSchema();
+        if (authSchema.failed_login_attempts) {
+            fields.push(`failed_login_attempts = $${paramCount++} `);
+            values.push(0);
+        }
+        if (authSchema.account_locked) {
+            fields.push(`account_locked = $${paramCount++} `);
+            values.push(false);
+        }
     }
 
     // Handle role change (EMPLOYEE <-> SUPERVISOR)
@@ -314,6 +327,14 @@ export const updateProfile = async (userId, { firstName, lastName, email }) => {
  * Change Password (Self-Service)
  */
 export const changePassword = async (userId, { currentPassword, newPassword }) => {
+    // Validate new password length
+    if (!newPassword || newPassword.length < 8) {
+        throw new ValidationError('New password must be at least 8 characters long.');
+    }
+    if (!PASSWORD_REGEX.test(newPassword)) {
+        throw new ValidationError(PASSWORD_RULES);
+    }
+
     const result = await db.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
     if (result.rows.length === 0) throw new NotFoundError('User not found');
 
@@ -326,12 +347,49 @@ export const changePassword = async (userId, { currentPassword, newPassword }) =
     // Hash new password
     const newHash = await hashPassword(newPassword);
 
+    // Build update — also reset security counters on successful password change
+    const authSchema = await ensureAuthSchema();
+    const setClauses = ['password_hash = $1', 'updated_at = CURRENT_TIMESTAMP'];
+    const params = [newHash];
+
+    if (authSchema.failed_login_attempts) setClauses.push('failed_login_attempts = 0');
+    if (authSchema.account_locked) setClauses.push('account_locked = false');
+
+    params.push(userId);
     await db.query(
-        'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [newHash, userId]
+        `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${params.length}`,
+        params
     );
 
     return { success: true };
+};
+
+/**
+ * Unlock a locked user account (Admin only)
+ * Resets account_locked and failed_login_attempts
+ */
+export const unlockEmployee = async (id) => {
+    const employee = await getEmployeeById(id);
+    if (!employee) {
+        throw new NotFoundError('Employee not found');
+    }
+
+    if (employee.role === 'ADMIN') {
+        throw new ValidationError('Admin accounts cannot be unlocked this way. Use email-based password reset.');
+    }
+
+    const authSchema = await ensureAuthSchema();
+
+    const setClauses = ['updated_at = CURRENT_TIMESTAMP'];
+    if (authSchema.account_locked) setClauses.push('account_locked = false');
+    if (authSchema.failed_login_attempts) setClauses.push('failed_login_attempts = 0');
+
+    await db.query(
+        `UPDATE users SET ${setClauses.join(', ')} WHERE id = $1`,
+        [id]
+    );
+
+    return { ...employee, accountLocked: false, failedLoginAttempts: 0 };
 };
 
 /**

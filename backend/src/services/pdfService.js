@@ -1,7 +1,17 @@
 import PDFDocument from 'pdfkit';
+import path from 'path';
+import fs from 'fs';
 
 /**
- * Generate a payslip PDF
+ * Format number in Indian locale — plain Rs. prefix
+ */
+const formatINR = (amount) => {
+   const num = parseFloat(amount) || 0;
+   return `Rs. ${num.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+};
+
+/**
+ * Generate a payslip PDF — strict minimal text-based layout, single page
  */
 export const generatePayslipPDF = async (payslipData) => {
    return new Promise((resolve, reject) => {
@@ -9,234 +19,174 @@ export const generatePayslipPDF = async (payslipData) => {
          const doc = new PDFDocument({
             size: 'A4',
             margin: 50,
+            bufferPages: true,
             info: {
                Title: `Payslip - ${payslipData.monthName} ${payslipData.year}`,
-               Author: 'JMJ Attendance System'
+               Author: 'JMJ Borewells'
             }
          });
 
          const buffers = [];
          doc.on('data', buffers.push.bind(buffers));
-         doc.on('end', () => {
-            const pdfData = Buffer.concat(buffers);
-            resolve(pdfData);
-         });
+         doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-         // Company Header
-         doc.fontSize(20)
-            .font('Helvetica-Bold')
-            .text('JMJ ENTERPRISES', { align: 'center' });
+         const m = 50;
+         const cw = doc.page.width - m * 2;
+         const black = '#000000';
+         const lightGray = '#b8b8b8';
+         const reservedFooterSpace = 50;
 
-         doc.fontSize(10)
-            .font('Helvetica')
-            .text('123 Business Park, Tech City, India - 500001', { align: 'center' });
+         // Column positions for detail rows
+         const leftLabel = m;
+         const leftVal = m + 115;
+         const rightLabel = m + 275;
+         const rightVal = m + 380;
 
+         const drawSectionTitle = (title) => {
+            doc.moveDown(0.55);
+            doc.fontSize(10).font('Helvetica-Bold').fillColor(black)
+               .text(title, m, doc.y, { align: 'left', width: cw });
+            const lineY = doc.y + 4;
+            doc.moveTo(m, lineY)
+               .lineTo(m + cw, lineY)
+               .lineWidth(0.5)
+               .strokeColor(lightGray)
+               .stroke();
+            doc.lineWidth(1);
+            doc.y = lineY + 7;
+         };
+
+         // Detail row: bold label, normal value (two pairs per row)
+         const detailRow = (l1, v1, l2, v2) => {
+            const y = doc.y;
+            doc.fontSize(9).font('Helvetica-Bold').fillColor(black).text(l1, leftLabel, y);
+            doc.font('Helvetica').text(v1 || 'N/A', leftVal, y);
+            if (l2) {
+               doc.font('Helvetica-Bold').text(l2, rightLabel, y);
+               doc.font('Helvetica').text(v2 || 'N/A', rightVal, y);
+            }
+            doc.y = y + 14;
+         };
+
+         // ── HEADER (center) ──
+         doc.fontSize(16).font('Helvetica-Bold').fillColor(black)
+            .text('JMJ BOREWELLS', m, 45, { align: 'center', width: cw });
+         doc.fontSize(9).font('Helvetica').fillColor(black)
+            .text('Near RCM Church, Chodavaram, Anakapalle - 531036', { align: 'center', width: cw });
          doc.moveDown(0.5);
-         doc.fontSize(12)
-            .font('Helvetica-Bold')
-            .text('PAYSLIP', { align: 'center' });
+         doc.fontSize(12).font('Helvetica-Bold').fillColor(black)
+            .text('PAYSLIP', { align: 'center', width: cw });
 
-         doc.moveDown();
+         // ── EMPLOYEE DETAILS ──
+         doc.moveDown(0.55);
+         drawSectionTitle('Employee Details');
 
-         // Draw line
-         doc.moveTo(50, doc.y)
-            .lineTo(545, doc.y)
-            .stroke();
+         detailRow('Employee Name:', payslipData.employeeName, 'Employee ID:', payslipData.employeeId);
+         detailRow('Designation:', payslipData.designation || 'Employee', 'Pay Period:', `${payslipData.monthName} ${payslipData.year}`);
+         detailRow('Pay Date:', payslipData.payDate || new Date().toLocaleDateString('en-IN'), '', '');
 
-         doc.moveDown();
+         // ── ATTENDANCE SUMMARY ──
+         drawSectionTitle('Attendance Summary');
 
-         // Employee Details Section
-         const startY = doc.y;
+         detailRow('Working Days:', (payslipData.workingDays || 0).toString(), 'Days Present:', (payslipData.presentDays || 0).toString());
+         detailRow('Days Absent:', (payslipData.absentDays || 0).toString(), 'Public Holidays:', (payslipData.publicHolidays || 0).toString());
+         detailRow('Overtime Hours:', (payslipData.overtimeHours || 0).toString(), 'LOP Per Day:', formatINR(payslipData.lopRate || 0));
 
-         doc.fontSize(10)
-            .font('Helvetica-Bold')
-            .text('Employee Details', 50, startY);
+         // ── SALARY BREAKDOWN ──
+         drawSectionTitle('Salary Breakdown');
 
-         doc.font('Helvetica')
-            .fontSize(9);
+         const half = cw / 2;
+         const eLeft = m;
+         const dLeft = m + half;
 
-         const leftCol = 50;
-         const leftValCol = 140;
-         const rightCol = 320;
-         const rightValCol = 420;
+         // Sub-headers
+         const subY = doc.y;
+         doc.fontSize(9).font('Helvetica-Bold').fillColor(black);
+         doc.text('Earnings', eLeft, subY);
+         doc.text('Deductions', dLeft, subY);
+         doc.y = subY + 14;
 
-         let y = startY + 20;
-
-         doc.text('Employee Name:', leftCol, y);
-         doc.text(payslipData.employeeName, leftValCol, y);
-         doc.text('Employee ID:', rightCol, y);
-         doc.text(payslipData.employeeId || 'N/A', rightValCol, y);
-
-         y += 15;
-         doc.text('Designation:', leftCol, y);
-         doc.text(payslipData.designation || 'Employee', leftValCol, y);
-
-         y += 15;
-         doc.text('Pay Period:', leftCol, y);
-         doc.text(`${payslipData.monthName} ${payslipData.year}`, leftValCol, y);
-         doc.text('Pay Date:', rightCol, y);
-         doc.text(payslipData.payDate || new Date().toLocaleDateString('en-IN'), rightValCol, y);
-
-         doc.moveDown(3);
-
-         // Draw line
-         doc.moveTo(50, doc.y)
-            .lineTo(545, doc.y)
-            .stroke();
-
-         doc.moveDown();
-
-         // Attendance Summary Section
-         doc.fontSize(10)
-            .font('Helvetica-Bold')
-            .text('Attendance Summary', 50);
-
-         doc.moveDown(0.5);
-         doc.font('Helvetica')
-            .fontSize(9);
-
-         y = doc.y;
-         doc.text('Working Days:', leftCol, y);
-         doc.text(payslipData.workingDays?.toString() || '0', leftValCol, y);
-         doc.text('Days Present:', rightCol, y);
-         doc.text(payslipData.presentDays?.toString() || '0', rightValCol, y);
-
-         y += 15;
-         doc.text('Days Absent:', leftCol, y);
-         doc.text(payslipData.absentDays?.toString() || '0', leftValCol, y);
-         doc.text('Public Holidays:', rightCol, y);
-         doc.text((payslipData.publicHolidays || 0).toString(), rightValCol, y);
-
-         y += 15;
-         doc.text('Overtime Hours:', leftCol, y);
-         doc.text(payslipData.overtimeHours?.toString() || '0', leftValCol, y);
-         doc.text('LOP Per Day:', rightCol, y);
-         doc.text(`₹${(payslipData.lopRate || 0).toLocaleString('en-IN')}`, rightValCol, y);
-
-         doc.moveDown(3);
-
-         // Draw line
-         doc.moveTo(50, doc.y)
-            .lineTo(545, doc.y)
-            .stroke();
-
-         doc.moveDown();
-
-         // Earnings & Deductions Section
-         const tableTop = doc.y;
-         const colWidth = 247.5;
-
-         // Earnings Header
-         doc.fontSize(10)
-            .font('Helvetica-Bold')
-            .text('Earnings', 50, tableTop);
-
-         // Deductions Header
-         doc.text('Deductions', 300, tableTop);
-
-         doc.moveDown(0.5);
-
-         // Draw headers
-         doc.fontSize(9)
-            .font('Helvetica-Bold');
-
-         let earningsY = doc.y;
-         let deductionsY = doc.y;
-
-         // Earnings
-         doc.font('Helvetica')
-            .fontSize(9);
-
+         // Earnings list
+         let ey = doc.y;
+         doc.font('Helvetica').fontSize(9).fillColor(black);
          const earnings = [
             { label: 'Basic Salary', amount: payslipData.baseSalary || 0 },
             { label: 'Overtime Pay', amount: payslipData.overtimeAmount || 0 },
-            // { label: 'Expense Reimbursement', amount: payslipData.expenseReimbursement || 0 },
          ];
-
-         for (const earning of earnings) {
-            doc.text(earning.label, 50, earningsY);
-            doc.text(`₹${earning.amount.toLocaleString('en-IN')}`, 200, earningsY, { align: 'right', width: 90 });
-            earningsY += 15;
+         for (const e of earnings) {
+            doc.font('Helvetica').text(e.label, eLeft, ey);
+            doc.text(formatINR(e.amount), eLeft + half - 110, ey, { align: 'right', width: 100 });
+            ey += 13;
          }
+         ey += 2;
+         doc.font('Helvetica-Bold').text('Total Earnings', eLeft, ey);
+         doc.font('Helvetica').text(formatINR(payslipData.grossSalary || 0), eLeft + half - 110, ey, { align: 'right', width: 100 });
 
-         // Total Earnings
-         doc.font('Helvetica-Bold');
-         doc.text('Total Earnings', 50, earningsY + 5);
-         doc.text(`₹${(payslipData.grossSalary || 0).toLocaleString('en-IN')}`, 200, earningsY + 5, { align: 'right', width: 90 });
-
-         // Deductions
-         doc.font('Helvetica');
+         // Deductions list
+         let dy = subY + 14;
+         doc.font('Helvetica').fontSize(9).fillColor(black);
          const deductions = [
-            { label: `LOP Deduction (${payslipData.absentDays || 0} days × ₹${(payslipData.lopRate || 0).toLocaleString('en-IN')})`, amount: payslipData.lopDeduction || payslipData.attendanceDeduction || 0 },
+            { label: `LOP (${payslipData.absentDays || 0}d x ${formatINR(payslipData.lopRate || 0)})`, amount: payslipData.lopDeduction || payslipData.attendanceDeduction || 0 },
             { label: 'Tax (TDS)', amount: payslipData.taxDeduction || 0 },
             { label: 'Other Deductions', amount: payslipData.otherDeductions || 0 },
          ];
+         for (const d of deductions) {
+            doc.font('Helvetica').text(d.label, dLeft, dy);
+            doc.text(formatINR(d.amount), dLeft + half - 110, dy, { align: 'right', width: 100 });
+            dy += 13;
+         }
+         dy += 2;
+         const totalDed = (payslipData.lopDeduction || payslipData.attendanceDeduction || 0) +
+            (payslipData.taxDeduction || 0) + (payslipData.otherDeductions || 0);
+         doc.font('Helvetica-Bold').text('Total Deductions', dLeft, dy);
+         doc.font('Helvetica').text(formatINR(totalDed), dLeft + half - 110, dy, { align: 'right', width: 100 });
 
-         for (const deduction of deductions) {
-            doc.text(deduction.label, 300, deductionsY);
-            doc.text(`₹${deduction.amount.toLocaleString('en-IN')}`, 450, deductionsY, { align: 'right', width: 90 });
-            deductionsY += 15;
+         doc.y = Math.max(ey, dy) + 10;
+
+         // ── NET PAY (right aligned, with separator above) ──
+         const netLineY = doc.y;
+         doc.moveTo(m, netLineY)
+            .lineTo(m + cw, netLineY)
+            .lineWidth(0.5)
+            .strokeColor(lightGray)
+            .stroke();
+         doc.lineWidth(1);
+         doc.y = netLineY + 8;
+
+         doc.fontSize(11).font('Helvetica-Bold').fillColor(black)
+            .text(`Net Pay: ${formatINR(payslipData.netSalary || 0)}`, m, doc.y, { align: 'right', width: cw });
+
+         doc.moveDown(1.1);
+
+         // ── AUTHORIZED SIGNATORY (right side) ──
+         const sigWidth = 160;
+         const imageWidth = 90;
+         const imageHeight = 28;
+         const sigX = m + cw - sigWidth;
+         const maxSignatureTop = doc.page.height - reservedFooterSpace - imageHeight - 18;
+         const sigY = Math.min(doc.y, maxSignatureTop);
+
+         // Try to load a default signature image
+         const sigPath = path.join(process.cwd(), 'uploads', 'signature.png');
+         if (fs.existsSync(sigPath)) {
+            doc.image(sigPath, sigX + (sigWidth - imageWidth), sigY, { width: imageWidth, height: imageHeight });
+            doc.y = sigY + imageHeight + 4;
+         } else {
+            // Leave blank space for signature
+            doc.y = sigY + imageHeight + 4;
          }
 
-         // Total Deductions
-         const totalDeductions = (payslipData.lopDeduction || payslipData.attendanceDeduction || 0) +
-            (payslipData.taxDeduction || 0) +
-            (payslipData.otherDeductions || 0);
-         doc.font('Helvetica-Bold');
-         doc.text('Total Deductions', 300, deductionsY + 5);
-         doc.text(`₹${totalDeductions.toLocaleString('en-IN')}`, 450, deductionsY + 5, { align: 'right', width: 90 });
+         doc.fontSize(9).font('Helvetica-Bold').fillColor(black)
+            .text('Authorized Signatory', sigX, doc.y, { align: 'right', width: sigWidth });
 
-         // Move to after earnings/deductions
-         doc.y = Math.max(earningsY, deductionsY) + 40;
-
-         // Draw line
-         doc.moveTo(50, doc.y)
-            .lineTo(545, doc.y)
-            .stroke();
-
-         doc.moveDown();
-
-         // Net Pay Section
-         doc.fontSize(14)
-            .font('Helvetica-Bold')
-            .fillColor('#006400')
-            .text(`Net Pay: ₹${(payslipData.netSalary || 0).toLocaleString('en-IN')}`, { align: 'center' });
-
-         doc.fillColor('#000000');
-
-         doc.moveDown(2);
-
-         // Draw line
-         doc.moveTo(50, doc.y)
-            .lineTo(545, doc.y)
-            .stroke();
-
-         doc.moveDown();
-
-         // Footer
-         doc.fontSize(8)
-            .font('Helvetica')
-            .fillColor('#666666')
-            .text('This is a computer-generated document. No signature is required.', { align: 'center' });
-
-         doc.moveDown(0.5);
-         doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, { align: 'center' });
-
-         doc.moveDown(2);
-
-         // Signature lines
-         doc.fillColor('#000000')
-            .fontSize(9);
-
-         doc.moveTo(50, doc.y + 30)
-            .lineTo(200, doc.y + 30)
-            .stroke();
-         doc.text('Employee Signature', 50, doc.y + 35);
-
-         doc.moveTo(395, doc.y - 20)
-            .lineTo(545, doc.y - 20)
-            .stroke();
-         doc.text('Authorized Signatory', 395, doc.y);
+         // ── FOOTER: pinned to last two lines of page 1 ──
+         // Temporarily disable bottom margin guard so PDFKit doesn't push footer to page 2
+         doc.page.margins.bottom = 0;
+         const line1Y = doc.page.height - 28;
+         const line2Y = doc.page.height - 16;
+         doc.fontSize(7).font('Helvetica').fillColor(lightGray)
+            .text('This is a computer-generated document. No signature is required.', m, line1Y, { align: 'center', width: cw, lineBreak: false });
+         doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, m, line2Y, { align: 'center', width: cw, lineBreak: false });
 
          doc.end();
       } catch (error) {
