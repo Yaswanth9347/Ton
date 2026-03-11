@@ -23,6 +23,18 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+const DEFAULT_ALLOWED_HEADERS = [
+  'Content-Type',
+  'Authorization',
+  'Cache-Control',
+  'Pragma',
+  'Expires',
+  'X-Requested-With',
+  'Accept',
+  'Origin',
+  'Cookie',
+];
+
 // CORS configuration
 const allowedOrigins = [
   'http://localhost:5173',
@@ -76,7 +88,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: DEFAULT_ALLOWED_HEADERS,
 };
 
 app.use(cors(corsOptions));
@@ -111,6 +123,18 @@ ensureInventorySchema().catch((error) => {
 // Serve uploads from correct directory based on environment
 const uploadsDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadsDir));
+
+app.get('/', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'backend',
+    message: 'Use /api/* endpoints',
+  });
+});
+
+app.get(['/favicon.ico', '/favicon.png'], (_req, res) => {
+  res.status(204).end();
+});
 
 // Routes
 app.use('/api/auth', authRoutes);

@@ -1,6 +1,24 @@
 import '../src/config/env.js'; // Validate environment variables first
 import app from '../src/app.js';
 
+const ERROR_ALLOWED_HEADERS = [
+    'X-CSRF-Token',
+    'X-Requested-With',
+    'Accept',
+    'Accept-Version',
+    'Content-Length',
+    'Content-MD5',
+    'Content-Type',
+    'Date',
+    'X-Api-Version',
+    'Authorization',
+    'Cache-Control',
+    'Pragma',
+    'Expires',
+    'Origin',
+    'Cookie',
+].join(', ');
+
 export default async function handler(req, res) {
     try {
         // Log environment for debugging (safely)
@@ -17,7 +35,7 @@ export default async function handler(req, res) {
             res.setHeader('Access-Control-Allow-Origin', origin);
             res.setHeader('Access-Control-Allow-Credentials', 'true');
             res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-            res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+            res.setHeader('Access-Control-Allow-Headers', ERROR_ALLOWED_HEADERS);
         }
 
         res.status(500).json({

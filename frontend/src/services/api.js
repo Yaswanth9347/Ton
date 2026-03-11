@@ -3,17 +3,10 @@ import toast from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
-const NO_CACHE_HEADERS = {
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    Pragma: 'no-cache',
-    Expires: '0',
-};
-
 const api = axios.create({
     baseURL: API_URL,
     headers: {
         'Content-Type': 'application/json',
-        ...NO_CACHE_HEADERS,
     },
     withCredentials: true,
 });
@@ -25,11 +18,6 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
-
-        config.headers = {
-            ...config.headers,
-            ...NO_CACHE_HEADERS,
-        };
 
         const method = (config.method || 'get').toLowerCase();
         if (method === 'get') {
