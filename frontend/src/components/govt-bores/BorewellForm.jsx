@@ -373,7 +373,7 @@ const TaxRow = ({ label, prefix, formData, handleChange, viewMode = false }) => 
 };
 
 
-function BorewellForm({ record, onClose, onSave, saving, viewMode = false }) {
+function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMode = false }) {
 
     // Helper to map record to form data
     const mapRecordToFormData = (rec) => {
@@ -753,6 +753,30 @@ function BorewellForm({ record, onClose, onSave, saving, viewMode = false }) {
                 </div>
 
                 <form onSubmit={handleSubmit} className="govt-bore-modal__form">
+
+                    {!!saveError && !viewMode && (
+                        <div
+                            style={{
+                                marginBottom: '16px',
+                                padding: '12px 14px',
+                                borderRadius: '10px',
+                                border: '1px solid #fecaca',
+                                background: '#fef2f2',
+                                color: '#b91c1c',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '10px',
+                                fontSize: '14px',
+                                fontWeight: '500'
+                            }}
+                        >
+                            <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '1px' }} />
+                            <div>
+                                <div style={{ fontWeight: '700', marginBottom: '4px' }}>Failed to save record</div>
+                                <div>{saveError}</div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Section 1: Project Information */}
                     <div className="govt-bore-modal__section">

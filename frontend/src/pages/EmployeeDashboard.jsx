@@ -9,7 +9,7 @@ import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
 import { attendanceApi } from '../services/api';
 import toast from 'react-hot-toast';
-import { getCurrentISTMonthYear } from '../utils/dateTime';
+import { getCurrentISTMonthYear, toISTDate } from '../utils/dateTime';
 
 export function EmployeeDashboard() {
     const { user, logout } = useAuth();
@@ -45,8 +45,10 @@ export function EmployeeDashboard() {
         // Calculate how long the employee has worked
         let workedHours = 0;
         if (todayStatus?.checkIn) {
-            const checkInTime = new Date(todayStatus.checkIn).getTime();
-            workedHours = (Date.now() - checkInTime) / (1000 * 60 * 60);
+            const checkInTime = toISTDate(todayStatus.checkIn)?.getTime();
+            if (checkInTime) {
+                workedHours = (Date.now() - checkInTime) / (1000 * 60 * 60);
+            }
         }
 
         try {

@@ -25,6 +25,32 @@ const getCurrentTimestamp = () => {
     return getCurrentISTDateTime();
 };
 
+const ATTENDANCE_SELECT_COLUMNS = `
+    id,
+    user_id,
+    TO_CHAR(attendance_date, 'YYYY-MM-DD') AS attendance_date,
+    CASE
+        WHEN check_in IS NOT NULL THEN TO_CHAR(check_in, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+        ELSE NULL
+    END AS check_in,
+    CASE
+        WHEN check_out IS NOT NULL THEN TO_CHAR(check_out, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+        ELSE NULL
+    END AS check_out,
+    check_in_latitude,
+    check_in_longitude,
+    check_in_address,
+    check_out_latitude,
+    check_out_longitude,
+    check_out_address,
+    status,
+    is_complete,
+    regular_hours,
+    overtime_hours,
+    created_at,
+    updated_at
+`;
+
 /**
  * Get today's attendance for a user
  */
@@ -32,10 +58,7 @@ export const getTodayAttendance = async (userId) => {
     const today = getTodayDate();
 
     const result = await db.query(
-        `SELECT id, user_id, attendance_date, check_in, check_out,
-                check_in_latitude, check_in_longitude, check_in_address,
-                check_out_latitude, check_out_longitude, check_out_address,
-                status, is_complete, regular_hours, overtime_hours, created_at, updated_at
+        `SELECT ${ATTENDANCE_SELECT_COLUMNS}
      FROM attendance
      WHERE user_id = $1 AND attendance_date = $2`,
         [userId, today]
@@ -92,7 +115,20 @@ export const checkIn = async (userId, location = null) => {
     const result = await db.query(
         `INSERT INTO attendance (user_id, attendance_date, check_in, check_in_latitude, check_in_longitude, check_in_address, status, is_complete)
      VALUES ($1, $2, $3, $4, $5, $6, 'present', false)
-     RETURNING id, user_id, attendance_date, check_in, check_in_latitude, check_in_longitude, check_in_address, check_out, status, is_complete, created_at`,
+     RETURNING id, user_id,
+               TO_CHAR(attendance_date, 'YYYY-MM-DD') AS attendance_date,
+               CASE
+                   WHEN check_in IS NOT NULL THEN TO_CHAR(check_in, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+                   ELSE NULL
+               END AS check_in,
+               check_in_latitude,
+               check_in_longitude,
+               check_in_address,
+               CASE
+                   WHEN check_out IS NOT NULL THEN TO_CHAR(check_out, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+                   ELSE NULL
+               END AS check_out,
+               status, is_complete, created_at`,
         [userId, today, checkInTime, latitude, longitude, address]
     );
 
@@ -139,7 +175,17 @@ export const checkOut = async (userId, location = null) => {
         `UPDATE attendance 
      SET check_out = $1, check_out_latitude = $2, check_out_longitude = $3, check_out_address = $4, is_complete = true, updated_at = CURRENT_TIMESTAMP
      WHERE id = $5
-     RETURNING id, user_id, attendance_date, check_in, check_out, check_out_latitude, check_out_longitude, check_out_address, status, is_complete, updated_at`,
+     RETURNING id, user_id,
+               TO_CHAR(attendance_date, 'YYYY-MM-DD') AS attendance_date,
+               CASE
+                   WHEN check_in IS NOT NULL THEN TO_CHAR(check_in, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+                   ELSE NULL
+               END AS check_in,
+               CASE
+                   WHEN check_out IS NOT NULL THEN TO_CHAR(check_out, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+                   ELSE NULL
+               END AS check_out,
+               check_out_latitude, check_out_longitude, check_out_address, status, is_complete, updated_at`,
         [checkOutTime, latitude, longitude, address, existing.id]
     );
 
@@ -193,7 +239,17 @@ export const checkOut = async (userId, location = null) => {
  */
 export const getAttendanceHistory = async (userId, startDate, endDate) => {
     let query = `
-    SELECT id, user_id, attendance_date, check_in, check_out, status, is_complete, created_at, updated_at
+        SELECT id, user_id,
+                     TO_CHAR(attendance_date, 'YYYY-MM-DD') AS attendance_date,
+                     CASE
+                         WHEN check_in IS NOT NULL THEN TO_CHAR(check_in, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+                         ELSE NULL
+                     END AS check_in,
+                     CASE
+                         WHEN check_out IS NOT NULL THEN TO_CHAR(check_out, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+                         ELSE NULL
+                     END AS check_out,
+                     status, is_complete, created_at, updated_at
     FROM attendance
     WHERE user_id = $1
   `;
@@ -246,7 +302,16 @@ const calculateTotalHours = (checkIn, checkOut) => {
  */
 export const getAllAttendance = async ({ userId, startDate, endDate }) => {
     let query = `
-    SELECT a.id, a.user_id, a.attendance_date, a.check_in, a.check_out, a.status, a.is_complete,
+        SELECT a.id, a.user_id, TO_CHAR(a.attendance_date, 'YYYY-MM-DD') AS attendance_date,
+                     CASE
+                         WHEN a.check_in IS NOT NULL THEN TO_CHAR(a.check_in, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+                         ELSE NULL
+                     END AS check_in,
+                     CASE
+                         WHEN a.check_out IS NOT NULL THEN TO_CHAR(a.check_out, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+                         ELSE NULL
+                     END AS check_out,
+                     a.status, a.is_complete,
            a.regular_hours, a.overtime_hours,
            a.created_at, a.updated_at, u.first_name, u.last_name, u.email
     FROM attendance a
@@ -298,7 +363,16 @@ export const getAllAttendance = async ({ userId, startDate, endDate }) => {
  */
 export const getAttendanceById = async (id) => {
     const result = await db.query(
-        `SELECT a.id, a.user_id, a.attendance_date, a.check_in, a.check_out, a.status, a.is_complete,
+        `SELECT a.id, a.user_id, TO_CHAR(a.attendance_date, 'YYYY-MM-DD') AS attendance_date,
+                CASE
+                    WHEN a.check_in IS NOT NULL THEN TO_CHAR(a.check_in, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+                    ELSE NULL
+                END AS check_in,
+                CASE
+                    WHEN a.check_out IS NOT NULL THEN TO_CHAR(a.check_out, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+                    ELSE NULL
+                END AS check_out,
+                a.status, a.is_complete,
             a.created_at, a.updated_at, u.first_name, u.last_name, u.email
      FROM attendance a
      JOIN users u ON a.user_id = u.id
@@ -539,7 +613,16 @@ export const getMonthlyCalendarData = async (userId, month, year) => {
     // Get attendance records for the month
     const attendanceResult = await db.query(
         `SELECT 
-            attendance_date, check_in, check_out, status, is_complete, 
+            TO_CHAR(attendance_date, 'YYYY-MM-DD') AS attendance_date,
+            CASE
+                WHEN check_in IS NOT NULL THEN TO_CHAR(check_in, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+                ELSE NULL
+            END AS check_in,
+            CASE
+                WHEN check_out IS NOT NULL THEN TO_CHAR(check_out, 'YYYY-MM-DD"T"HH24:MI:SS') || '+05:30'
+                ELSE NULL
+            END AS check_out,
+            status, is_complete, 
             regular_hours, overtime_hours
          FROM attendance 
          WHERE user_id = $1 

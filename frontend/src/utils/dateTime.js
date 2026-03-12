@@ -11,6 +11,36 @@ const WEEKDAY_INDEX = {
     Sat: 6,
 };
 
+const parseISTValue = (value) => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+            return new Date(`${trimmed}T00:00:00+05:30`);
+        }
+
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+            const [datePart, timePart] = trimmed.split(' ');
+            const normalizedTime = timePart.length === 5 ? `${timePart}:00` : timePart;
+            return new Date(`${datePart}T${normalizedTime}+05:30`);
+        }
+
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+            const normalizedTime = trimmed.length === 16 ? `${trimmed}:00` : trimmed;
+            return new Date(`${normalizedTime}+05:30`);
+        }
+
+        return new Date(trimmed);
+    }
+
+    return new Date(value);
+};
+
+export const toISTDate = (value) => parseISTValue(value);
+
 const getParts = (value = new Date()) => {
     const formatter = new Intl.DateTimeFormat('en-CA', {
         timeZone: IST_TIMEZONE,
@@ -33,28 +63,34 @@ const getParts = (value = new Date()) => {
 
 export const formatDateInIST = (value, options = {}) => {
     if (!value) return '-';
+    const parsedValue = parseISTValue(value);
+    if (!parsedValue || Number.isNaN(parsedValue.getTime())) return '-';
     return new Intl.DateTimeFormat(IST_LOCALE, {
         timeZone: IST_TIMEZONE,
         year: 'numeric',
         month: 'short',
         day: 'numeric',
         ...options,
-    }).format(new Date(value));
+    }).format(parsedValue);
 };
 
 export const formatTimeInIST = (value, options = {}) => {
     if (!value) return '-';
+    const parsedValue = parseISTValue(value);
+    if (!parsedValue || Number.isNaN(parsedValue.getTime())) return '-';
     return new Intl.DateTimeFormat(IST_LOCALE, {
         timeZone: IST_TIMEZONE,
         hour: '2-digit',
         minute: '2-digit',
         hour12: true,
         ...options,
-    }).format(new Date(value));
+    }).format(parsedValue);
 };
 
 export const formatDateTimeInIST = (value, options = {}) => {
     if (!value) return '-';
+    const parsedValue = parseISTValue(value);
+    if (!parsedValue || Number.isNaN(parsedValue.getTime())) return '-';
     return new Intl.DateTimeFormat(IST_LOCALE, {
         timeZone: IST_TIMEZONE,
         year: 'numeric',
@@ -64,7 +100,7 @@ export const formatDateTimeInIST = (value, options = {}) => {
         minute: '2-digit',
         hour12: true,
         ...options,
-    }).format(new Date(value));
+    }).format(parsedValue);
 };
 
 export const getCurrentISTDate = () => {
@@ -91,11 +127,11 @@ export const getMonthName = (month, format = 'long') => {
 };
 
 export const getWeekdayIndexInIST = (value) => {
-    const input = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
-        ? new Date(`${value}T00:00:00+05:30`)
-        : value instanceof Date
-            ? value
-            : new Date(value);
+    const input = parseISTValue(value);
+
+    if (!input || Number.isNaN(input.getTime())) {
+        return 0;
+    }
 
     const weekday = new Intl.DateTimeFormat('en-US', {
         timeZone: IST_TIMEZONE,
@@ -114,7 +150,9 @@ export const getCurrentISTDay = () => Number(new Intl.DateTimeFormat('en-CA', {
 
 export const formatForDateTimeLocalInput = (value) => {
     if (!value) return '';
-    const { year, month, day, hour, minute } = getParts(new Date(value));
+    const parsedValue = parseISTValue(value);
+    if (!parsedValue || Number.isNaN(parsedValue.getTime())) return '';
+    const { year, month, day, hour, minute } = getParts(parsedValue);
     return `${year}-${month}-${day}T${hour}:${minute}`;
 };
 

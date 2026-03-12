@@ -82,6 +82,7 @@ export default function GovtBoresPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const scrollContainerRef = useRef(null);
     const [statusFilter, setStatusFilter] = useState('');
@@ -284,18 +285,21 @@ export default function GovtBoresPage() {
     const handleAdd = () => {
         setSelectedRecord(null);
         setViewMode(false);
+        setSaveError('');
         setIsModalOpen(true);
     };
 
     const handleEdit = (record) => {
         setSelectedRecord(record);
         setViewMode(false);
+        setSaveError('');
         setIsModalOpen(true);
     };
 
     const handleView = (record) => {
         setSelectedRecord(record);
         setViewMode(true);
+        setSaveError('');
         setIsModalOpen(true);
     };
 
@@ -315,6 +319,7 @@ export default function GovtBoresPage() {
     const handleSave = async (formData) => {
         try {
             setSaving(true);
+            setSaveError('');
             if (selectedRecord) {
                 await govtBoreApi.update(selectedRecord.id, formData);
                 toast.success('Record updated');
@@ -327,7 +332,7 @@ export default function GovtBoresPage() {
         } catch (err) {
             console.error('Save record error:', err);
             const msg = err?.response?.data?.message || err?.message || 'Failed to save record';
-            toast.error(msg);
+            setSaveError(msg);
         } finally {
             setSaving(false);
         }
@@ -622,9 +627,13 @@ export default function GovtBoresPage() {
                 <BorewellForm
                     key={selectedRecord ? selectedRecord.id : 'new'}
                     record={selectedRecord}
-                    onClose={() => setIsModalOpen(false)}
+                    onClose={() => {
+                        setSaveError('');
+                        setIsModalOpen(false);
+                    }}
                     onSave={handleSave}
                     saving={saving}
+                    saveError={saveError}
                     viewMode={viewMode}
                 />
             )}
