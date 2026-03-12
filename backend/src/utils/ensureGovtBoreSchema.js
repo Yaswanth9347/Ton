@@ -14,6 +14,8 @@ import prisma from '../config/prisma.js';
 let _hasPipeCompanyCol = null;
 
 const REQUIRED_BOREWELLWORK_COLUMNS = [
+  'createdAt',
+  'updatedAt',
   'pipe_company_id',
   'geologist',
   'bank_name',
@@ -135,6 +137,8 @@ export async function ensureGovtBoreSchema() {
     // 5. Add remaining extended BorewellWork columns required by the form
     await prisma.$executeRawUnsafe(`
       ALTER TABLE "BorewellWork"
+        ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         ADD COLUMN IF NOT EXISTS "bank_name" TEXT,
         ADD COLUMN IF NOT EXISTS "borecap_qty" INTEGER,
         ADD COLUMN IF NOT EXISTS "casing250_amount" DECIMAL(14,2),
