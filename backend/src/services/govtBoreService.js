@@ -546,16 +546,15 @@ export const createRecord = async (data, userId = null) => {
   // --- Fast path: all columns exist, use Prisma ---
   if (colReady) {
     try {
-      return await prisma.$transaction(async (tx) => {
+      const workId = await prisma.$transaction(async (tx) => {
         const { mandal, village } = await findOrCreateLocation(tx, mandalName, villageName);
         const work = await tx.borewellWork.create({ data: buildCreateData(data, mandal.id, village.id, true) });
-        const record = await tx.borewellWork.findUnique({
-          where: { id: work.id },
-          include: { mandal: true, village: true, pipe_company_ref: true, pipe_inventory_ref: true }
-        });
-        await syncGovtBorePipeInventory({ tx, currentRecord: record, createdBy: userId });
-        return record;
+        return work.id;
       });
+
+      const record = await getRecordById(workId);
+      await syncGovtBorePipeInventory({ currentRecord: record, createdBy: userId });
+      return record;
     } catch (error) {
       if (!isMissingColumnError(error)) throw error;
       console.warn('Govt bores create fallback (P2022): falling back to raw SQL');
@@ -601,7 +600,7 @@ export const updateRecord = async (id, data, userId = null) => {
   // --- Fast path: all columns exist, use Prisma ---
   if (colReady) {
     try {
-      return await prisma.$transaction(async (tx) => {
+      const updatedId = await prisma.$transaction(async (tx) => {
         let mandalId, villageId;
         if (data.mandal || data.village) {
           const mName = data.mandal || data.mandalName || 'Unknown';
@@ -621,9 +620,13 @@ export const updateRecord = async (id, data, userId = null) => {
           data: updateData,
           include: { mandal: true, village: true, pipe_company_ref: true, pipe_inventory_ref: true }
         });
-        await syncGovtBorePipeInventory({ tx, currentRecord: record, previousRecord, createdBy: userId });
-        return record;
+
+        return record.id;
       });
+
+      const record = await getRecordById(updatedId);
+      await syncGovtBorePipeInventory({ currentRecord: record, previousRecord, createdBy: userId });
+      return record;
     } catch (error) {
       if (!isMissingColumnError(error)) throw error;
       console.warn('Govt bores update fallback (P2022): falling back to raw SQL');
