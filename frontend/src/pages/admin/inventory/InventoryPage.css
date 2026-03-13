@@ -546,6 +546,8 @@
 .status-badge--load       { background: rgba(37,99,235,0.12);  color: #2563eb;  border: 1px solid rgba(37,99,235,0.25); }
 .status-badge--issue      { background: rgba(245,158,11,0.12); color: #b45309;  border: 1px solid rgba(245,158,11,0.25); }
 .status-badge--return     { background: rgba(16,185,129,0.12); color: #059669;  border: 1px solid rgba(16,185,129,0.25); }
+.status-badge--refill     { background: rgba(16,185,129,0.12); color: #059669;  border: 1px solid rgba(16,185,129,0.25); }
+.status-badge--consumption{ background: rgba(245,158,11,0.12); color: #b45309;  border: 1px solid rgba(245,158,11,0.25); }
 
 .status-badge__dot {
   width: 6px;

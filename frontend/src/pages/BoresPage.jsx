@@ -9,6 +9,7 @@ import {
 import BoreModal from '../components/admin/BoreModal';
 import { boreApi } from '../services/api';
 import toast from 'react-hot-toast';
+import { formatTruckTypeDisplay } from '../utils/formatters';
 
 // Column definitions for the table
 const DISPLAY_COLS = [
@@ -152,6 +153,7 @@ export default function BoresPage() {
         if (col.type === 'date') return formatDate(val);
         if (col.type === 'currency') return `${parseFloat(val).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
         if (col.type === 'number') return parseFloat(val).toLocaleString('en-IN');
+        if (col.key === 'vehicle_name') return formatTruckTypeDisplay(val);
         return val;
     };
 

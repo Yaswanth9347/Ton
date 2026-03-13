@@ -6,6 +6,10 @@ import {
     reconcileGovtBoreAllocationStatuses,
     returnPipeAllocation,
 } from './pipeAllocationService.js';
+import { ensureDefaultSpares } from '../utils/ensureDefaultSpares.js';
+import { DEFAULT_GOVT_SPARE_NAMES } from '../constants/defaultSpareMaterials.js';
+import { ensureInventorySchema } from '../utils/ensureInventorySchema.js';
+import { DEFAULT_DIESEL_VEHICLES, normalizeVehicleKey } from '../constants/defaultDieselVehicles.js';
 
 // =============================================
 // PIPES SERVICE (ERP ORM)
@@ -307,12 +311,19 @@ export const deletePipe = async (pipeId) => {
     });
 };
 
-export const getPipeTransactions = async (filters) => {
+export const getPipeTransactions = async (filters = {}) => {
+    const page = Math.max(parseInt(filters.page || 1, 10), 1);
+    const limit = Math.min(Math.max(parseInt(filters.limit || 10, 10), 1), 100);
+    const skip = (page - 1) * limit;
     const whereClause = {};
     if (filters.startDate || filters.endDate) {
         whereClause.created_at = {};
         if (filters.startDate) whereClause.created_at.gte = new Date(filters.startDate);
-        if (filters.endDate) whereClause.created_at.lte = new Date(filters.endDate);
+        if (filters.endDate) {
+            const endDate = new Date(filters.endDate);
+            endDate.setHours(23, 59, 59, 999);
+            whereClause.created_at.lte = endDate;
+        }
     }
 
     // Map filter values to actual DB transaction types (including legacy support)
@@ -329,13 +340,54 @@ export const getPipeTransactions = async (filters) => {
         }
     }
 
+    if (filters.company || filters.size) {
+        const pipeWhere = {};
+        if (filters.company) {
+            pipeWhere.pipe_type_name = {
+                equals: filters.company,
+                mode: 'insensitive'
+            };
+        }
+        if (filters.size) {
+            pipeWhere.pipe_size = {
+                equals: filters.size,
+                mode: 'insensitive'
+            };
+        }
+
+        const matchingPipeMasters = await prisma.pipes_master.findMany({
+            where: pipeWhere,
+            select: { id: true }
+        });
+
+        if (matchingPipeMasters.length === 0) {
+            return {
+                records: [],
+                pagination: {
+                    page,
+                    limit,
+                    total: 0,
+                    totalPages: 0
+                }
+            };
+        }
+
+        whereClause.pipe_master_id = {
+            in: matchingPipeMasters.map((pipe) => pipe.id)
+        };
+    }
+
+    const total = await prisma.pipes_stock_transactions.count({ where: whereClause });
+
     const txns = await prisma.pipes_stock_transactions.findMany({
         where: whereClause,
         include: {
             pipe_master: true,
             user: { select: { username: true } }
         },
-        orderBy: { created_at: 'desc' }
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: limit
     });
 
     // Normalize legacy transaction types to new standard names
@@ -358,7 +410,7 @@ export const getPipeTransactions = async (filters) => {
         return dbType;
     };
 
-    return txns.map(t => {
+    const records = txns.map(t => {
         const transactionType = normalizeTransactionType(t);
         const lengthFeet = t.pipe_master.length_feet ? parseFloat(t.pipe_master.length_feet) : 20;
         return {
@@ -382,6 +434,16 @@ export const getPipeTransactions = async (filters) => {
             allocation_id: t.allocation_id
         };
     });
+
+    return {
+        records,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit)
+        }
+    };
 };
 
 export const getPipeAllocations = async () => {
@@ -463,7 +525,15 @@ export const deletePipeCompany = async (companyId) => {
 // SPARES SERVICE
 // =============================================
 
+const getSpareStockStatus = (availableQty, reorderLevel) => {
+    if (availableQty <= 0) return 'OUT_OF_STOCK';
+    if (availableQty <= reorderLevel) return 'LOW_STOCK';
+    return 'IN_STOCK';
+};
+
 export const getAllSpares = async (filters) => {
+    await ensureDefaultSpares(prisma);
+
     const whereClause = { is_active: true };
     if (filters?.spareType) whereClause.category = filters.spareType;
 
@@ -471,6 +541,17 @@ export const getAllSpares = async (filters) => {
         where: whereClause,
         include: {
             stock: true,
+            allocations: {
+                where: {
+                    status: 'OPEN',
+                    bore_type: 'govt'
+                },
+                include: {
+                    govt_bore: {
+                        include: { village: true }
+                    }
+                }
+            },
             transactions: {
                 orderBy: { created_at: 'desc' },
                 take: 1
@@ -480,21 +561,41 @@ export const getAllSpares = async (filters) => {
     });
 
     let mappedSpares = spares.map(s => {
-        const available = parseFloat(s.stock?.available_quantity || 0) > 0;
+        const availableQty = parseFloat(s.stock?.available_quantity || 0);
+        const reorderLevel = s.reorder_level || 5;
         const latestTxn = s.transactions[0] || null;
+        const activeAllocations = (s.allocations || []).filter((allocation) => {
+            const openBalance = parseFloat(allocation.issued_quantity || 0) - parseFloat(allocation.returned_quantity || 0);
+            return openBalance > 0.0001;
+        });
+        const activeBoreReferences = activeAllocations.map((allocation) => {
+            return allocation.govt_bore?.village?.name || allocation.govt_bore?.location || `Govt Bore #${allocation.govt_bore_id}`;
+        });
+        const allocatedQty = activeAllocations.reduce((sum, allocation) => {
+            return sum + (parseFloat(allocation.issued_quantity || 0) - parseFloat(allocation.returned_quantity || 0));
+        }, 0);
+        const status = getSpareStockStatus(availableQty, reorderLevel);
 
         return {
             id: s.id,
             spare_type: s.category,
             spare_number: s.spare_name,
-            status: available ? 'AVAILABLE' : 'IN_USE',
-            current_location: available ? 'HOME' : 'VEHICLE',
-            vehicle_name: (!available && latestTxn) ? latestTxn.vehicle_name : null,
-            supervisor_name: (!available && latestTxn) ? latestTxn.supervisor_name : null,
+            is_default: s.category === 'MATERIAL' && DEFAULT_GOVT_SPARE_NAMES.includes(s.spare_name),
+            status,
+            available_quantity: availableQty,
+            allocated_quantity: allocatedQty,
+            active_bore_count: activeAllocations.length,
+            active_bore_reference: activeBoreReferences[0] || null,
+            active_bore_references: activeBoreReferences,
+            current_location: activeAllocations.length > 0 ? 'Govt Bore' : 'Main Store',
+            vehicle_name: latestTxn?.vehicle_name || null,
+            supervisor_name: latestTxn?.supervisor_name || null,
             brand: s.brand || null,
             unit_type: s.unit_type || 'Piece',
             cost_per_unit: s.cost_per_unit ? parseFloat(s.cost_per_unit) : 0,
-            reorder_level: s.reorder_level || 5,
+            reorder_level: reorderLevel,
+            total_value: availableQty * (s.cost_per_unit ? parseFloat(s.cost_per_unit) : 0),
+            last_transaction_at: latestTxn?.created_at || null,
             created_at: s.created_at,
             updated_at: s.updated_at
         };
@@ -515,7 +616,11 @@ export const addNewSpare = async (data, userId) => {
         console.log(`[Inventory - Spares] Creating new spare...`, JSON.stringify(data));
 
         const existing = await tx.spares_master.findFirst({
-            where: { spare_name: data.spare_number, category: data.spare_type, is_active: true }
+            where: {
+                spare_name: { equals: data.spare_number, mode: 'insensitive' },
+                category: { equals: data.spare_type, mode: 'insensitive' },
+                is_active: true,
+            }
         });
 
         if (existing) {
@@ -528,24 +633,16 @@ export const addNewSpare = async (data, userId) => {
                 spare_name: data.spare_number,
                 category: data.spare_type,
                 unit: 'nos',
+                description: data.description || null,
                 brand: data.brand || null,
                 unit_type: data.unit_type || 'Piece',
                 cost_per_unit: data.cost_per_unit ? parseFloat(data.cost_per_unit) : 0,
+                reorder_level: data.reorder_level ? parseInt(data.reorder_level, 10) : 5,
                 stock: {
-                    create: { available_quantity: 1 }
+                    create: { available_quantity: 0 }
                 }
             },
             include: { stock: true }
-        });
-
-        await tx.spares_stock_transactions.create({
-            data: {
-                spare_master_id: spare.id,
-                transaction_type: 'ADD',
-                quantity: 1,
-                reference_type: 'INVENTORY_ENTRY',
-                created_by: userId || 1
-            }
         });
 
         console.log(`[Inventory - Spares] Spare added successfully. ID: ${spare.id}`);
@@ -553,98 +650,132 @@ export const addNewSpare = async (data, userId) => {
             id: spare.id,
             spare_type: spare.category,
             spare_number: spare.spare_name,
-            status: 'AVAILABLE',
-            current_location: 'HOME',
-            vehicle_name: null,
-            supervisor_name: null
+            status: 'OUT_OF_STOCK',
+            current_location: 'Main Store',
+            available_quantity: 0,
+            allocated_quantity: 0,
+            brand: spare.brand || null,
+            unit_type: spare.unit_type || 'Piece',
+            cost_per_unit: spare.cost_per_unit ? parseFloat(spare.cost_per_unit) : 0,
+            reorder_level: spare.reorder_level || 5
         };
     });
 };
 
-export const issueSpareToVehicle = async (spareId, data, userId) => {
+export const addSpareStock = async (spareId, data, userId) => {
     return await prisma.$transaction(async (tx) => {
-        const spare = await tx.spares_master.findUnique({ where: { id: parseInt(spareId) }, include: { stock: true } });
-        if (!spare) throw new Error('Spare not found');
+        const spare = await tx.spares_master.findUnique({
+            where: { id: parseInt(spareId) },
+            include: { stock: true },
+        });
 
-        const currentStock = parseFloat(spare.stock?.available_quantity || 0);
-        if (currentStock <= 0) {
-            throw new Error(`Spare is not available. It is currently in use.`);
+        if (!spare || !spare.is_active) throw new Error('Spare not found');
+
+        const quantity = parseFloat(data.quantity || 0);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            throw new Error('Stock quantity must be greater than 0');
         }
 
-        await tx.spares_stock.update({
+        const nextCostPerUnit = data.cost_per_unit !== undefined && data.cost_per_unit !== null && data.cost_per_unit !== ''
+            ? parseFloat(data.cost_per_unit)
+            : null;
+
+        if (nextCostPerUnit !== null && (!Number.isFinite(nextCostPerUnit) || nextCostPerUnit < 0)) {
+            throw new Error('Cost must be 0 or greater');
+        }
+
+        if (nextCostPerUnit !== null) {
+            await tx.spares_master.update({
+                where: { id: spare.id },
+                data: { cost_per_unit: nextCostPerUnit },
+            });
+        }
+
+        await tx.spares_stock.upsert({
             where: { spare_master_id: spare.id },
-            data: { available_quantity: 0 }
+            update: { available_quantity: { increment: quantity } },
+            create: { spare_master_id: spare.id, available_quantity: quantity },
         });
 
         await tx.spares_stock_transactions.create({
             data: {
                 spare_master_id: spare.id,
-                transaction_type: 'DEDUCT',
-                quantity: 1,
-                reference_type: 'PRIVATE_BORE',
-                vehicle_name: data.vehicle_name,
-                supervisor_name: data.supervisor_name,
-                remarks: data.remarks || `Issued to vehicle ${data.vehicle_name || 'Unknown'}`,
-                created_by: userId
-            }
+                transaction_type: 'ADD_STOCK',
+                quantity,
+                reference_type: 'INVENTORY_ENTRY',
+                created_by: userId || 1,
+                remarks: 'Stock added from inventory page',
+            },
+        });
+
+        const updated = await tx.spares_master.findUnique({
+            where: { id: spare.id },
+            include: {
+                stock: true,
+                allocations: {
+                    where: { status: 'OPEN', bore_type: 'govt' },
+                    include: { govt_bore: { include: { village: true } } },
+                },
+                transactions: { orderBy: { created_at: 'desc' }, take: 1 },
+            },
+        });
+
+        const availableQty = parseFloat(updated.stock?.available_quantity || 0);
+        const activeAllocations = (updated.allocations || []).filter((allocation) => {
+            const openBalance = parseFloat(allocation.issued_quantity || 0) - parseFloat(allocation.returned_quantity || 0);
+            return openBalance > 0.0001;
         });
 
         return {
-            id: spare.id,
-            spare_type: spare.category,
-            spare_number: spare.spare_name,
-            status: 'IN_USE',
-            current_location: 'VEHICLE',
-            vehicle_name: data.vehicle_name,
-            supervisor_name: data.supervisor_name
+            id: updated.id,
+            spare_type: updated.category,
+            spare_number: updated.spare_name,
+            status: getSpareStockStatus(availableQty, updated.reorder_level || 5),
+            available_quantity: availableQty,
+            cost_per_unit: updated.cost_per_unit ? parseFloat(updated.cost_per_unit) : 0,
+            total_value: availableQty * (updated.cost_per_unit ? parseFloat(updated.cost_per_unit) : 0),
+            allocated_quantity: activeAllocations.reduce((sum, allocation) => sum + (parseFloat(allocation.issued_quantity || 0) - parseFloat(allocation.returned_quantity || 0)), 0),
+            active_bore_count: activeAllocations.length,
+            active_bore_reference: activeAllocations[0]?.govt_bore?.village?.name || activeAllocations[0]?.govt_bore?.location || null,
+            current_location: activeAllocations.length > 0 ? 'Govt Bore' : 'Main Store',
         };
     });
 };
 
-export const returnSpareToHome = async (spareId, data, userId) => {
-    return await prisma.$transaction(async (tx) => {
-        const spare = await tx.spares_master.findUnique({ where: { id: parseInt(spareId) }, include: { stock: true } });
-        if (!spare) throw new Error('Spare not found');
+export const issueSpareToVehicle = async (_spareId, _data, _userId) => {
+    throw new Error('Manual spare issue is disabled. Govt bore material quantities now drive spare deductions automatically.');
+};
 
-        await tx.spares_stock.update({
-            where: { spare_master_id: spare.id },
-            data: { available_quantity: 1 }
-        });
-
-        await tx.spares_stock_transactions.create({
-            data: {
-                spare_master_id: spare.id,
-                transaction_type: 'ADD',
-                quantity: 1,
-                reference_type: 'INVENTORY_ENTRY',
-                remarks: data.remarks || `Returned to home`,
-                created_by: userId
-            }
-        });
-
-        return {
-            id: spare.id,
-            spare_type: spare.category,
-            spare_number: spare.spare_name,
-            status: 'AVAILABLE',
-            current_location: 'HOME',
-            vehicle_name: null,
-            supervisor_name: null
-        };
-    });
+export const returnSpareToHome = async (_spareId, _data, _userId) => {
+    throw new Error('Manual spare return is disabled. Update or delete the govt bore record to restore synced quantities.');
 };
 
 export const updateSpareStatus = async (_spareId, _status) => {
-    return { success: true, message: 'Status is driven dynamically via Issue/Return workflows now.' };
+    return { success: true, message: 'Status is derived from quantity and reorder level.' };
 };
 
 export const deleteSpare = async (spareId) => {
     return await prisma.$transaction(async (tx) => {
-        const spare = await tx.spares_master.findUnique({ where: { id: parseInt(spareId) }, include: { stock: true } });
+        const spare = await tx.spares_master.findUnique({
+            where: { id: parseInt(spareId) },
+            include: {
+                stock: true,
+                allocations: {
+                    where: { status: 'OPEN' },
+                },
+            },
+        });
         if (!spare) throw new Error('Spare not found');
 
-        if (parseFloat(spare.stock?.available_quantity || 0) <= 0) {
-            throw new Error('Cannot delete a spare that is currently in use / issued to a vehicle.');
+        if ((spare.allocations || []).some((allocation) => {
+            const openBalance = parseFloat(allocation.issued_quantity || 0) - parseFloat(allocation.returned_quantity || 0);
+            return openBalance > 0.0001;
+        })) {
+            throw new Error('Cannot delete a spare that is currently linked to an active bore allocation.');
+        }
+
+        if (spare.category === 'MATERIAL' && DEFAULT_GOVT_SPARE_NAMES.includes(spare.spare_name)) {
+            throw new Error('Default govt bore material spares cannot be deleted.');
         }
 
         return await tx.spares_master.update({
@@ -654,9 +785,59 @@ export const deleteSpare = async (spareId) => {
     });
 };
 
-export const getSparesTransactions = async (spareId = null) => {
+export const getSparesTransactions = async (options = {}) => {
+    await ensureDefaultSpares(prisma);
+    const page = Math.max(parseInt(options.page || 1, 10), 1);
+    const limit = Math.min(Math.max(parseInt(options.limit || 10, 10), 1), 100);
+    const skip = (page - 1) * limit;
+
+    const spareId = options.spareId ? parseInt(options.spareId, 10) : null;
     const whereClause = {};
     if (spareId) whereClause.spare_master_id = parseInt(spareId);
+
+    if (options.transactionType) {
+        whereClause.transaction_type = options.transactionType;
+    }
+
+    if (options.startDate || options.endDate) {
+        whereClause.created_at = {};
+        if (options.startDate) whereClause.created_at.gte = new Date(options.startDate);
+        if (options.endDate) {
+            const endDate = new Date(options.endDate);
+            endDate.setHours(23, 59, 59, 999);
+            whereClause.created_at.lte = endDate;
+        }
+    }
+
+    if (options.spareName) {
+        const matchingSpares = await prisma.spares_master.findMany({
+            where: {
+                spare_name: {
+                    contains: options.spareName,
+                    mode: 'insensitive'
+                }
+            },
+            select: { id: true }
+        });
+
+        if (matchingSpares.length === 0) {
+            return {
+                records: [],
+                pagination: {
+                    page,
+                    limit,
+                    total: 0,
+                    totalPages: 0
+                }
+            };
+        }
+
+        whereClause.spare_master_id = {
+            in: matchingSpares.map((spare) => spare.id)
+        };
+    }
+
+    const total = await prisma.spares_stock_transactions.count({ where: whereClause });
 
     const txns = await prisma.spares_stock_transactions.findMany({
         where: whereClause,
@@ -664,85 +845,372 @@ export const getSparesTransactions = async (spareId = null) => {
             spare_master: true,
             user: { select: { username: true } }
         },
-        orderBy: { created_at: 'desc' }
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: limit
     });
 
-    return txns.map(t => ({
+    const govtReferenceIds = [...new Set(txns
+        .filter((txn) => txn.reference_type?.includes('GOVT_BORE') && txn.reference_id)
+        .map((txn) => txn.reference_id))];
+
+    const govtBores = govtReferenceIds.length > 0
+        ? await prisma.borewellWork.findMany({
+            where: { id: { in: govtReferenceIds } },
+            include: { village: true },
+        })
+        : [];
+
+    const boreReferenceMap = new Map(govtBores.map((record) => [record.id, record.village?.name || record.location || `Govt Bore #${record.id}`]));
+
+    const records = txns.map(t => ({
         id: t.id,
         spare_id: t.spare_master_id,
         spare_type: t.spare_master.category,
         spare_number: t.spare_master.spare_name,
-        transaction_type: t.transaction_type === 'DEDUCT' ? 'ISSUE' : (t.transaction_type === 'ADD' && t.reference_type === 'INVENTORY_ENTRY' ? 'RETURN' : t.transaction_type),
+        quantity: parseFloat(t.quantity || 0),
+        transaction_type: t.transaction_type,
+        bore_reference: t.reference_type?.includes('GOVT_BORE') ? (boreReferenceMap.get(t.reference_id) || `Govt Bore #${t.reference_id}`) : null,
         vehicle_name: t.vehicle_name,
         supervisor_name: t.supervisor_name,
         remarks: t.remarks,
         created_by_name: t.user?.username || 'System',
         created_at: t.created_at
     }));
+
+    return {
+        records,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit)
+        }
+    };
 };
 
 // =============================================
 // DIESEL SERVICE (ERP ORM)
 // =============================================
 
-export const getAllDieselRecords = async (filters) => {
-    const whereClause = { reference_type: 'INVENTORY_ENTRY' };
+const DIESEL_REFERENCE_TYPES = ['INVENTORY_ENTRY', 'GOVT_BORE'];
+const DIESEL_REFILL_TYPES = ['REFILL', 'ADD'];
+const DIESEL_CONSUMPTION_TYPES = ['CONSUMPTION', 'ISSUE'];
+
+const isRefillTransaction = (type) => DIESEL_REFILL_TYPES.includes(type);
+const isConsumptionTransaction = (type) => DIESEL_CONSUMPTION_TYPES.includes(type);
+
+const parseDecimal = (value, fallback = 0) => {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const getOrCreateDieselMaster = async (tx) => {
+    let master = await tx.diesel_master.findFirst({ where: { storage_location: 'Main Tank' }, include: { stock: true } });
+    if (!master) {
+        master = await tx.diesel_master.create({
+            data: {
+                storage_location: 'Main Tank',
+                unit: 'liters',
+                stock: { create: { available_quantity: 0 } }
+            },
+            include: { stock: true }
+        });
+    } else if (!master.stock) {
+        await tx.diesel_stock.create({
+            data: { diesel_master_id: master.id, available_quantity: 0 }
+        });
+
+        master = await tx.diesel_master.findUnique({
+            where: { id: master.id },
+            include: { stock: true }
+        });
+    }
+
+    return master;
+};
+
+const getVehicleAliases = (vehicle) => {
+    const fromDefault = DEFAULT_DIESEL_VEHICLES.find(
+        (item) => normalizeVehicleKey(item.vehicle_number) === normalizeVehicleKey(vehicle.vehicle_number)
+            || normalizeVehicleKey(item.truck_type) === normalizeVehicleKey(vehicle.truck_type)
+    );
+
+    return [...new Set([
+        vehicle.vehicle_number,
+        vehicle.truck_type,
+        ...(fromDefault?.aliases || []),
+    ].filter(Boolean))];
+};
+
+const getActiveDieselVehicles = async (tx) => {
+    try {
+        const rows = await tx.diesel_vehicle_master.findMany({
+            where: { is_active: true },
+            orderBy: [{ vehicle_number: 'asc' }],
+        });
+
+        if (rows.length > 0) {
+            return rows.map((row) => ({
+                id: row.id,
+                fallback_id: null,
+                vehicle_number: row.vehicle_number,
+                truck_type: row.truck_type,
+                tank_capacity: parseDecimal(row.tank_capacity, 0),
+            }));
+        }
+    } catch (error) {
+        console.warn('[Inventory - Diesel] Vehicle mapping table unavailable:', error.message);
+    }
+
+    return [];
+};
+
+const resolveMappedDieselVehicle = async (tx, vehicleInput, { required = true } = {}) => {
+    const inputKey = normalizeVehicleKey(vehicleInput);
+    if (!inputKey) {
+        if (required) {
+            throw new Error('Vehicle is required. Select a configured truck vehicle number.');
+        }
+        return null;
+    }
+
+    const vehicles = await getActiveDieselVehicles(tx);
+
+    const matched = vehicles.find((vehicle) => {
+        const aliasKeys = getVehicleAliases(vehicle).map(normalizeVehicleKey);
+        return aliasKeys.includes(inputKey);
+    });
+
+    if (!matched && required) {
+        throw new Error(`Vehicle "${vehicleInput}" is not configured in diesel mapping.`);
+    }
+
+    return matched || null;
+};
+
+const getVehicleCurrentFuel = async (tx, vehicle) => {
+    const aliases = getVehicleAliases(vehicle);
+    const vehicleWhere = vehicle.id
+        ? [
+            { diesel_vehicle_id: vehicle.id },
+            {
+                diesel_vehicle_id: null,
+                vehicle_name: { in: aliases },
+            },
+        ]
+        : [
+            { vehicle_name: { in: aliases } },
+        ];
+
+    const txns = await tx.diesel_stock_transactions.findMany({
+        where: {
+            reference_type: { in: DIESEL_REFERENCE_TYPES },
+            OR: vehicleWhere,
+        },
+        select: {
+            transaction_type: true,
+            quantity: true,
+        },
+    });
+
+    return txns.reduce((sum, txn) => {
+        const qty = parseDecimal(txn.quantity, 0);
+        if (isRefillTransaction(txn.transaction_type)) return sum + qty;
+        if (isConsumptionTransaction(txn.transaction_type)) return sum - qty;
+        return sum;
+    }, 0);
+};
+
+const getGlobalDieselAvailable = async (tx, dieselMasterId) => {
+    const stock = await tx.diesel_stock.findUnique({ where: { diesel_master_id: dieselMasterId } });
+    return parseDecimal(stock?.available_quantity, 0);
+};
+
+const ensureFuelWithinBounds = (value, vehicle) => {
+    const capacity = parseDecimal(vehicle.tank_capacity, 0);
+    if (value < -0.0001) {
+        throw new Error(`Vehicle ${vehicle.vehicle_number} has insufficient diesel.`);
+    }
+    if (value > capacity + 0.0001) {
+        throw new Error(`Vehicle ${vehicle.vehicle_number} cannot exceed tank capacity (${capacity.toFixed(2)} L).`);
+    }
+};
+
+const getDieselBoreReferenceMap = async (txns) => {
+    const govtReferenceIds = [...new Set(txns
+        .filter((txn) => txn.reference_type === 'GOVT_BORE' && txn.reference_id)
+        .map((txn) => txn.reference_id))];
+
+    if (govtReferenceIds.length === 0) {
+        return new Map();
+    }
+
+    const govtBores = await prisma.borewellWork.findMany({
+        where: { id: { in: govtReferenceIds } },
+        include: { village: true },
+    });
+
+    return new Map(govtBores.map((record) => [
+        record.id,
+        record.village?.name || record.location || `Govt Bore #${record.id}`,
+    ]));
+};
+
+export const getAllDieselRecords = async (filters = {}) => {
+    try {
+        await ensureInventorySchema();
+    } catch (error) {
+        console.warn('[Inventory - Diesel] Schema ensure failed for list API. Continuing with compatibility mode:', error.message);
+    }
+    const page = Math.max(parseInt(filters.page || 1, 10), 1);
+    const limit = Math.min(Math.max(parseInt(filters.limit || 10, 10), 1), 100);
+    const skip = (page - 1) * limit;
+
+    const whereClause = { reference_type: { in: DIESEL_REFERENCE_TYPES } };
 
     if (filters?.startDate) whereClause.created_at = { ...whereClause.created_at, gte: new Date(filters.startDate) };
-    if (filters?.endDate) whereClause.created_at = { ...whereClause.created_at, lte: new Date(filters.endDate) };
-    if (filters?.vehicle) whereClause.vehicle_name = { contains: filters.vehicle, mode: 'insensitive' };
+    if (filters?.endDate) {
+        const endDate = new Date(filters.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        whereClause.created_at = { ...whereClause.created_at, lte: endDate };
+    }
+    if (filters?.vehicleNumber) whereClause.vehicle_name = { contains: filters.vehicleNumber, mode: 'insensitive' };
     if (filters?.supervisor) whereClause.supervisor_name = { contains: filters.supervisor, mode: 'insensitive' };
+
+    if (filters?.transactionType) {
+        const upperType = String(filters.transactionType).toUpperCase();
+        if (upperType === 'REFILL') {
+            whereClause.transaction_type = { in: DIESEL_REFILL_TYPES };
+        } else if (upperType === 'CONSUMPTION') {
+            whereClause.transaction_type = { in: DIESEL_CONSUMPTION_TYPES };
+        }
+    }
+
+    if (filters?.truckType) {
+        const matchedVehicles = await prisma.diesel_vehicle_master.findMany({
+            where: {
+                is_active: true,
+                truck_type: {
+                    contains: filters.truckType,
+                    mode: 'insensitive'
+                }
+            },
+            select: {
+                id: true,
+                vehicle_number: true
+            }
+        });
+
+        if (matchedVehicles.length === 0) {
+            return {
+                records: [],
+                pagination: {
+                    page,
+                    limit,
+                    total: 0,
+                    totalPages: 0
+                }
+            };
+        }
+
+        whereClause.OR = [
+            {
+                diesel_vehicle_id: {
+                    in: matchedVehicles.map((vehicle) => vehicle.id)
+                }
+            },
+            {
+                vehicle_name: {
+                    in: matchedVehicles.map((vehicle) => vehicle.vehicle_number)
+                }
+            }
+        ];
+    }
+
+    const total = await prisma.diesel_stock_transactions.count({ where: whereClause });
 
     const txns = await prisma.diesel_stock_transactions.findMany({
         where: whereClause,
         include: { user: { select: { username: true } } },
-        orderBy: { created_at: 'desc' }
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: limit
     });
 
-    return txns.map(t => ({
+    const vehicles = await prisma.$transaction(async (tx) => getActiveDieselVehicles(tx));
+    const vehicleById = new Map(vehicles.filter((vehicle) => vehicle.id).map((vehicle) => [vehicle.id, vehicle]));
+    const resolveVehicleFromName = (vehicleName) => {
+        const key = normalizeVehicleKey(vehicleName);
+        if (!key) return null;
+        return vehicles.find((vehicle) => getVehicleAliases(vehicle).map(normalizeVehicleKey).includes(key)) || null;
+    };
+
+    const boreReferenceMap = await getDieselBoreReferenceMap(txns);
+
+    const records = txns.map(t => ({
         id: t.id,
-        vehicle_name: t.vehicle_name,
+        vehicle_name: ((t.diesel_vehicle_id ? vehicleById.get(t.diesel_vehicle_id) : null) || resolveVehicleFromName(t.vehicle_name))?.vehicle_number || t.vehicle_name,
+        truck_type: ((t.diesel_vehicle_id ? vehicleById.get(t.diesel_vehicle_id) : null) || resolveVehicleFromName(t.vehicle_name))?.truck_type || null,
+        tank_capacity: ((t.diesel_vehicle_id ? vehicleById.get(t.diesel_vehicle_id) : null) || resolveVehicleFromName(t.vehicle_name))?.tank_capacity || null,
         purchase_date: t.created_at,
         supervisor_name: t.supervisor_name,
         amount: t.amount,
         liters: t.quantity,
         bill_url: t.bill_url,
         remarks: t.remarks,
+        transaction_type: isRefillTransaction(t.transaction_type) ? 'REFILL' : (isConsumptionTransaction(t.transaction_type) ? 'CONSUMPTION' : t.transaction_type),
+        source_destination: isRefillTransaction(t.transaction_type)
+            ? 'Fuel Station → Truck'
+            : (isConsumptionTransaction(t.transaction_type) ? 'Truck → Bore Operation' : '—'),
+        record_source: t.reference_type === 'GOVT_BORE' ? 'GOVT_BORE' : 'MANUAL',
+        bore_reference: t.reference_type === 'GOVT_BORE'
+            ? (boreReferenceMap.get(t.reference_id) || `Govt Bore #${t.reference_id}`)
+            : null,
+        is_auto_synced: t.reference_type === 'GOVT_BORE',
         created_by_name: t.user?.username || 'System',
         created_at: t.created_at
     }));
+
+    return {
+        records,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit)
+        }
+    };
 };
 
 export const addDieselRecord = async (data, userId) => {
+    await ensureInventorySchema();
     return await prisma.$transaction(async (tx) => {
-        let master = await tx.diesel_master.findFirst({ where: { storage_location: 'Main Tank' }, include: { stock: true } });
-        if (!master) {
-            master = await tx.diesel_master.create({
-                data: {
-                    storage_location: 'Main Tank',
-                    unit: 'liters',
-                    stock: { create: { available_quantity: 0 } }
-                },
-                include: { stock: true }
-            });
+        const master = await getOrCreateDieselMaster(tx);
+        const vehicleInput = data.truck_type || data.vehicle_name;
+        const vehicle = await resolveMappedDieselVehicle(tx, vehicleInput, { required: true });
+        const quantity = parseDecimal(data.liters, 0);
+
+        if (quantity <= 0) {
+            throw new Error('Liters must be greater than zero for diesel refill.');
         }
 
-        const quantity = parseFloat(data.liters || 0);
+        const currentFuel = await getVehicleCurrentFuel(tx, vehicle);
+        ensureFuelWithinBounds(currentFuel + quantity, vehicle);
 
-        if (quantity > 0) {
-            await tx.diesel_stock.update({
-                where: { diesel_master_id: master.id },
-                data: { available_quantity: { increment: quantity } }
-            });
-        }
+        await tx.diesel_stock.update({
+            where: { diesel_master_id: master.id },
+            data: { available_quantity: { increment: quantity } }
+        });
 
         const record = await tx.diesel_stock_transactions.create({
             data: {
                 diesel_master_id: master.id,
-                transaction_type: 'ADD',
+                ...(vehicle.id ? { diesel_vehicle_id: vehicle.id } : {}),
+                transaction_type: 'REFILL',
                 quantity: quantity,
                 reference_type: 'INVENTORY_ENTRY',
-                vehicle_name: data.vehicle_name,
+                vehicle_name: vehicle.vehicle_number,
                 supervisor_name: data.supervisor_name,
                 amount: data.amount ? parseFloat(data.amount) : null,
                 bill_url: data.bill_url,
@@ -757,23 +1225,64 @@ export const addDieselRecord = async (data, userId) => {
             vehicle_name: record.vehicle_name,
             purchase_date: record.created_at,
             amount: record.amount,
-            liters: record.quantity
+            liters: record.quantity,
+            truck_type: vehicle.truck_type,
+            tank_capacity: vehicle.tank_capacity
         };
     });
 };
 
 export const updateDieselRecord = async (id, data) => {
+    await ensureInventorySchema();
     return await prisma.$transaction(async (tx) => {
         const record = await tx.diesel_stock_transactions.findUnique({ where: { id: parseInt(id) } });
         if (!record) throw new Error('Diesel record not found');
+        if (record.reference_type !== 'INVENTORY_ENTRY') {
+            throw new Error('Govt bore synced diesel records must be updated from the govt bore record.');
+        }
 
-        const oldQuantity = parseFloat(record.quantity);
-        const newQuantity = parseFloat(data.liters || oldQuantity);
+        const oldQuantity = parseDecimal(record.quantity, 0);
+        const newQuantity = data.liters !== undefined && data.liters !== null && data.liters !== ''
+            ? parseDecimal(data.liters, 0)
+            : oldQuantity;
+
+        if (newQuantity < 0) {
+            throw new Error('Liters cannot be negative.');
+        }
+
+        const existingVehicle = record.diesel_vehicle_id
+            ? (await tx.diesel_vehicle_master.findUnique({ where: { id: record.diesel_vehicle_id } }).catch(() => null))
+            : await resolveMappedDieselVehicle(tx, record.vehicle_name, { required: false });
+        const nextVehicleInput = data.truck_type || data.vehicle_name || record.vehicle_name;
+        const nextVehicle = await resolveMappedDieselVehicle(tx, nextVehicleInput, { required: true });
+
+        if (!existingVehicle) {
+            throw new Error('Existing diesel record is not linked to a configured vehicle. Update is not allowed.');
+        }
+
+        if (existingVehicle.id === nextVehicle.id) {
+            const currentFuel = await getVehicleCurrentFuel(tx, existingVehicle);
+            ensureFuelWithinBounds(currentFuel - oldQuantity + newQuantity, existingVehicle);
+        } else {
+            const currentOldVehicleFuel = await getVehicleCurrentFuel(tx, existingVehicle);
+            const currentNextVehicleFuel = await getVehicleCurrentFuel(tx, nextVehicle);
+            ensureFuelWithinBounds(currentOldVehicleFuel - oldQuantity, existingVehicle);
+            ensureFuelWithinBounds(currentNextVehicleFuel + newQuantity, nextVehicle);
+        }
+
         const difference = newQuantity - oldQuantity;
+        const master = await getOrCreateDieselMaster(tx);
 
-        if (difference !== 0) {
+        if (difference > 0.0001) {
+            const globalAvailable = await getGlobalDieselAvailable(tx, master.id);
+            if (globalAvailable + 0.0001 < difference) {
+                throw new Error(`Insufficient main diesel stock. Available ${globalAvailable.toFixed(2)} L, required ${difference.toFixed(2)} L.`);
+            }
+        }
+
+        if (Math.abs(difference) > 0.0001) {
             await tx.diesel_stock.update({
-                where: { diesel_master_id: record.diesel_master_id },
+                where: { diesel_master_id: master.id },
                 data: { available_quantity: { increment: difference } }
             });
         }
@@ -781,7 +1290,8 @@ export const updateDieselRecord = async (id, data) => {
         const updated = await tx.diesel_stock_transactions.update({
             where: { id: record.id },
             data: {
-                vehicle_name: data.vehicle_name,
+                ...(nextVehicle.id ? { diesel_vehicle_id: nextVehicle.id } : {}),
+                vehicle_name: nextVehicle.vehicle_number,
                 supervisor_name: data.supervisor_name,
                 amount: data.amount ? parseFloat(data.amount) : record.amount,
                 quantity: newQuantity,
@@ -796,20 +1306,200 @@ export const updateDieselRecord = async (id, data) => {
 };
 
 export const deleteDieselRecord = async (id) => {
+    await ensureInventorySchema();
     return await prisma.$transaction(async (tx) => {
         const record = await tx.diesel_stock_transactions.findUnique({ where: { id: parseInt(id) } });
         if (!record) throw new Error('Diesel record not found');
+        if (record.reference_type !== 'INVENTORY_ENTRY') {
+            throw new Error('Govt bore synced diesel records must be removed from the govt bore record.');
+        }
+
+        const quantity = parseDecimal(record.quantity, 0);
+        const vehicle = record.diesel_vehicle_id
+            ? (await tx.diesel_vehicle_master.findUnique({ where: { id: record.diesel_vehicle_id } }).catch(() => null))
+            : await resolveMappedDieselVehicle(tx, record.vehicle_name, { required: false });
+
+        if (!vehicle) {
+            throw new Error('Diesel record is not linked to a configured vehicle. Delete is not allowed.');
+        }
+
+        const currentFuel = await getVehicleCurrentFuel(tx, vehicle);
+        ensureFuelWithinBounds(currentFuel - quantity, vehicle);
+
+        const master = await getOrCreateDieselMaster(tx);
+        const globalAvailable = await getGlobalDieselAvailable(tx, master.id);
+        if (globalAvailable + 0.0001 < quantity) {
+            throw new Error(`Cannot delete record because main diesel stock would go below zero.`);
+        }
 
         await tx.diesel_stock.update({
-            where: { diesel_master_id: record.diesel_master_id },
-            data: { available_quantity: { decrement: record.quantity } }
+            where: { diesel_master_id: master.id },
+            data: { available_quantity: { decrement: quantity } }
         });
 
         return await tx.diesel_stock_transactions.delete({ where: { id: record.id } });
     });
 };
 
+export const getDieselVehicleStatus = async () => {
+    try {
+        await ensureInventorySchema();
+    } catch (error) {
+        console.warn('[Inventory - Diesel] Schema ensure failed for vehicle status API. Continuing with compatibility mode:', error.message);
+    }
+    return await prisma.$transaction(async (tx) => {
+        const vehicles = await getActiveDieselVehicles(tx);
+
+        const withStatus = await Promise.all(vehicles.map(async (vehicle) => {
+            const currentFuel = await getVehicleCurrentFuel(tx, vehicle);
+            const tankCapacity = parseDecimal(vehicle.tank_capacity, 0);
+            const safeFuel = Math.max(0, Math.min(currentFuel, tankCapacity));
+            const percentage = tankCapacity > 0 ? (safeFuel / tankCapacity) * 100 : 0;
+
+            const aliases = getVehicleAliases(vehicle);
+            const refillWhere = {
+                reference_type: { in: DIESEL_REFERENCE_TYPES },
+                transaction_type: { in: DIESEL_REFILL_TYPES },
+                OR: [
+                    { diesel_vehicle_id: vehicle.id || -1 },
+                    { vehicle_name: { in: aliases } },
+                ],
+            };
+
+            const [latestRefill, refillAggregate] = await Promise.all([
+                tx.diesel_stock_transactions.findFirst({
+                    where: refillWhere,
+                    orderBy: { created_at: 'desc' },
+                    select: { created_at: true },
+                }),
+                tx.diesel_stock_transactions.aggregate({
+                    where: refillWhere,
+                    _sum: {
+                        quantity: true,
+                        amount: true,
+                    },
+                }),
+            ]);
+
+            return {
+                id: vehicle.id || vehicle.fallback_id,
+                vehicle_number: vehicle.vehicle_number,
+                truck_type: vehicle.truck_type,
+                tank_capacity: tankCapacity,
+                current_fuel: safeFuel,
+                tank_percentage: Number(Math.max(0, Math.min(percentage, 100)).toFixed(2)),
+                latest_purchase_date: latestRefill?.created_at || null,
+                total_liters: parseDecimal(refillAggregate?._sum?.quantity, 0),
+                total_cost: parseDecimal(refillAggregate?._sum?.amount, 0),
+            };
+        }));
+
+        return withStatus;
+    });
+};
+
+export const createDieselVehicle = async (data) => {
+    await ensureInventorySchema();
+
+    const truckType = String(data.truck_type || '').trim();
+    const vehicleNumber = String(data.vehicle_number || '').trim();
+    const tankCapacity = parseDecimal(data.tank_capacity, NaN);
+
+    if (!truckType || !vehicleNumber || !Number.isFinite(tankCapacity) || tankCapacity <= 0) {
+        throw new Error('Truck type, vehicle number, and positive tank capacity are required.');
+    }
+
+    return await prisma.$transaction(async (tx) => {
+        const existing = await tx.diesel_vehicle_master.findFirst({
+            where: {
+                OR: [
+                    { vehicle_number: { equals: vehicleNumber, mode: 'insensitive' } },
+                    { truck_type: { equals: truckType, mode: 'insensitive' } },
+                ],
+            },
+        });
+
+        if (existing) {
+            throw new Error('Truck type or vehicle number already exists in diesel vehicles.');
+        }
+
+        const created = await tx.diesel_vehicle_master.create({
+            data: {
+                truck_type: truckType,
+                vehicle_number: vehicleNumber,
+                tank_capacity: tankCapacity,
+                is_active: true,
+            },
+        });
+
+        return {
+            id: created.id,
+            truck_type: created.truck_type,
+            vehicle_number: created.vehicle_number,
+            tank_capacity: parseDecimal(created.tank_capacity, 0),
+            current_fuel: 0,
+            tank_percentage: 0,
+        };
+    });
+};
+
+export const deleteDieselVehicle = async (id) => {
+    await ensureInventorySchema();
+
+    return await prisma.$transaction(async (tx) => {
+        const vehicleId = parseInt(id, 10);
+        if (!Number.isInteger(vehicleId)) {
+            throw new Error('Invalid diesel vehicle ID.');
+        }
+
+        const vehicle = await tx.diesel_vehicle_master.findUnique({
+            where: { id: vehicleId },
+        });
+
+        if (!vehicle || !vehicle.is_active) {
+            throw new Error('Diesel vehicle not found.');
+        }
+
+        const aliases = getVehicleAliases(vehicle);
+
+        const dieselTxnCount = await tx.diesel_stock_transactions.count({
+            where: {
+                OR: [
+                    { diesel_vehicle_id: vehicle.id },
+                    { vehicle_name: { in: aliases } },
+                ],
+            },
+        });
+
+        const govtBoreCount = await tx.borewellWork.count({
+            where: {
+                OR: aliases.map((alias) => ({ vehicle: { equals: alias, mode: 'insensitive' } })),
+            },
+        });
+
+        const privateBoreCount = tx.borewell_data?.count
+            ? await tx.borewell_data.count({
+                where: {
+                    OR: aliases.map((alias) => ({ vehicle_name: { equals: alias, mode: 'insensitive' } })),
+                },
+            })
+            : 0;
+
+        if (dieselTxnCount > 0 || govtBoreCount > 0 || privateBoreCount > 0) {
+            throw new Error('This truck cannot be deleted because it has related diesel transactions or bore records.');
+        }
+
+        await tx.diesel_vehicle_master.update({
+            where: { id: vehicle.id },
+            data: { is_active: false },
+        });
+
+        return { success: true };
+    });
+};
+
 export const getDieselSummary = async (startDate, endDate) => {
+    await ensureInventorySchema();
     const whereClause = {
         reference_type: 'INVENTORY_ENTRY',
         created_at: { gte: new Date(startDate), lte: new Date(endDate) }
@@ -882,21 +1572,31 @@ export const getInventorySummary = async () => {
     }, 0);
 
     // Spares summary
+    await ensureDefaultSpares(prisma);
     const spares = await prisma.spares_master.findMany({
         where: { is_active: true },
-        include: { stock: true }
+        include: {
+            stock: true,
+            allocations: {
+                where: { status: 'OPEN', bore_type: 'govt' }
+            }
+        }
     });
 
     let totalSpares = spares.length;
-    let sparesAvailable = 0;
-    let sparesInUse = 0;
+    let sparesStocked = 0;
+    let sparesOutOfStock = 0;
+    let sparesLowStock = 0;
     let totalSparesValue = 0;
+    let totalAllocatedSpares = 0;
     spares.forEach(s => {
         const qty = parseFloat(s.stock?.available_quantity || 0);
         const cost = parseFloat(s.cost_per_unit || 0);
         totalSparesValue += qty * cost;
-        if (qty > 0) sparesAvailable++;
-        else sparesInUse++;
+        totalAllocatedSpares += (s.allocations || []).reduce((sum, allocation) => sum + (parseFloat(allocation.issued_quantity || 0) - parseFloat(allocation.returned_quantity || 0)), 0);
+        if (qty > 0) sparesStocked++;
+        else sparesOutOfStock++;
+        if (qty > 0 && qty <= (s.reorder_level || 5)) sparesLowStock++;
     });
 
     // Diesel summary (last 30 days)
@@ -925,8 +1625,12 @@ export const getInventorySummary = async () => {
         },
         spares: {
             total: totalSpares,
-            available: sparesAvailable,
-            in_use: sparesInUse,
+            available: sparesStocked,
+            in_use: sparesOutOfStock,
+            stocked: sparesStocked,
+            out_of_stock: sparesOutOfStock,
+            low_stock: sparesLowStock,
+            total_allocated_qty: totalAllocatedSpares,
             total_value: totalSparesValue
         },
         diesel: {
@@ -947,6 +1651,7 @@ export default {
     getPipeTransactions,
     getAllSpares,
     addNewSpare,
+    addSpareStock,
     issueSpareToVehicle,
     returnSpareToHome,
     updateSpareStatus,
@@ -956,6 +1661,8 @@ export default {
     addDieselRecord,
     updateDieselRecord,
     deleteDieselRecord,
+    createDieselVehicle,
+    deleteDieselVehicle,
     getDieselSummary,
     getInventorySummary
 };

@@ -1,11 +1,213 @@
 /* DieselTracking.css — module-specific styles */
 /* Core design tokens come from InventoryPage.css */
 
+.diesel-source-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.diesel-source-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 76px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.diesel-source-badge--manual {
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--color-primary);
+}
+
+.diesel-source-badge--govt {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--color-success);
+}
+
+.diesel-source-ref {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.diesel-auto-note {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.diesel-tank-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing-4);
+}
+
+.diesel-tank-grid--1 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.diesel-tank-grid--2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.diesel-tank-grid--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.diesel-tank-grid--4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.diesel-tank-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3);
+}
+
+.diesel-tank-card__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--spacing-3);
+}
+
+.diesel-tank-card__vehicle {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+.diesel-tank-card__type {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.diesel-tank-card__pct {
+    font-size: var(--font-size-base);
+    font-weight: 800;
+    color: var(--color-primary);
+}
+
+.diesel-tank-card__bar {
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--border-color);
+    overflow: hidden;
+}
+
+.diesel-tank-card__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--color-primary);
+    transition: width 0.3s ease;
+}
+
+.diesel-tank-card__meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--spacing-2);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+
+.diesel-tank-card__meta--stack {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.diesel-fuel-bar-wrap {
+    display: block;
+    width: 100%;
+}
+
+.diesel-fuel-bar-track {
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
+    background: transparent;
+    overflow: hidden;
+}
+
+.diesel-fuel-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--color-primary);
+}
+
+.diesel-tank-card__fuel-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--spacing-2);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+
+.diesel-tank-card__fuel-value {
+    font-weight: 600;
+}
+
+.diesel-fuel-bar-text {
+    min-width: 42px;
+    text-align: right;
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.diesel-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: var(--spacing-6);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+}
+
+@media (max-width: 1400px) {
+    .diesel-tank-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .diesel-tank-grid--4 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 1100px) {
+    .diesel-tank-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    .diesel-tank-grid {
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+    }
+}
+
 /* Responsive: hide price/L on very small screens */
 @media (max-width: 700px) {
 
-    .inv-table thead th:nth-child(6),
-    .inv-table tbody td:nth-child(6) {
+    .inv-table thead th:nth-child(7),
+    .inv-table tbody td:nth-child(7) {
         display: none;
     }
 }

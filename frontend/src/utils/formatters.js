@@ -82,3 +82,20 @@ export const getTodayDate = () => {
 export const getDateDaysAgo = (days) => {
     return getDateDaysAgoIST(days);
 };
+
+/**
+ * Format truck type for UI display (e.g. 4 1/2 -> 4 ½)
+ * Keeps database/source values unchanged and only normalizes rendered text.
+ */
+export const formatTruckTypeDisplay = (value) => {
+    if (value === null || value === undefined) return value;
+
+    const raw = String(value);
+
+    return raw
+        .replace(/\b(\d+)\s*1\/2\b/gi, '$1 ½')
+        .replace(/\b(\d+)1\/2\b/gi, '$1 ½')
+        .replace(/\btyre\b/gi, 'Tyre')
+        .replace(/\s+/g, ' ')
+        .trim();
+};

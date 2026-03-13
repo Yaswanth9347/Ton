@@ -1,4 +1,5 @@
 import db from '../models/db.js';
+import { DEFAULT_GOVT_SPARE_MATERIALS } from '../constants/defaultSpareMaterials.js';
 
 let inventorySchemaReady = false;
 let inventorySchemaPromise = null;
@@ -123,6 +124,26 @@ const inventorySchemaStatements = [
         supervisor_name VARCHAR(100)
     )
     `,
+      `
+      CREATE TABLE IF NOT EXISTS spare_bore_allocations (
+        id SERIAL PRIMARY KEY,
+        spare_master_id INTEGER NOT NULL REFERENCES spares_master(id) ON DELETE CASCADE,
+        bore_type VARCHAR(20) NOT NULL,
+        private_bore_id INTEGER REFERENCES borewell_data(id) ON DELETE CASCADE,
+        govt_bore_id INTEGER REFERENCES "BorewellWork"(id) ON DELETE CASCADE,
+        issued_quantity DECIMAL(10,2) NOT NULL DEFAULT 0,
+        returned_quantity DECIMAL(10,2) NOT NULL DEFAULT 0,
+        status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+        auto_created BOOLEAN NOT NULL DEFAULT false,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT chk_spare_bore_allocation_one_bore CHECK (
+          (private_bore_id IS NOT NULL AND govt_bore_id IS NULL AND bore_type = 'private') OR
+          (private_bore_id IS NULL AND govt_bore_id IS NOT NULL AND bore_type = 'govt')
+        )
+      )
+      `,
     `
     CREATE TABLE IF NOT EXISTS diesel_master (
         id SERIAL PRIMARY KEY,
@@ -160,6 +181,37 @@ const inventorySchemaStatements = [
     )
     `,
     `
+    CREATE TABLE IF NOT EXISTS diesel_vehicle_master (
+        id SERIAL PRIMARY KEY,
+        vehicle_number VARCHAR(100) NOT NULL UNIQUE,
+        truck_type VARCHAR(50) NOT NULL,
+        tank_capacity DECIMAL(10,2) NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    `,
+    `
+    ALTER TABLE diesel_stock_transactions
+      ADD COLUMN IF NOT EXISTS diesel_vehicle_id INTEGER
+    `,
+    `
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE table_schema = 'public'
+          AND table_name = 'diesel_stock_transactions'
+          AND constraint_name = 'fk_diesel_stock_transactions_vehicle_id'
+      ) THEN
+        ALTER TABLE diesel_stock_transactions
+          ADD CONSTRAINT fk_diesel_stock_transactions_vehicle_id
+          FOREIGN KEY (diesel_vehicle_id) REFERENCES diesel_vehicle_master(id) ON DELETE SET NULL;
+      END IF;
+    END $$
+    `,
+    `
     ALTER TABLE borewell_data
       ADD COLUMN IF NOT EXISTS pipe_inventory_id INTEGER
     `,
@@ -195,6 +247,26 @@ const inventorySchemaStatements = [
     `,
     `
     ALTER TABLE spares_master ADD COLUMN IF NOT EXISTS reorder_level INTEGER DEFAULT 5
+    `,
+    `
+    ALTER TABLE spares_master
+      ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP,
+      ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP
+    `,
+    `
+    UPDATE spares_master
+    SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+        updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+    WHERE created_at IS NULL OR updated_at IS NULL
+    `,
+    `
+    ALTER TABLE spares_stock
+      ALTER COLUMN last_updated_at SET DEFAULT CURRENT_TIMESTAMP
+    `,
+    `
+    UPDATE spares_stock
+    SET last_updated_at = COALESCE(last_updated_at, CURRENT_TIMESTAMP)
+    WHERE last_updated_at IS NULL
     `,
     `
     ALTER TABLE spares_stock_transactions
@@ -246,7 +318,26 @@ const inventorySchemaStatements = [
     CREATE INDEX IF NOT EXISTS idx_spares_stock_transactions_created_at ON spares_stock_transactions(created_at DESC)
     `,
     `
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_spare_bore_allocations_spare_bore
+      ON spare_bore_allocations (spare_master_id, COALESCE(private_bore_id, 0), COALESCE(govt_bore_id, 0))
+    `,
+    `
+    CREATE INDEX IF NOT EXISTS idx_spare_bore_allocations_status
+      ON spare_bore_allocations (bore_type, status)
+    `,
+    `
+    CREATE INDEX IF NOT EXISTS idx_spare_bore_allocations_private_bore
+      ON spare_bore_allocations (private_bore_id)
+    `,
+    `
+    CREATE INDEX IF NOT EXISTS idx_spare_bore_allocations_govt_bore
+      ON spare_bore_allocations (govt_bore_id)
+    `,
+    `
     CREATE INDEX IF NOT EXISTS idx_diesel_stock_transactions_created_at ON diesel_stock_transactions(created_at DESC)
+    `,
+    `
+    CREATE INDEX IF NOT EXISTS idx_diesel_stock_transactions_vehicle_id ON diesel_stock_transactions(diesel_vehicle_id)
     `,
     `
     DO $$
@@ -314,6 +405,35 @@ const inventorySchemaStatements = [
     `,
 ];
 
+const defaultSpareSeedStatements = DEFAULT_GOVT_SPARE_MATERIALS.flatMap((item) => {
+    const safeName = item.spare_name.replace(/'/g, "''");
+    const safeCategory = item.category.replace(/'/g, "''");
+    const safeUnitType = item.unit_type.replace(/'/g, "''");
+
+    return [
+        `
+      INSERT INTO spares_master (spare_name, category, unit, description, unit_type, reorder_level, is_active, created_at, updated_at)
+      VALUES ('${safeName}', '${safeCategory}', 'nos', 'Default govt bore material', '${safeUnitType}', ${Number(item.reorder_level) || 0}, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT (spare_name, category)
+        DO UPDATE SET
+            unit_type = EXCLUDED.unit_type,
+            reorder_level = EXCLUDED.reorder_level,
+        is_active = true,
+        updated_at = CURRENT_TIMESTAMP
+        `,
+        `
+        INSERT INTO spares_stock (spare_master_id, available_quantity, last_updated_at)
+        SELECT sm.id, 0, CURRENT_TIMESTAMP
+        FROM spares_master sm
+        WHERE sm.spare_name = '${safeName}'
+          AND sm.category = '${safeCategory}'
+          AND NOT EXISTS (
+            SELECT 1 FROM spares_stock ss WHERE ss.spare_master_id = sm.id
+          )
+        `,
+    ];
+});
+
 export function resetInventorySchemaCache() {
     inventorySchemaReady = false;
     inventorySchemaPromise = null;
@@ -336,6 +456,10 @@ export async function ensureInventorySchema() {
 
             for (const statement of inventorySchemaStatements) {
                 await client.query(statement);
+            }
+
+            for (const statement of defaultSpareSeedStatements) {
+              await client.query(statement);
             }
 
             await client.query('COMMIT');

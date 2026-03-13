@@ -1,14 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-    Plus, Send, RotateCcw, Wrench, CheckCircle, AlertCircle,
-    Settings, Trash2, X, Filter, ChevronLeft, ChevronRight
+    Plus, Boxes, PackagePlus, Wrench, CheckCircle, AlertCircle,
+    Trash2, X, Filter, ChevronLeft, ChevronRight, PackageSearch, Layers3
 } from 'lucide-react';
-import axios from 'axios';
 import './InventoryPage.css';
 import './SparesInventory.css';
+import { inventoryApi } from '../../../services/api';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 10;
+const INVENTORY_SUMMARY_REFRESH_EVENT = 'inventory:summary-refresh';
 
 /* ── Toast ── */
 function Toast({ type, message, onClose }) {
@@ -38,8 +38,19 @@ function ConfirmDialog({ message, onConfirm, onCancel }) {
     );
 }
 
-const STATUS_LABEL = { AVAILABLE: 'Available', IN_USE: 'In Use', MAINTENANCE: 'Maintenance' };
-const STATUS_KEY = { AVAILABLE: 'available', IN_USE: 'in_use', MAINTENANCE: 'maintenance' };
+const STATUS_LABEL = { IN_STOCK: 'In Stock', LOW_STOCK: 'Low Stock', OUT_OF_STOCK: 'Out of Stock' };
+const STATUS_KEY = { IN_STOCK: 'good', LOW_STOCK: 'low', OUT_OF_STOCK: 'critical' };
+
+const fmtQty = (value) => {
+    const qty = parseFloat(value || 0);
+    return Number.isInteger(qty) ? qty.toString() : qty.toFixed(2);
+};
+
+const fmtCurrency = (value) => {
+    const amount = parseFloat(value || 0);
+    if (!amount) return '—';
+    return `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+};
 
 export function SparesInventory() {
     const [spares, setSpares] = useState([]);
@@ -52,38 +63,68 @@ export function SparesInventory() {
     const [toast, setToast] = useState(null);
     const [confirm, setConfirm] = useState(null);
     const [txPage, setTxPage] = useState(1);
-    const [txFilters, setTxFilters] = useState({ type: 'ALL', action: 'ALL', search: '' });
+    const [txFilters, setTxFilters] = useState({ spareName: '', transactionType: '', dateFrom: '', dateTo: '' });
+    const [txPagination, setTxPagination] = useState({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 0 });
+    const [search, setSearch] = useState('');
     const [filterType, setFilterType] = useState('ALL');
     const [filterStatus, setFilterStatus] = useState('ALL');
-    const [formData, setFormData] = useState({ spare_type: 'OB', spare_number: '', vehicle_name: '', supervisor_name: '', remarks: '', brand: '', cost_per_unit: '' });
+    const [formData, setFormData] = useState({
+        spare_type: 'MATERIAL',
+        spare_number: '',
+        brand: '',
+        unit_type: 'Piece',
+        cost_per_unit: '',
+        quantity: '',
+    });
 
     const showToast = (type, msg) => setToast({ type, message: msg });
-    const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
+    const refreshSummary = () => window.dispatchEvent(new Event(INVENTORY_SUMMARY_REFRESH_EVENT));
 
     const fetchSpares = useCallback(async () => {
         try {
             const params = {};
             if (filterType !== 'ALL') params.spare_type = filterType;
             if (filterStatus !== 'ALL') params.status = filterStatus;
-            const r = await axios.get(`${API_URL}/inventory/spares`, { params, headers: authH() });
+            const r = await inventoryApi.getSpares(params);
             setSpares(r.data.data);
         } catch { /* silent */ }
     }, [filterType, filterStatus]);
 
     const fetchTxns = useCallback(async () => {
         try {
-            const r = await axios.get(`${API_URL}/inventory/spares/transactions`, { headers: authH() });
-            setTxns(r.data.data);
-        } catch { /* silent */ }
-    }, []);
+            const params = {
+                page: txPage,
+                limit: PAGE_SIZE,
+            };
+            if (txFilters.spareName) params.spare_name = txFilters.spareName;
+            if (txFilters.transactionType) params.transaction_type = txFilters.transactionType;
+            if (txFilters.dateFrom) params.start_date = txFilters.dateFrom;
+            if (txFilters.dateTo) params.end_date = txFilters.dateTo;
 
-    useEffect(() => { Promise.all([fetchSpares(), fetchTxns()]).finally(() => setLoading(false)); }, [fetchSpares, fetchTxns]);
+            const r = await inventoryApi.getSpareTransactions(params);
+            setTxns(r.data.data);
+            setTxPagination(r.data.pagination || { page: txPage, limit: PAGE_SIZE, total: r.data.data?.length || 0, totalPages: 1 });
+        } catch { /* silent */ }
+    }, [txPage, txFilters]);
+
+    useEffect(() => {
+        Promise.all([fetchSpares(), fetchTxns()]).finally(() => setLoading(false));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     useEffect(() => { fetchSpares(); }, [filterType, filterStatus]);
+    useEffect(() => { if (!loading) fetchTxns(); }, [fetchTxns, loading]);
 
     const openModal = (type, spare = null) => {
         setModalType(type);
         setSelSpare(spare);
-        setFormData({ spare_type: 'OB', spare_number: '', vehicle_name: spare?.vehicle_name || '', supervisor_name: spare?.supervisor_name || '', remarks: '', brand: '', cost_per_unit: '' });
+        setFormData({
+            spare_type: spare?.spare_type || 'MATERIAL',
+            spare_number: '',
+            brand: '',
+            unit_type: spare?.unit_type || 'Piece',
+            cost_per_unit: spare?.cost_per_unit ? String(spare.cost_per_unit) : '',
+            quantity: '',
+        });
         setShowModal(true);
     };
     const closeModal = () => { setShowModal(false); setSelSpare(null); };
@@ -92,27 +133,24 @@ export function SparesInventory() {
         e.preventDefault();
         setSubmitting(true);
         try {
-            const headers = authH();
             if (modalType === 'add') {
-                await axios.post(`${API_URL}/inventory/spares`, {
+                await inventoryApi.addSpare({
                     spare_type: formData.spare_type,
                     spare_number: formData.spare_number,
+                    unit_type: formData.unit_type,
                     brand: formData.brand || null,
                     cost_per_unit: formData.cost_per_unit ? parseFloat(formData.cost_per_unit) : 0
-                }, { headers });
-                showToast('success', `${formData.spare_type} #${formData.spare_number} added`);
-            } else if (modalType === 'issue') {
-                await axios.post(`${API_URL}/inventory/spares/${selSpare.id}/issue`,
-                    { vehicle_name: formData.vehicle_name, supervisor_name: formData.supervisor_name, remarks: formData.remarks }, { headers });
-                showToast('success', `${selSpare.spare_number} issued to ${formData.vehicle_name}`);
-            } else if (modalType === 'return') {
-                await axios.post(`${API_URL}/inventory/spares/${selSpare.id}/return`, { remarks: formData.remarks }, { headers });
-                showToast('success', `${selSpare.spare_number} returned to home`);
-            } else if (modalType === 'maintenance') {
-                await axios.patch(`${API_URL}/inventory/spares/${selSpare.id}/status`, { status: 'MAINTENANCE' }, { headers });
-                showToast('warning', `${selSpare.spare_number} marked for maintenance`);
+                });
+                showToast('success', `${formData.spare_number} added`);
+            } else if (modalType === 'stock') {
+                await inventoryApi.addSpareStock(selSpare.id, {
+                    quantity: parseFloat(formData.quantity),
+                    cost_per_unit: formData.cost_per_unit === '' ? null : parseFloat(formData.cost_per_unit),
+                });
+                showToast('success', `${selSpare.spare_number} stock updated`);
             }
             await Promise.all([fetchSpares(), fetchTxns()]);
+            refreshSummary();
             closeModal();
         } catch (err) {
             showToast('error', err.response?.data?.message || 'An error occurred');
@@ -127,9 +165,10 @@ export function SparesInventory() {
             onConfirm: async () => {
                 setConfirm(null);
                 try {
-                    await axios.delete(`${API_URL}/inventory/spares/${spare.id}`, { headers: authH() });
+                    await inventoryApi.deleteSpare(spare.id);
                     showToast('success', 'Spare deleted');
-                    fetchSpares();
+                    await Promise.all([fetchSpares(), fetchTxns()]);
+                    refreshSummary();
                 } catch (err) {
                     showToast('error', err.response?.data?.message || 'Error deleting spare');
                 }
@@ -137,33 +176,41 @@ export function SparesInventory() {
         });
     };
 
+    const stats = useMemo(() => ({
+        total: spares.length,
+        inStock: spares.filter(s => s.status === 'IN_STOCK').length,
+        lowStock: spares.filter(s => s.status === 'LOW_STOCK').length,
+        outOfStock: spares.filter(s => s.status === 'OUT_OF_STOCK').length,
+        totalUnits: spares.reduce((sum, spare) => sum + parseFloat(spare.available_quantity || 0), 0),
+        activeBores: spares.filter(s => s.active_bore_count > 0).length,
+    }), [spares]);
+
+    const filteredSpares = useMemo(() => {
+        return spares.filter((spare) => {
+            if (search) {
+                const q = search.toLowerCase();
+                const haystacks = [
+                    spare.spare_number,
+                    spare.spare_type,
+                    spare.brand,
+                    spare.active_bore_reference,
+                    ...(spare.active_bore_references || []),
+                ].filter(Boolean).map((value) => value.toLowerCase());
+
+                if (!haystacks.some((value) => value.includes(q))) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+    }, [search, spares]);
+
     if (loading) return <div className="inv-spinner"><div className="inv-spinner__ring" />Loading spares…</div>;
 
     /* Stats */
-    const stats = {
-        totalOB: spares.filter(s => s.spare_type === 'OB').length,
-        availOB: spares.filter(s => s.spare_type === 'OB' && s.status === 'AVAILABLE').length,
-        inUseOB: spares.filter(s => s.spare_type === 'OB' && s.status === 'IN_USE').length,
-        maintOB: spares.filter(s => s.spare_type === 'OB' && s.status === 'MAINTENANCE').length,
-        totalBIT: spares.filter(s => s.spare_type === 'BIT').length,
-        availBIT: spares.filter(s => s.spare_type === 'BIT' && s.status === 'AVAILABLE').length,
-        inUseBIT: spares.filter(s => s.spare_type === 'BIT' && s.status === 'IN_USE').length,
-        maintBIT: spares.filter(s => s.spare_type === 'BIT' && s.status === 'MAINTENANCE').length,
-    };
 
-    /* Filtered transactions */
-    const filtTxns = transactions.filter(tx => {
-        if (txFilters.type !== 'ALL' && tx.spare_type !== txFilters.type) return false;
-        if (txFilters.action !== 'ALL' && tx.transaction_type !== txFilters.action) return false;
-        if (txFilters.search) {
-            const q = txFilters.search.toLowerCase();
-            if (!tx.spare_number?.toLowerCase().includes(q) && !tx.vehicle_name?.toLowerCase().includes(q)) return false;
-        }
-        return true;
-    });
-
-    const totalTxPages = Math.max(1, Math.ceil(filtTxns.length / PAGE_SIZE));
-    const pageTxns = filtTxns.slice((txPage - 1) * PAGE_SIZE, txPage * PAGE_SIZE);
+    const totalTxPages = txPagination.totalPages || 0;
 
     return (
         <div>
@@ -172,29 +219,29 @@ export function SparesInventory() {
 
             {/* Stats */}
             <div className="inv-stats">
-                {/* OB Cards */}
                 <div className="inv-stat">
                     <div className="inv-stat__icon-row"><div className="inv-stat__icon inv-stat__icon--blue"><Wrench size={18} /></div></div>
-                    <div className="inv-stat__value">{stats.availOB} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/ {stats.totalOB}</span></div>
-                    <div className="inv-stat__label">OBs Available</div>
-                    <div className="inv-stat__sub">{stats.inUseOB} in use · {stats.maintOB} maintenance</div>
+                    <div className="inv-stat__value">{stats.total}</div>
+                    <div className="inv-stat__label">Spare Materials</div>
+                    <div className="inv-stat__sub">{fmtQty(stats.totalUnits)} total units in store</div>
                 </div>
                 <div className="inv-stat">
-                    <div className="inv-stat__icon-row"><div className="inv-stat__icon inv-stat__icon--green"><Settings size={18} /></div></div>
-                    <div className="inv-stat__value">{stats.availBIT} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/ {stats.totalBIT}</span></div>
-                    <div className="inv-stat__label">Bits Available</div>
-                    <div className="inv-stat__sub">{stats.inUseBIT} in use · {stats.maintBIT} maintenance</div>
+                    <div className="inv-stat__icon-row"><div className="inv-stat__icon inv-stat__icon--green"><Boxes size={18} /></div></div>
+                    <div className="inv-stat__value">{stats.inStock}</div>
+                    <div className="inv-stat__label">In Stock Items</div>
+                    <div className="inv-stat__sub">{stats.activeBores} items currently tied to active bores</div>
                 </div>
                 <div className="inv-stat">
-                    <div className="inv-stat__icon-row"><div className={`inv-stat__icon inv-stat__icon--${stats.inUseOB + stats.inUseBIT > 0 ? 'amber' : 'green'}`}><Send size={18} /></div></div>
-                    <div className="inv-stat__value">{stats.inUseOB + stats.inUseBIT}</div>
-                    <div className="inv-stat__label">Total In Use</div>
-                    <div className="inv-stat__sub">Deployed to vehicles</div>
+                    <div className="inv-stat__icon-row"><div className={`inv-stat__icon inv-stat__icon--${stats.lowStock > 0 ? 'amber' : 'green'}`}><Layers3 size={18} /></div></div>
+                    <div className="inv-stat__value">{stats.lowStock}</div>
+                    <div className="inv-stat__label">Low Stock</div>
+                    <div className="inv-stat__sub">At or below reorder level</div>
                 </div>
                 <div className="inv-stat">
-                    <div className="inv-stat__icon-row"><div className={`inv-stat__icon inv-stat__icon--${stats.maintOB + stats.maintBIT > 0 ? 'red' : 'green'}`}><AlertCircle size={18} /></div></div>
-                    <div className="inv-stat__value">{stats.maintOB + stats.maintBIT}</div>
-                    <div className="inv-stat__label">Maintenance</div>
+                    <div className="inv-stat__icon-row"><div className={`inv-stat__icon inv-stat__icon--${stats.outOfStock > 0 ? 'red' : 'green'}`}><PackageSearch size={18} /></div></div>
+                    <div className="inv-stat__value">{stats.outOfStock}</div>
+                    <div className="inv-stat__label">Out of Stock</div>
+                    <div className="inv-stat__sub">Need replenishment before bore sync can deduct</div>
                 </div>
             </div>
 
@@ -203,16 +250,23 @@ export function SparesInventory() {
                 <div className="inv-section-header">
                     <span className="inv-section-title">Spares Register</span>
                     <div style={{ display: 'flex', gap: 'var(--spacing-2)', alignItems: 'center' }}>
+                        <input
+                            type="text"
+                            className="inv-filter-input inv-filter-input--sm"
+                            placeholder="Search material or bore…"
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            style={{ minWidth: 220 }}
+                        />
                         <select className="inv-filter-input inv-filter-input--sm" value={filterType} onChange={e => setFilterType(e.target.value)} style={{ minWidth: 110 }}>
                             <option value="ALL">All Types</option>
-                            <option value="OB">OB Only</option>
-                            <option value="BIT">Bit Only</option>
+                            <option value="MATERIAL">Material</option>
                         </select>
                         <select className="inv-filter-input inv-filter-input--sm" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ minWidth: 130 }}>
                             <option value="ALL">All Status</option>
-                            <option value="AVAILABLE">Available</option>
-                            <option value="IN_USE">In Use</option>
-                            <option value="MAINTENANCE">Maintenance</option>
+                            <option value="IN_STOCK">In Stock</option>
+                            <option value="LOW_STOCK">Low Stock</option>
+                            <option value="OUT_OF_STOCK">Out of Stock</option>
                         </select>
                         <button className="inv-btn inv-btn--primary inv-btn--sm" onClick={() => openModal('add')}>
                             <Plus size={15} /> Add Spare
@@ -225,62 +279,45 @@ export function SparesInventory() {
                         <thead>
                             <tr>
                                 <th style={{ textAlign: 'center' }}>Type</th>
-                                <th style={{ textAlign: 'center' }}>Spare #</th>
-                                <th style={{ textAlign: 'center' }}>Brand</th>
-                                <th style={{ textAlign: 'center' }}>Cost</th>
+                                <th style={{ textAlign: 'center' }}>Material</th>
+                                <th style={{ textAlign: 'center' }}>Available</th>
+                                <th style={{ textAlign: 'center' }}>Unit</th>
                                 <th style={{ textAlign: 'center' }}>Status</th>
-                                <th style={{ textAlign: 'center' }}>Location</th>
-                                <th style={{ textAlign: 'center' }}>Vehicle</th>
+                                <th style={{ textAlign: 'center' }}>Value</th>
                                 <th style={{ textAlign: 'center' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {spares.length === 0 ? (
-                                <tr><td colSpan="8" className="inv-table__empty" style={{ textAlign: 'center' }}>No spares found. Add one to get started.</td></tr>
+                            {filteredSpares.length === 0 ? (
+                                <tr><td colSpan="7" className="inv-table__empty" style={{ textAlign: 'center' }}>No spares found. Add one to get started.</td></tr>
                             ) : (
-                                spares.map(spare => (
+                                filteredSpares.map(spare => (
                                     <tr key={spare.id}>
                                         <td style={{ textAlign: 'center' }}>
                                             <span style={{
                                                 display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: '0.8rem',
-                                                color: spare.spare_type === 'OB' ? 'var(--color-primary)' : 'var(--color-warning)',
-                                                background: spare.spare_type === 'OB' ? 'rgba(37,99,235,0.1)' : 'rgba(245,158,11,0.1)',
+                                                color: 'var(--color-primary)',
+                                                background: 'rgba(37,99,235,0.1)',
                                                 padding: '3px 10px', borderRadius: 'var(--radius-full)',
                                                 justifyContent: 'center'
                                             }}>
-                                                {spare.spare_type === 'OB' ? <Wrench size={12} /> : <Settings size={12} />}
+                                                <Wrench size={12} />
                                                 {spare.spare_type}
                                             </span>
                                         </td>
                                         <td style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', textAlign: 'center' }}>{spare.spare_number}</td>
-                                        <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem', textAlign: 'center' }}>{spare.brand || '—'}</td>
-                                        <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem', textAlign: 'center' }}>
-                                            {spare.cost_per_unit > 0 ? `₹${parseFloat(spare.cost_per_unit).toLocaleString('en-IN')}` : '—'}
-                                        </td>
+                                        <td style={{ fontWeight: 700, textAlign: 'center' }}>{fmtQty(spare.available_quantity)}</td>
+                                        <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem', textAlign: 'center' }}>{spare.unit_type || '—'}</td>
                                         <td style={{ textAlign: 'center' }}><span className={`status-badge status-badge--${STATUS_KEY[spare.status]}`} style={{ justifyContent: 'center' }}><span className="status-badge__dot" />{STATUS_LABEL[spare.status]}</span></td>
-                                        <td style={{ color: 'var(--text-muted)', textAlign: 'center' }}>{spare.current_location || 'HOME'}</td>
-                                        <td style={{ textAlign: 'center' }}>{spare.vehicle_name || '—'}</td>
+                                        <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem', textAlign: 'center' }}>
+                                            {fmtCurrency(spare.total_value)}
+                                        </td>
                                         <td>
                                             <div className="inv-actions" style={{ justifyContent: 'center' }}>
-                                                {spare.status === 'AVAILABLE' && (
-                                                    <button className="inv-action-btn inv-action-btn--issue" title="Issue to Vehicle" onClick={() => openModal('issue', spare)}><Send size={13} /></button>
+                                                <button className="inv-action-btn inv-action-btn--load" title="Add Stock" onClick={() => openModal('stock', spare)}><PackagePlus size={13} /></button>
+                                                {!spare.is_default && (
+                                                    <button className="inv-action-btn inv-action-btn--delete" title="Delete Spare" onClick={() => handleDelete(spare)}><Trash2 size={13} /></button>
                                                 )}
-                                                {spare.status === 'IN_USE' && (
-                                                    <button className="inv-action-btn inv-action-btn--return" title="Return to Home" onClick={() => openModal('return', spare)}><RotateCcw size={13} /></button>
-                                                )}
-                                                {spare.status !== 'MAINTENANCE' && (
-                                                    <button className="inv-action-btn inv-action-btn--maint" title="Set Maintenance" onClick={() => openModal('maintenance', spare)}><Settings size={13} /></button>
-                                                )}
-                                                {spare.status === 'MAINTENANCE' && (
-                                                    <button className="inv-action-btn inv-action-btn--return" title="Mark as Available" onClick={async () => {
-                                                        try {
-                                                            await axios.patch(`${API_URL}/inventory/spares/${spare.id}/status`, { status: 'AVAILABLE' }, { headers: authH() });
-                                                            showToast('success', `${spare.spare_number} marked as available`);
-                                                            fetchSpares();
-                                                        } catch (err) { showToast('error', err.response?.data?.message || 'Error'); }
-                                                    }}><CheckCircle size={13} /></button>
-                                                )}
-                                                <button className="inv-action-btn inv-action-btn--delete" title="Delete Spare" onClick={() => handleDelete(spare)}><Trash2 size={13} /></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -295,23 +332,31 @@ export function SparesInventory() {
             <div>
                 <div className="inv-section-header">
                     <span className="inv-section-title">Transaction History</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>{filtTxns.length} records</span>
                 </div>
-                <div className="inv-controls" style={{ marginBottom: 'var(--spacing-3)' }}>
+                <div className="inv-controls inv-controls--right" style={{ marginBottom: 'var(--spacing-3)' }}>
                     <div className="inv-filters">
                         <Filter size={15} style={{ color: 'var(--text-muted)' }} />
-                        <input type="text" className="inv-filter-input" placeholder="Search spare # or vehicle…" value={txFilters.search}
-                            onChange={e => { setTxFilters(f => ({ ...f, search: e.target.value })); setTxPage(1); }} style={{ minWidth: 200 }} />
-                        <select className="inv-filter-input" value={txFilters.type} onChange={e => { setTxFilters(f => ({ ...f, type: e.target.value })); setTxPage(1); }}>
-                            <option value="ALL">All Types</option>
-                            <option value="OB">OB</option>
-                            <option value="BIT">Bit</option>
-                        </select>
-                        <select className="inv-filter-input" value={txFilters.action} onChange={e => { setTxFilters(f => ({ ...f, action: e.target.value })); setTxPage(1); }}>
-                            <option value="ALL">All Actions</option>
+                        <input
+                            type="text"
+                            className="inv-filter-input"
+                            placeholder="Spare name..."
+                            value={txFilters.spareName}
+                            onChange={e => { setTxFilters(f => ({ ...f, spareName: e.target.value })); setTxPage(1); }}
+                            style={{ minWidth: 200 }}
+                        />
+                        <select className="inv-filter-input" value={txFilters.transactionType} onChange={e => { setTxFilters(f => ({ ...f, transactionType: e.target.value })); setTxPage(1); }}>
+                            <option value="">All Actions</option>
+                            <option value="ADD_STOCK">Add Stock</option>
                             <option value="ISSUE">Issue</option>
                             <option value="RETURN">Return</option>
                         </select>
+                        <input type="date" className="inv-filter-input" value={txFilters.dateFrom} onChange={e => { setTxFilters(f => ({ ...f, dateFrom: e.target.value })); setTxPage(1); }} />
+                        <input type="date" className="inv-filter-input" value={txFilters.dateTo} onChange={e => { setTxFilters(f => ({ ...f, dateTo: e.target.value })); setTxPage(1); }} />
+                        {(txFilters.spareName || txFilters.transactionType || txFilters.dateFrom || txFilters.dateTo) && (
+                            <button className="inv-btn inv-btn--ghost inv-btn--sm" onClick={() => { setTxFilters({ spareName: '', transactionType: '', dateFrom: '', dateTo: '' }); setTxPage(1); }}>
+                                <X size={13} /> Clear
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -321,18 +366,18 @@ export function SparesInventory() {
                             <tr>
                                 <th style={{ textAlign: 'center' }}>Date</th>
                                 <th style={{ textAlign: 'center' }}>Type</th>
-                                <th style={{ textAlign: 'center' }}>Spare #</th>
+                                <th style={{ textAlign: 'center' }}>Material</th>
                                 <th style={{ textAlign: 'center' }}>Action</th>
-                                <th style={{ textAlign: 'center' }}>Vehicle</th>
-                                <th style={{ textAlign: 'center' }}>Supervisor</th>
+                                <th style={{ textAlign: 'center' }}>Qty</th>
+                                <th style={{ textAlign: 'center' }}>Govt Bore</th>
                                 <th style={{ textAlign: 'center' }}>Remarks</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {pageTxns.length === 0 ? (
+                            {transactions.length === 0 ? (
                                 <tr><td colSpan="7" className="inv-table__empty" style={{ textAlign: 'center' }}>No transactions found.</td></tr>
                             ) : (
-                                pageTxns.map(tx => (
+                                transactions.map(tx => (
                                     <tr key={tx.id}>
                                         <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem', textAlign: 'center' }}>
                                             {new Date(tx.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -340,8 +385,8 @@ export function SparesInventory() {
                                         <td style={{ textAlign: 'center' }}>{tx.spare_type}</td>
                                         <td style={{ fontWeight: 600, textAlign: 'center' }}>{tx.spare_number}</td>
                                         <td style={{ textAlign: 'center' }}><span className={`status-badge status-badge--${tx.transaction_type.toLowerCase()}`} style={{ justifyContent: 'center' }}>{tx.transaction_type}</span></td>
-                                        <td style={{ textAlign: 'center' }}>{tx.vehicle_name || '—'}</td>
-                                        <td style={{ textAlign: 'center' }}>{tx.supervisor_name || '—'}</td>
+                                        <td style={{ textAlign: 'center' }}>{fmtQty(tx.quantity)}</td>
+                                        <td style={{ textAlign: 'center' }}>{tx.bore_reference || '—'}</td>
                                         <td style={{ color: 'var(--text-muted)', textAlign: 'center' }}>{tx.remarks || '—'}</td>
                                     </tr>
                                 ))
@@ -350,7 +395,7 @@ export function SparesInventory() {
                     </table>
                     {totalTxPages > 1 && (
                         <div className="inv-pagination">
-                            <span>Showing {(txPage - 1) * PAGE_SIZE + 1}–{Math.min(txPage * PAGE_SIZE, filtTxns.length)} of {filtTxns.length}</span>
+                            <span>Showing {(txPage - 1) * PAGE_SIZE + 1}–{Math.min(txPage * PAGE_SIZE, txPagination.total)} of {txPagination.total}</span>
                             <div className="inv-pagination__btns">
                                 <button className="inv-pagination__btn" onClick={() => setTxPage(p => Math.max(1, p - 1))} disabled={txPage === 1}><ChevronLeft size={13} /></button>
                                 {Array.from({ length: Math.min(5, totalTxPages) }, (_, i) => {
@@ -371,9 +416,7 @@ export function SparesInventory() {
                         <div className="inv-modal__header">
                             <span className="inv-modal__title">
                                 {modalType === 'add' && <><Plus size={16} /> Add New Spare</>}
-                                {modalType === 'issue' && <><Send size={16} /> Issue Spare to Vehicle</>}
-                                {modalType === 'return' && <><RotateCcw size={16} /> Return Spare to Home</>}
-                                {modalType === 'maintenance' && <><Settings size={16} /> Set to Maintenance</>}
+                                {modalType === 'stock' && <><PackagePlus size={16} /> Add Spare Stock</>}
                             </span>
                             <button className="inv-modal__close" onClick={closeModal}>×</button>
                         </div>
@@ -384,13 +427,13 @@ export function SparesInventory() {
                                         <div className="inv-form-group">
                                             <label>Spare Type *</label>
                                             <select value={formData.spare_type} onChange={e => setFormData(f => ({ ...f, spare_type: e.target.value }))} required>
-                                                <option value="OB">OB (Outer Barrel)</option>
-                                                <option value="BIT">Bit</option>
+                                                <option value="MATERIAL">Material</option>
+                                                <option value="CUSTOM">Custom</option>
                                             </select>
                                         </div>
                                         <div className="inv-form-group">
-                                            <label>Spare Number *</label>
-                                            <input type="text" value={formData.spare_number} onChange={e => setFormData(f => ({ ...f, spare_number: e.target.value }))} placeholder="e.g. OB-001" required />
+                                            <label>Spare Name *</label>
+                                            <input type="text" value={formData.spare_number} onChange={e => setFormData(f => ({ ...f, spare_number: e.target.value }))} placeholder="e.g. Bore Cap" required />
                                         </div>
                                         <div className="inv-form-row">
                                             <div className="inv-form-group">
@@ -402,56 +445,46 @@ export function SparesInventory() {
                                                 <input type="number" step="0.01" min="0" value={formData.cost_per_unit} onChange={e => setFormData(f => ({ ...f, cost_per_unit: e.target.value }))} placeholder="0.00" />
                                             </div>
                                         </div>
+                                        <div className="inv-form-row">
+                                            <div className="inv-form-group">
+                                                <label>Unit Type</label>
+                                                <input type="text" value={formData.unit_type} onChange={e => setFormData(f => ({ ...f, unit_type: e.target.value }))} placeholder="Piece / Unit / Set" />
+                                            </div>
+                                        </div>
                                     </>
                                 )}
-                                {(modalType === 'issue' || modalType === 'return' || modalType === 'maintenance') && (
+                                {modalType === 'stock' && (
                                     <div className="inv-form-group">
                                         <label>Spare</label>
                                         <input type="text" value={`${selSpare?.spare_type} — ${selSpare?.spare_number}`} disabled />
                                     </div>
                                 )}
-                                {modalType === 'issue' && (
+                                {modalType === 'stock' && (
                                     <>
                                         <div className="inv-form-row">
                                             <div className="inv-form-group">
-                                                <label>Vehicle Name *</label>
-                                                <input type="text" value={formData.vehicle_name} onChange={e => setFormData(f => ({ ...f, vehicle_name: e.target.value }))} placeholder="e.g. TN 01 AB 1234" required />
+                                                <label>Current Available</label>
+                                                <input type="text" value={fmtQty(selSpare?.available_quantity)} disabled />
                                             </div>
                                             <div className="inv-form-group">
-                                                <label>Supervisor</label>
-                                                <input type="text" value={formData.supervisor_name} onChange={e => setFormData(f => ({ ...f, supervisor_name: e.target.value }))} placeholder="Name" />
+                                                <label>Add Quantity *</label>
+                                                <input type="number" step="0.01" min="0.01" value={formData.quantity} onChange={e => setFormData(f => ({ ...f, quantity: e.target.value }))} placeholder="0.00" required />
                                             </div>
                                         </div>
                                         <div className="inv-form-group">
-                                            <label>Remarks</label>
-                                            <textarea value={formData.remarks} onChange={e => setFormData(f => ({ ...f, remarks: e.target.value }))} rows={2} placeholder="Optional notes…" />
-                                        </div>
-                                    </>
-                                )}
-                                {(modalType === 'return' || modalType === 'maintenance') && (
-                                    <>
-                                        {selSpare?.vehicle_name && (
-                                            <div className="inv-form-group">
-                                                <label>Current Vehicle</label>
-                                                <input type="text" value={selSpare.vehicle_name} disabled />
-                                            </div>
-                                        )}
-                                        <div className="inv-form-group">
-                                            <label>Remarks{modalType === 'maintenance' ? ' / Reason' : ''}</label>
-                                            <textarea value={formData.remarks} onChange={e => setFormData(f => ({ ...f, remarks: e.target.value }))} rows={2} placeholder="Optional notes…" />
+                                            <label>Cost</label>
+                                            <input type="number" step="0.01" min="0" value={formData.cost_per_unit} onChange={e => setFormData(f => ({ ...f, cost_per_unit: e.target.value }))} placeholder="0.00" />
                                         </div>
                                     </>
                                 )}
                             </div>
                             <div className="inv-modal__footer">
                                 <button type="button" className="inv-btn inv-btn--ghost" onClick={closeModal}>Cancel</button>
-                                <button type="submit" className={`inv-btn ${modalType === 'maintenance' || modalType === 'return' ? 'inv-btn--primary' : 'inv-btn--primary'}`} disabled={submitting}>
+                                <button type="submit" className="inv-btn inv-btn--primary" disabled={submitting}>
                                     {submitting ? 'Saving…' : (
                                         <>
                                             {modalType === 'add' && 'Add Spare'}
-                                            {modalType === 'issue' && 'Issue Spare'}
-                                            {modalType === 'return' && 'Return Spare'}
-                                            {modalType === 'maintenance' && 'Confirm Maintenance'}
+                                            {modalType === 'stock' && 'Add Stock'}
                                         </>
                                     )}
                                 </button>
@@ -463,3 +496,5 @@ export function SparesInventory() {
         </div>
     );
 }
+
+export default SparesInventory;

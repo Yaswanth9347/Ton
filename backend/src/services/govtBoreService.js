@@ -9,6 +9,8 @@
 import prisma from '../config/prisma.js';
 import { ensureGovtBoreSchema, hasPipeCompanyColumn } from '../utils/ensureGovtBoreSchema.js';
 import { releaseBorePipeAllocations, syncGovtBorePipeInventory } from './pipeAllocationService.js';
+import { releaseBoreSpareAllocations, syncGovtBoreSpareInventory } from './spareAllocationService.js';
+import { releaseGovtBoreDieselAllocation, syncGovtBoreDieselInventory } from './dieselSyncService.js';
 
 // Safe numeric parsers: return null for empty/invalid values, undefined for missing keys.
 // Prevents NaN from reaching Prisma which would crash the query.
@@ -307,6 +309,10 @@ function buildCreateData(data, mandalId, villageId, includePipeCols) {
     stand_rate: data.stand_rate ? parseFloat(data.stand_rate) : null,
     stand_amount: data.stand_amount ? parseFloat(data.stand_amount) : null,
 
+    diesel_liters: data.diesel_liters ? parseFloat(data.diesel_liters) : null,
+    diesel_rate: data.diesel_rate ? parseFloat(data.diesel_rate) : null,
+    diesel_amount: data.diesel_amount ? parseFloat(data.diesel_amount) : null,
+
     head_handle_qty: data.head_handle_qty ? parseInt(data.head_handle_qty) : null,
     head_handle_rate: data.head_handle_rate ? parseFloat(data.head_handle_rate) : null,
     head_handle_amount: data.head_handle_amount ? parseFloat(data.head_handle_amount) : null,
@@ -426,6 +432,10 @@ function buildUpdateData(data, includePipeCols) {
     stand_qty: data.stand_qty !== undefined ? parseInt(data.stand_qty) : undefined,
     stand_rate: data.stand_rate !== undefined ? parseFloat(data.stand_rate) : undefined,
     stand_amount: data.stand_amount !== undefined ? parseFloat(data.stand_amount) : undefined,
+
+    diesel_liters: safeFloat(data.diesel_liters),
+    diesel_rate: safeFloat(data.diesel_rate),
+    diesel_amount: safeFloat(data.diesel_amount),
 
     head_handle_qty: data.head_handle_qty !== undefined ? parseInt(data.head_handle_qty) : undefined,
     head_handle_rate: data.head_handle_rate !== undefined ? parseFloat(data.head_handle_rate) : undefined,
@@ -549,12 +559,17 @@ export const createRecord = async (data, userId = null) => {
       const workId = await prisma.$transaction(async (tx) => {
         const { mandal, village } = await findOrCreateLocation(tx, mandalName, villageName);
         const work = await tx.borewellWork.create({ data: buildCreateData(data, mandal.id, village.id, true) });
+        const record = await tx.borewellWork.findUnique({
+          where: { id: work.id },
+          include: { mandal: true, village: true, pipe_company_ref: true, pipe_inventory_ref: true }
+        });
+        await syncGovtBorePipeInventory({ tx, currentRecord: record, createdBy: userId });
+        await syncGovtBoreSpareInventory({ tx, currentRecord: record, createdBy: userId });
+        await syncGovtBoreDieselInventory({ tx, currentRecord: record, createdBy: userId });
         return work.id;
       });
 
-      const record = await getRecordById(workId);
-      await syncGovtBorePipeInventory({ currentRecord: record, createdBy: userId });
-      return record;
+      return await getRecordById(workId);
     } catch (error) {
       if (!isMissingColumnError(error)) throw error;
       console.warn('Govt bores create fallback (P2022): falling back to raw SQL');
@@ -585,6 +600,8 @@ export const createRecord = async (data, userId = null) => {
 
   const record = await getRecordByIdFallback(inserted[0].id);
   await syncGovtBorePipeInventory({ currentRecord: record, createdBy: userId });
+  await syncGovtBoreSpareInventory({ currentRecord: record, createdBy: userId });
+  await syncGovtBoreDieselInventory({ currentRecord: record, createdBy: userId });
   return record;
 };
 
@@ -621,12 +638,14 @@ export const updateRecord = async (id, data, userId = null) => {
           include: { mandal: true, village: true, pipe_company_ref: true, pipe_inventory_ref: true }
         });
 
+        await syncGovtBorePipeInventory({ tx, currentRecord: record, previousRecord, createdBy: userId });
+        await syncGovtBoreSpareInventory({ tx, currentRecord: record, previousRecord, createdBy: userId });
+        await syncGovtBoreDieselInventory({ tx, currentRecord: record, previousRecord, createdBy: userId });
+
         return record.id;
       });
 
-      const record = await getRecordById(updatedId);
-      await syncGovtBorePipeInventory({ currentRecord: record, previousRecord, createdBy: userId });
-      return record;
+      return await getRecordById(updatedId);
     } catch (error) {
       if (!isMissingColumnError(error)) throw error;
       console.warn('Govt bores update fallback (P2022): falling back to raw SQL');
@@ -652,6 +671,8 @@ export const updateRecord = async (id, data, userId = null) => {
   if (Object.keys(updateData).length === 0) {
     const record = await getRecordByIdFallback(workId);
     await syncGovtBorePipeInventory({ currentRecord: record, previousRecord, createdBy: userId });
+    await syncGovtBoreSpareInventory({ currentRecord: record, previousRecord, createdBy: userId });
+    await syncGovtBoreDieselInventory({ currentRecord: record, previousRecord, createdBy: userId });
     return record;
   }
 
@@ -671,6 +692,8 @@ export const updateRecord = async (id, data, userId = null) => {
 
   const record = await getRecordByIdFallback(workId);
   await syncGovtBorePipeInventory({ currentRecord: record, previousRecord, createdBy: userId });
+  await syncGovtBoreSpareInventory({ currentRecord: record, previousRecord, createdBy: userId });
+  await syncGovtBoreDieselInventory({ currentRecord: record, previousRecord, createdBy: userId });
   return record;
 };
 
@@ -686,6 +709,19 @@ export const deleteRecord = async (id, userId = null) => {
       boreId: workId,
       createdBy: userId,
       remarks: `Auto-returned to store after deleting govt bore #${workId}`
+    });
+    await releaseBoreSpareAllocations({
+      tx,
+      boreType: 'govt',
+      boreId: workId,
+      createdBy: userId,
+      remarks: `Auto-restored spare stock after deleting govt bore #${workId}`
+    });
+    await releaseGovtBoreDieselAllocation({
+      tx,
+      boreId: workId,
+      createdBy: userId,
+      remarks: `Auto-restored diesel stock after deleting govt bore #${workId}`
     });
 
     // Delete related bill if exists

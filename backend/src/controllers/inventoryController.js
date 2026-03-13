@@ -174,14 +174,19 @@ export const getPipeTransactions = async (req, res, next) => {
         const filters = {
             startDate: req.query.start_date,
             endDate: req.query.end_date,
-            transactionType: req.query.transaction_type
+            transactionType: req.query.transaction_type,
+            company: req.query.company,
+            size: req.query.size,
+            page: req.query.page,
+            limit: req.query.limit,
         };
 
-        const transactions = await inventoryService.getPipeTransactions(filters);
+        const result = await inventoryService.getPipeTransactions(filters);
 
         res.json({
             status: 'success',
-            data: transactions
+            data: result.records,
+            pagination: result.pagination,
         });
     } catch (error) {
         next(error);
@@ -335,27 +340,38 @@ export const createSpare = async (req, res, next) => {
     }
 };
 
-export const issueSpare = async (req, res, next) => {
+export const addSpareStock = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { vehicle_name, supervisor_name, remarks } = req.body;
+        const { quantity } = req.body;
 
-        if (!vehicle_name) {
+        if (!quantity || parseFloat(quantity) <= 0) {
             return res.status(400).json({
                 status: 'fail',
-                message: 'Vehicle name is required'
+                message: 'Stock quantity must be greater than 0'
             });
         }
 
-        const spare = await inventoryService.issueSpareToVehicle(
-            parseInt(id),
-            { vehicle_name, supervisor_name, remarks },
-            req.user.id
-        );
+        const spare = await inventoryService.addSpareStock(parseInt(id), req.body, req.user.id);
 
         res.json({
             status: 'success',
-            message: 'Spare issued successfully',
+            message: 'Spare stock updated successfully',
+            data: spare
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const issueSpare = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const spare = await inventoryService.issueSpareToVehicle(parseInt(id), req.body, req.user.id);
+
+        res.json({
+            status: 'success',
+            message: 'Spare updated successfully',
             data: spare
         });
     } catch (error) {
@@ -366,17 +382,11 @@ export const issueSpare = async (req, res, next) => {
 export const returnSpare = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { remarks } = req.body;
-
-        const spare = await inventoryService.returnSpareToHome(
-            parseInt(id),
-            { remarks },
-            req.user.id
-        );
+        const spare = await inventoryService.returnSpareToHome(parseInt(id), req.body, req.user.id);
 
         res.json({
             status: 'success',
-            message: 'Spare returned successfully',
+            message: 'Spare updated successfully',
             data: spare
         });
     } catch (error) {
@@ -439,12 +449,22 @@ export const deleteSpare = async (req, res) => {
 
 export const getSparesTransactions = async (req, res, next) => {
     try {
-        const spareId = req.query.spare_id ? parseInt(req.query.spare_id) : null;
-        const transactions = await inventoryService.getSparesTransactions(spareId);
+        const options = {
+            spareId: req.query.spare_id,
+            spareName: req.query.spare_name,
+            transactionType: req.query.transaction_type,
+            startDate: req.query.start_date,
+            endDate: req.query.end_date,
+            page: req.query.page,
+            limit: req.query.limit,
+        };
+
+        const result = await inventoryService.getSparesTransactions(options);
 
         res.json({
             status: 'success',
-            data: transactions
+            data: result.records,
+            pagination: result.pagination,
         });
     } catch (error) {
         next(error);
@@ -460,15 +480,20 @@ export const getDieselRecords = async (req, res, next) => {
         const filters = {
             startDate: req.query.start_date,
             endDate: req.query.end_date,
-            vehicle: req.query.vehicle,
-            supervisor: req.query.supervisor
+            truckType: req.query.truck_type,
+            vehicleNumber: req.query.vehicle_number,
+            transactionType: req.query.transaction_type,
+            supervisor: req.query.supervisor,
+            page: req.query.page,
+            limit: req.query.limit,
         };
 
-        const records = await inventoryService.getAllDieselRecords(filters);
+        const result = await inventoryService.getAllDieselRecords(filters);
 
         res.json({
             status: 'success',
-            data: records
+            data: result.records,
+            pagination: result.pagination,
         });
     } catch (error) {
         next(error);
@@ -477,12 +502,12 @@ export const getDieselRecords = async (req, res, next) => {
 
 export const createDieselRecord = async (req, res, next) => {
     try {
-        const { vehicle_name, purchase_date, amount } = req.body;
+        const { truck_type, vehicle_name, purchase_date, amount, liters } = req.body;
 
-        if (!vehicle_name || !purchase_date || !amount) {
+        if ((!truck_type && !vehicle_name) || !purchase_date || !amount || !liters || parseFloat(liters) <= 0) {
             return res.status(400).json({
                 status: 'fail',
-                message: 'Vehicle name, purchase date, and amount are required'
+                message: 'Truck type or vehicle, purchase date, amount, and positive liters are required'
             });
         }
 
@@ -562,6 +587,70 @@ export const getDieselSummary = async (req, res, next) => {
         });
     } catch (error) {
         next(error);
+    }
+};
+
+export const getDieselVehicleStatus = async (req, res, next) => {
+    try {
+        const vehicles = await inventoryService.getDieselVehicleStatus();
+
+        res.json({
+            status: 'success',
+            data: vehicles,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const createDieselVehicle = async (req, res) => {
+    try {
+        const { truck_type, vehicle_number, tank_capacity } = req.body;
+
+        if (!truck_type || !vehicle_number || !tank_capacity || parseFloat(tank_capacity) <= 0) {
+            return res.status(400).json({
+                status: 'fail',
+                message: 'Truck type, vehicle number, and positive tank capacity are required'
+            });
+        }
+
+        const vehicle = await inventoryService.createDieselVehicle(req.body);
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Diesel vehicle added successfully',
+            data: vehicle,
+        });
+    } catch (error) {
+        res.status(400).json({
+            status: 'fail',
+            message: error.message || 'Failed to add diesel vehicle'
+        });
+    }
+};
+
+export const deleteDieselVehicle = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!id) {
+            return res.status(400).json({
+                status: 'fail',
+                message: 'ID is required',
+            });
+        }
+
+        await inventoryService.deleteDieselVehicle(id);
+
+        res.json({
+            status: 'success',
+            message: 'Diesel vehicle deleted successfully',
+        });
+    } catch (error) {
+        res.status(400).json({
+            status: 'fail',
+            message: error.message || 'Failed to delete diesel vehicle',
+        });
     }
 };
 

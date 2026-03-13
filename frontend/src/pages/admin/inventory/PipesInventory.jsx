@@ -1,16 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
     Plus, Minus, RotateCcw, TrendingUp, TrendingDown,
-    Package, AlertTriangle, Filter, Trash2, X, CheckCircle, AlertCircle
+    Package, AlertTriangle, Filter, Trash2, X, CheckCircle, AlertCircle, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../../../context/AuthContext';
+import { formatTruckTypeDisplay } from '../../../utils/formatters';
 import './InventoryPage.css';
 import './PipesInventory.css';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 const FEET_PER_PIPE = 20;
-const VISIBLE_TRANSACTION_ROWS = 10;
+const TX_PAGE_SIZE = 10;
 const INVENTORY_SUMMARY_REFRESH_EVENT = 'inventory:summary-refresh';
 
 /* ── Conversion helpers ── */
@@ -47,18 +48,7 @@ const formatVehicleDisplay = (value) => {
     const raw = value?.trim();
     if (!raw) return '—';
 
-    const normalized = raw
-        .replace(/½/g, '1/2')
-        .replace(/["“”]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-    if (/^4\s*1\/2$/i.test(normalized) || /^4\s*1\/2\s*tyre$/i.test(normalized)) return '4 ½';
-    if (/^6\s*1\/2$/i.test(normalized) || /^6\s*1\/2\s*tyre$/i.test(normalized)) return '6 ½';
-    if (/^41\/2$/i.test(normalized)) return '4 ½';
-    if (/^61\/2$/i.test(normalized)) return '6 ½';
-
-    return raw.replace(/\b4\s*1\/2\b/g, '4 ½').replace(/\b6\s*1\/2\b/g, '6 ½');
+    return formatTruckTypeDisplay(raw.replace(/["“”]/g, ''));
 };
 
 const stockStatus = (qty) => {
@@ -123,8 +113,10 @@ export function PipesInventory() {
         allocation_id: ''
     });
     const [filters, setFilters] = useState({
-        dateFrom: '', dateTo: '', search: '', company: '', transactionType: ''
+        dateFrom: '', dateTo: '', company: '', size: '', transactionType: ''
     });
+    const [txPage, setTxPage] = useState(1);
+    const [txPagination, setTxPagination] = useState({ page: 1, limit: TX_PAGE_SIZE, total: 0, totalPages: 0 });
 
     const showToast = (type, message) => setToast({ type, message });
     const refreshInventorySummary = () => window.dispatchEvent(new Event(INVENTORY_SUMMARY_REFRESH_EVENT));
@@ -140,10 +132,21 @@ export function PipesInventory() {
 
     const fetchTxns = useCallback(async () => {
         try {
-            const r = await axios.get(`${API_URL}/inventory/pipes/transactions`, { headers: authHeaders() });
+            const params = {
+                page: txPage,
+                limit: TX_PAGE_SIZE,
+            };
+            if (filters.dateFrom) params.start_date = filters.dateFrom;
+            if (filters.dateTo) params.end_date = filters.dateTo;
+            if (filters.company) params.company = filters.company;
+            if (filters.size) params.size = filters.size;
+            if (filters.transactionType) params.transaction_type = filters.transactionType;
+
+            const r = await axios.get(`${API_URL}/inventory/pipes/transactions`, { headers: authHeaders(), params });
             setTxns(r.data.data);
+            setTxPagination(r.data.pagination || { page: txPage, limit: TX_PAGE_SIZE, total: r.data.data?.length || 0, totalPages: 1 });
         } catch { /* silent */ }
-    }, []);
+    }, [txPage, filters]);
 
     const fetchAllocations = useCallback(async () => {
         try {
@@ -153,8 +156,15 @@ export function PipesInventory() {
     }, []);
 
     useEffect(() => {
-        Promise.all([fetchPipes(), fetchTxns(), fetchAllocations()]).finally(() => setLoading(false));
-    }, [fetchPipes, fetchTxns, fetchAllocations]);
+        Promise.all([fetchPipes(), fetchAllocations(), fetchTxns()]).finally(() => setLoading(false));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        if (!loading) {
+            fetchTxns();
+        }
+    }, [fetchTxns, loading]);
 
     const openModal = (type, pipe = null, allocation = null) => {
         setModalType(type);
@@ -269,22 +279,6 @@ export function PipesInventory() {
     }).length;
     const criticalStock = pipes.filter(p => parseFloat((p.store_quantity ?? p.quantity) || 0) === 0).length;
 
-    /* Filtered transactions — FIX: company filter applied correctly */
-    const filtTxns = transactions.filter(tx => {
-        if (filters.dateFrom && new Date(tx.created_at) < new Date(filters.dateFrom)) return false;
-        if (filters.dateTo) {
-            const to = new Date(filters.dateTo); to.setHours(23, 59, 59);
-            if (new Date(tx.created_at) > to) return false;
-        }
-        if (filters.search) {
-            const q = filters.search.toLowerCase();
-            if (!tx.vehicle_name?.toLowerCase().includes(q) && !tx.size?.toLowerCase().includes(q)) return false;
-        }
-        if (filters.company && tx.company !== filters.company) return false;
-        if (filters.transactionType && tx.transaction_type !== filters.transactionType) return false;
-        return true;
-    });
-
     const activeAllocations = allocations.filter(allocation => {
         const status = (allocation?.status || '').toLowerCase();
         return status !== 'done' && status !== 'completed';
@@ -296,10 +290,16 @@ export function PipesInventory() {
             .filter(Boolean)
     )].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
-    const setFilter = (key, val) => { setFilters(f => ({ ...f, [key]: val })); };
-    const clearFilters = () => { setFilters({ dateFrom: '', dateTo: '', search: '', company: '', transactionType: '' }); };
+    const setFilter = (key, val) => {
+        setTxPage(1);
+        setFilters(f => ({ ...f, [key]: val }));
+    };
+    const clearFilters = () => {
+        setTxPage(1);
+        setFilters({ dateFrom: '', dateTo: '', company: '', size: '', transactionType: '' });
+    };
 
-    const transactionTableHeight = `${(VISIBLE_TRANSACTION_ROWS + 1) * 48}px`;
+    const transactionTableHeight = `${(TX_PAGE_SIZE + 1) * 48}px`;
 
     return (
         <div>
@@ -441,7 +441,7 @@ export function PipesInventory() {
                             <tr>
                                 <th style={{ textAlign: 'center' }}>Village</th>
                                 <th style={{ textAlign: 'center' }}>Type</th>
-                                <th style={{ textAlign: 'center' }}>Vehicle</th>
+                                <th style={{ textAlign: 'center' }}>Vehicle Type</th>
                                 <th style={{ textAlign: 'center' }}>Pipe</th>
                                 <th style={{ textAlign: 'center' }}>Issued</th>
                                 <th style={{ textAlign: 'center' }}>Returned</th>
@@ -477,9 +477,6 @@ export function PipesInventory() {
             <div>
                 <div className="inv-section-header">
                     <span className="inv-section-title">Transaction History</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-                        {filtTxns.length} record{filtTxns.length !== 1 ? 's' : ''}
-                    </span>
                 </div>
 
                 {/* Filters */}
@@ -490,13 +487,18 @@ export function PipesInventory() {
                             onChange={e => setFilter('dateFrom', e.target.value)} title="From date" />
                         <input type="date" className="inv-filter-input" value={filters.dateTo}
                             onChange={e => setFilter('dateTo', e.target.value)} title="To date" />
-                        <input type="text" className="inv-filter-input" placeholder="Search vehicle or size…" value={filters.search}
-                            onChange={e => setFilter('search', e.target.value)} style={{ minWidth: 180 }} />
                         <select className="inv-filter-input" value={filters.company}
                             onChange={e => setFilter('company', e.target.value)}>
                             <option value="">All Brands</option>
                             {[...new Set(pipes.map(p => p.company))].sort().map(c => (
                                 <option key={c} value={c}>{c}</option>
+                            ))}
+                        </select>
+                        <select className="inv-filter-input" value={filters.size}
+                            onChange={e => setFilter('size', e.target.value)}>
+                            <option value="">All Sizes</option>
+                            {[...new Set(pipes.map(p => p.size).filter(Boolean))].sort().map(size => (
+                                <option key={size} value={size}>{size}</option>
                             ))}
                         </select>
                         <select className="inv-filter-input" value={filters.transactionType}
@@ -507,7 +509,7 @@ export function PipesInventory() {
                             <option value="ISSUE">Issue</option>
                             <option value="RETURN">Return</option>
                         </select>
-                        {(filters.dateFrom || filters.dateTo || filters.search || filters.company || filters.transactionType) && (
+                        {(filters.dateFrom || filters.dateTo || filters.company || filters.size || filters.transactionType) && (
                             <button className="inv-btn inv-btn--ghost inv-btn--sm" onClick={clearFilters}>
                                 <X size={13} /> Clear
                             </button>
@@ -531,10 +533,10 @@ export function PipesInventory() {
                             </tr>
                         </thead>
                         <tbody>
-                            {filtTxns.length === 0 ? (
+                            {transactions.length === 0 ? (
                                 <tr><td colSpan="9" className="inv-table__empty" style={{ textAlign: 'center' }}>No transactions match current filters.</td></tr>
                             ) : (
-                                filtTxns.map(tx => (
+                                transactions.map(tx => (
                                     <tr key={tx.id}>
                                         <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem', textAlign: 'center' }}>
                                             {new Date(tx.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -577,6 +579,22 @@ export function PipesInventory() {
                             )}
                         </tbody>
                     </table>
+
+                    {txPagination.totalPages > 1 && (
+                        <div className="inv-pagination">
+                            <span>
+                                Showing {(txPage - 1) * TX_PAGE_SIZE + 1}–{Math.min(txPage * TX_PAGE_SIZE, txPagination.total)} of {txPagination.total}
+                            </span>
+                            <div className="inv-pagination__btns">
+                                <button className="inv-pagination__btn" onClick={() => setTxPage(p => Math.max(1, p - 1))} disabled={txPage === 1}><ChevronLeft size={13} /></button>
+                                {Array.from({ length: Math.min(5, txPagination.totalPages) }, (_, i) => {
+                                    const pg = Math.max(1, Math.min(txPage - 2, txPagination.totalPages - 4)) + i;
+                                    return <button key={pg} className={`inv-pagination__btn ${txPage === pg ? 'inv-pagination__btn--active' : ''}`} onClick={() => setTxPage(pg)}>{pg}</button>;
+                                })}
+                                <button className="inv-pagination__btn" onClick={() => setTxPage(p => Math.min(txPagination.totalPages, p + 1))} disabled={txPage === txPagination.totalPages}><ChevronRight size={13} /></button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -755,3 +773,5 @@ export function PipesInventory() {
         </div>
     );
 }
+
+export default PipesInventory;

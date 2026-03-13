@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, Plus, Edit2, Trash2, Download, ChevronLeft, ChevronRight, FileText, MapPin, IndianRupee, Droplets, Filter, X, Eye, Clock } from 'lucide-react';
 import BorewellForm from '../components/govt-bores/BorewellForm';
+import { formatTruckTypeDisplay } from '../utils/formatters';
 import { govtBoreApi } from '../services/api';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -12,7 +13,7 @@ const DISPLAY_COLS = [
     // 📌 General Details
     { key: 'village', label: 'Village', width: '120px' },
     { key: 'location', label: 'Point / Supervisor', width: '150px' },
-    { key: 'vehicle', label: 'Vehicle', width: '100px' },
+    { key: 'vehicle', label: 'Vehicle Type', width: '100px' },
     { key: 'grant', label: 'Grant', width: '100px', align: 'center' },
     { key: 'date', label: 'Date', width: '110px', align: 'center' },
     { key: 'platform_date', label: 'Platform Dt', width: '110px', align: 'center' },
@@ -152,13 +153,9 @@ export default function GovtBoresPage() {
         if (key === 'mandal') return rec.mandal?.name || '-';
         if (key === 'village') return rec.village?.name || '-';
         if (key === 'vehicle') {
-            // Standardize vehicle display
             const val = rec[key];
             if (!val) return '-';
-            if (val.toLowerCase() === '4 1/2 tyre') return '4 ½ Tyre';
-            if (val.toLowerCase() === '6 1/2 tyre') return '6 ½ Tyre';
-            if (val.toLowerCase() === '10 tyre') return '10 Tyre';
-            return val.replace(/\btyre\b/gi, 'Tyre');
+            return formatTruckTypeDisplay(val);
         }
         if (key === 'date' || key === 'platform_date' || key === 'material_date' || key === 'cheque_date') return formatDate(rec[key]);
         if (key === 'pipe_company_display') return rec.pipe_company_ref?.company_name || rec.pipe_company || '-';
@@ -322,17 +319,18 @@ export default function GovtBoresPage() {
             setSaveError('');
             if (selectedRecord) {
                 await govtBoreApi.update(selectedRecord.id, formData);
-                toast.success('Record updated');
+                fetchRecords();
+                return { message: 'Record updated successfully.' };
             } else {
                 await govtBoreApi.create(formData);
-                toast.success('Record created');
+                fetchRecords();
+                return { message: 'Record saved successfully.' };
             }
-            setIsModalOpen(false);
-            fetchRecords();
         } catch (err) {
             console.error('Save record error:', err);
             const msg = err?.response?.data?.message || err?.message || 'Failed to save record';
             setSaveError(msg);
+            throw err;
         } finally {
             setSaving(false);
         }
@@ -442,7 +440,7 @@ export default function GovtBoresPage() {
                     <Search size={18} className="govt-bores__search-icon" />
                     <input
                         type="text"
-                        placeholder="Search by village, mandal, vehicle, location..."
+                        placeholder="Search by village, mandal, vehicle type, location..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="govt-bores__search-input"
@@ -459,7 +457,7 @@ export default function GovtBoresPage() {
                     >
                         <option value="">All Status</option>
                         <option value="Pending">Pending</option>
-                        <option value="To be recording">To be recording</option>
+                        <option value="To be recording">To Be Recording</option>
                         <option value="Done">Done</option>
                         <option value="Completed">Completed</option>
                     </select>

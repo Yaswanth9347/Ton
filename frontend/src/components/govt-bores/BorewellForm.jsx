@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Plus, Calculator, AlertCircle, Calendar, MapPin } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { govtBoreApi, inventoryApi } from '../../services/api';
+import { formatTruckTypeDisplay } from '../../utils/formatters';
 import MiniCalendar from '../common/MiniCalendar';
 
 // --- Constants & Rates ---
@@ -207,6 +207,10 @@ const initialFormData = {
     stand_rate: '',
     stand_amount: '',
 
+    diesel_liters: '',
+    diesel_rate: '',
+    diesel_amount: '',
+
     // GI Pipes
     pipe_company: '',
     pipe_company_id: '',
@@ -262,7 +266,7 @@ const initialFormData = {
 };
 
 // Reusable Components
-const InputField = ({ label, name, type = 'text', readOnly = false, className = '', formData, handleChange, viewMode = false, required = false, inputStyle = {} }) => (
+const InputField = ({ label, name, type = 'text', readOnly = false, className = '', formData, handleChange, viewMode = false, required = false, inputStyle = {}, error = '' }) => (
     <div className={`form-field ${className}`}>
         <label className="form-field__label">{label} {required && <span style={{ color: 'red' }}>*</span>}</label>
         <input
@@ -271,16 +275,17 @@ const InputField = ({ label, name, type = 'text', readOnly = false, className = 
             value={formData[name] || ''}
             onChange={handleChange}
             readOnly={readOnly || viewMode}
-            className={`form-field__input ${(readOnly || viewMode) ? 'form-field__input--readonly' : ''}`}
+            className={`form-field__input ${(readOnly || viewMode) ? 'form-field__input--readonly' : ''} ${error ? 'form-field__input--error' : ''}`}
             required={required}
             min={type === 'number' ? "0" : undefined}
             style={inputStyle}
         />
+        {!!error && <span className="form-field__error">{error}</span>}
     </div>
 );
 
 
-const SelectField = ({ label, name, options, formData, handleChange, viewMode = false, required = false }) => (
+const SelectField = ({ label, name, options, formData, handleChange, viewMode = false, required = false, error = '' }) => (
     <div className="form-field">
         <label className="form-field__label">{label} {required && <span style={{ color: 'red' }}>*</span>}</label>
         <select
@@ -288,7 +293,7 @@ const SelectField = ({ label, name, options, formData, handleChange, viewMode = 
             value={formData[name] || ''}
             onChange={handleChange}
             disabled={viewMode}
-            className={`form-field__input ${viewMode ? 'form-field__input--readonly' : ''}`}
+            className={`form-field__input ${viewMode ? 'form-field__input--readonly' : ''} ${error ? 'form-field__input--error' : ''}`}
             required={required}
         >
             <option value="">Select {label}</option>
@@ -298,6 +303,7 @@ const SelectField = ({ label, name, options, formData, handleChange, viewMode = 
                 </option>
             ))}
         </select>
+        {!!error && <span className="form-field__error">{error}</span>}
     </div>
 );
 
@@ -375,6 +381,13 @@ const TaxRow = ({ label, prefix, formData, handleChange, viewMode = false }) => 
 
 function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMode = false }) {
 
+    const REQUIRED_FIELDS = {
+        mandal: 'Mandal',
+        village: 'Village',
+        location: 'Location',
+        vehicle: 'Vehicle Type',
+    };
+
     // Helper to map record to form data
     const mapRecordToFormData = (rec) => {
         if (!rec) return { ...initialFormData };
@@ -427,6 +440,7 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
     const [mandals, setMandals] = useState([]);
     const [companies, setCompanies] = useState([]);
     const [inventoryPipes, setInventoryPipes] = useState([]);
+    const [dieselVehicles, setDieselVehicles] = useState([]);
 
     // Custom Row States
     const [customMaterials, setCustomMaterials] = useState([]);
@@ -434,6 +448,19 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
     const [customPayments, setCustomPayments] = useState([]);
     const [editingLabelId, setEditingLabelId] = useState(null);
     const [tempLabelValue, setTempLabelValue] = useState('');
+    const [fieldErrors, setFieldErrors] = useState({});
+    const [formNotice, setFormNotice] = useState(null);
+
+    useEffect(() => {
+        if (!formNotice) return;
+        const timer = setTimeout(() => setFormNotice(null), 4500);
+        return () => clearTimeout(timer);
+    }, [formNotice]);
+
+    useEffect(() => {
+        if (!saveError || viewMode) return;
+        setFormNotice({ type: 'error', message: saveError });
+    }, [saveError, viewMode]);
 
     // Initialize custom rows from record
     useEffect(() => {
@@ -464,6 +491,7 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
         fetchMandals();
         fetchCompanies();
         fetchInventoryPipes();
+        fetchDieselVehicles();
     }, [record]);
 
     const fetchMandals = async () => {
@@ -493,6 +521,15 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
         }
     };
 
+    const fetchDieselVehicles = async () => {
+        try {
+            const res = await inventoryApi.getDieselVehicles();
+            setDieselVehicles(res.data.data || []);
+        } catch (err) {
+            console.error('Failed to fetch diesel vehicles:', err);
+        }
+    };
+
     const uniqueInventoryPipes = useMemo(() => {
         const deduped = new Map();
 
@@ -519,6 +556,34 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
             return (a.size || '').localeCompare(b.size || '', undefined, { numeric: true, sensitivity: 'base' });
         });
     }, [inventoryPipes]);
+
+    const vehicleOptions = useMemo(() => {
+        const uniqueByTruckType = new Map();
+        (dieselVehicles || []).forEach((vehicle) => {
+            if (!uniqueByTruckType.has(vehicle.truck_type)) {
+                uniqueByTruckType.set(vehicle.truck_type, {
+                    label: `${formatTruckTypeDisplay(vehicle.truck_type)}`,
+                    value: vehicle.truck_type,
+                });
+            }
+        });
+
+        const mapped = Array.from(uniqueByTruckType.values());
+
+        if (formData.vehicle && !mapped.some((item) => item.value === formData.vehicle)) {
+            mapped.unshift({ label: `${formData.vehicle} (Legacy)`, value: formData.vehicle });
+        }
+
+        if (mapped.length === 0) {
+            return [
+                { label: '4 ½ Tyre', value: '4 1/2 Tyre' },
+                { label: '6 ½ Tyre', value: '6 1/2 Tyre' },
+                { label: '10 Tyre', value: '10 Tyre' },
+            ];
+        }
+
+        return mapped;
+    }, [dieselVehicles, formData.vehicle]);
 
     // Calculations removed to support manual entry
 
@@ -684,6 +749,12 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
             updates.drilling_amount = calculateAmount(qty, rate);
         }
 
+        else if (name === 'diesel_liters' || name === 'diesel_rate') {
+            const liters = name === 'diesel_liters' ? value : formData.diesel_liters;
+            const rate = name === 'diesel_rate' ? value : formData.diesel_rate;
+            updates.diesel_amount = calculateAmount(liters, rate);
+        }
+
         // Standard Qty/Rate pairs
         else if (name.endsWith('_qty') || name.endsWith('_rate')) {
             const parts = name.split('_');
@@ -716,16 +787,41 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
             }
             return next;
         });
+
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const copy = { ...prev };
+                delete copy[name];
+                return copy;
+            });
+        }
     };
 
-    const handleSubmit = (e) => {
+    const validateMandatoryFields = () => {
+        const errors = {};
+        Object.entries(REQUIRED_FIELDS).forEach(([key, label]) => {
+            if (!String(formData[key] || '').trim()) {
+                errors[key] = `${label} is required`;
+            }
+        });
+        return errors;
+    };
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
         // Validation: Mandatory Fields
-        if (!formData.mandal || !formData.village || !formData.location || !formData.vehicle) {
-            toast.error('Please fill in all mandatory fields: Mandal, Village, Location, Vehicle');
+        const errors = validateMandatoryFields();
+        if (Object.keys(errors).length > 0) {
+            setFieldErrors(errors);
+            setFormNotice({
+                type: 'error',
+                message: 'Please fill in all mandatory fields: Mandal, Village, Location, Vehicle Type',
+            });
             return;
         }
+
+        setFieldErrors({});
 
         // Pack custom rows into custom_data
         const packedData = {
@@ -734,8 +830,16 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
             payments: customPayments
         };
         // Also include any legacy data? No, we replace structure.
-
-        onSave({ ...formData, custom_data: packedData });
+        try {
+            const result = await onSave({ ...formData, custom_data: packedData });
+            setFormNotice({ type: 'success', message: result?.message || 'Record saved successfully.' });
+            setTimeout(() => {
+                onClose();
+            }, 900);
+        } catch {
+            // Parent sets saveError; fallback message for immediate local feedback
+            setFormNotice((prev) => prev || { type: 'error', message: 'Failed to save record' });
+        }
     };
 
 
@@ -754,27 +858,12 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
 
                 <form onSubmit={handleSubmit} className="govt-bore-modal__form">
 
-                    {!!saveError && !viewMode && (
-                        <div
-                            style={{
-                                marginBottom: '16px',
-                                padding: '12px 14px',
-                                borderRadius: '10px',
-                                border: '1px solid #fecaca',
-                                background: '#fef2f2',
-                                color: '#b91c1c',
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: '10px',
-                                fontSize: '14px',
-                                fontWeight: '500'
-                            }}
-                        >
-                            <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '1px' }} />
-                            <div>
-                                <div style={{ fontWeight: '700', marginBottom: '4px' }}>Failed to save record</div>
-                                <div>{saveError}</div>
-                            </div>
+                    {!!formNotice && !viewMode && (
+                        <div className={`govt-bore-modal__notice govt-bore-modal__notice--${formNotice.type}`}>
+                            <div className="govt-bore-modal__notice-text">{formNotice.message}</div>
+                            <button type="button" className="govt-bore-modal__notice-close" onClick={() => setFormNotice(null)}>
+                                <X size={14} />
+                            </button>
                         </div>
                     )}
 
@@ -784,23 +873,21 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
                         <div className="govt-bore-modal__grid govt-bore-modal__grid--3">
                             <div className="form-field">
                                 <label className="form-field__label">Mandal</label>
-                                <input type="text" name="mandal" list="mandal-list" value={formData.mandal} onChange={handleChange} className="form-field__input" />
+                                <input type="text" name="mandal" list="mandal-list" value={formData.mandal} onChange={handleChange} className={`form-field__input ${fieldErrors.mandal ? 'form-field__input--error' : ''}`} />
                                 <datalist id="mandal-list">{mandals.map((m, i) => <option key={i} value={m.name} />)}</datalist>
+                                {!!fieldErrors.mandal && <span className="form-field__error">{fieldErrors.mandal}</span>}
                             </div>
-                            <InputField label="Village" name="village" formData={formData} handleChange={handleChange} viewMode={viewMode} />
-                            <InputField label="Point / Supervisor" name="location" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            <InputField label="Village" name="village" formData={formData} handleChange={handleChange} viewMode={viewMode} error={fieldErrors.village} />
+                            <InputField label="Point / Supervisor" name="location" formData={formData} handleChange={handleChange} viewMode={viewMode} error={fieldErrors.location} />
 
                             <SelectField
-                                label="Vehicle"
+                                label="Vehicle Type"
                                 name="vehicle"
                                 formData={formData}
                                 handleChange={handleChange}
                                 viewMode={viewMode}
-                                options={[
-                                    { label: '4 ½ Tyre', value: '4 ½ Tyre' },
-                                    { label: '6 ½ Tyre', value: '6 ½ Tyre' },
-                                    { label: '10 Tyre', value: '10 Tyre' }
-                                ]}
+                                options={vehicleOptions}
+                                error={fieldErrors.vehicle}
                             />
                             <InputField label="Grant" name="grant" formData={formData} handleChange={handleChange} viewMode={viewMode} />
                             <DateField label="Date" name="date" formData={formData} handleChange={handleChange} viewMode={viewMode} />
@@ -815,7 +902,7 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
                                 viewMode={viewMode}
                                 options={[
                                     { label: 'Pending', value: 'Pending' },
-                                    { label: 'To be recording', value: 'To be recording' },
+                                    { label: 'To Be Recording', value: 'To be recording' },
                                     { label: 'Done', value: 'Done' },
                                     { label: 'Completed', value: 'Completed' }
                                 ]}
@@ -959,6 +1046,17 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
                                     )}
                                 </div>
                             ))}
+                        </div>
+
+                        <div className="govt-bore-modal__subsection" style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '12px', flexWrap: 'wrap' }}>
+                                <h4 style={{ fontSize: '14px', fontWeight: '600', margin: 0 }}>Diesel Consumption</h4>
+                            </div>
+                            <div className="govt-bore-modal__grid govt-bore-modal__grid--3">
+                                <InputField label="Diesel Liters" name="diesel_liters" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
+                                <InputField label="Diesel Rate" name="diesel_rate" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
+                                <InputField label="Diesel Amount" name="diesel_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
+                            </div>
                         </div>
 
                         {/* Merged Pipes & Labour Section */}

@@ -126,6 +126,7 @@ model borewell_data {
   users      users?    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   pipe_inventory_ref pipes_master? @relation("PrivateBorePipeInventory", fields: [pipe_inventory_id], references: [id])
   pipe_allocations   pipe_bore_allocations[] @relation("PrivateBoreAllocations")
+  spare_allocations  spare_bore_allocations[] @relation("PrivateBoreSpareAllocations")
 
   @@index([customer_name], map: "idx_borewell_data_customer")
   @@index([created_by], map: "idx_borewell_data_created_by")
@@ -487,6 +488,7 @@ model users {
   roles                                            roles                       @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   pipes_stock_transactions                         pipes_stock_transactions[]
   pipe_bore_allocations                           pipe_bore_allocations[]
+  spare_bore_allocations                          spare_bore_allocations[]
   spares_stock_transactions                        spares_stock_transactions[]
   diesel_stock_transactions                        diesel_stock_transactions[]
 
@@ -687,6 +689,10 @@ model BorewellWork {
   head_handle_rate   Decimal? @db.Decimal(10, 2)
   head_handle_amount Decimal? @db.Decimal(14, 2)
 
+  diesel_liters Decimal? @db.Decimal(10, 2)
+  diesel_rate   Decimal? @db.Decimal(10, 2)
+  diesel_amount Decimal? @db.Decimal(14, 2)
+
   // ----------------------------
   // GI Pipes Extended
   // ----------------------------
@@ -697,6 +703,7 @@ model BorewellWork {
   pipe_company_ref  pipes_company_master? @relation(fields: [pipe_company_id], references: [id])
   pipe_inventory_ref pipes_master? @relation("GovtBorePipeInventory", fields: [pipe_inventory_id], references: [id])
   pipe_allocations   pipe_bore_allocations[] @relation("GovtBoreAllocations")
+  spare_allocations  spare_bore_allocations[] @relation("GovtBoreSpareAllocations")
 
   geologist String? // Geologist name
 
@@ -891,6 +898,7 @@ model spares_master {
 
   stock        spares_stock?
   transactions spares_stock_transactions[]
+  allocations  spare_bore_allocations[]
 
   @@unique([spare_name, category])
 }
@@ -921,6 +929,31 @@ model spares_stock_transactions {
   user         users         @relation(fields: [created_by], references: [id])
 }
 
+model spare_bore_allocations {
+  id                Int      @id @default(autoincrement())
+  spare_master_id   Int
+  bore_type         String   @db.VarChar(20)
+  private_bore_id   Int?
+  govt_bore_id      Int?
+  issued_quantity   Decimal  @default(0) @db.Decimal(10, 2)
+  returned_quantity Decimal  @default(0) @db.Decimal(10, 2)
+  status            String   @default("OPEN") @db.VarChar(20)
+  auto_created      Boolean  @default(false)
+  created_by        Int?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  spare_master spares_master  @relation(fields: [spare_master_id], references: [id])
+  private_bore borewell_data? @relation("PrivateBoreSpareAllocations", fields: [private_bore_id], references: [id])
+  govt_bore    BorewellWork?  @relation("GovtBoreSpareAllocations", fields: [govt_bore_id], references: [id])
+  creator      users?         @relation(fields: [created_by], references: [id])
+
+  @@unique([spare_master_id, private_bore_id, govt_bore_id])
+  @@index([bore_type, status])
+  @@index([private_bore_id])
+  @@index([govt_bore_id])
+}
+
 // =============================================
 // ERP DIESEL INVENTORY SCHEMA
 // =============================================
@@ -937,6 +970,18 @@ model diesel_master {
   transactions diesel_stock_transactions[]
 
   @@unique([storage_location])
+}
+
+model diesel_vehicle_master {
+  id             Int      @id @default(autoincrement())
+  vehicle_number String   @unique @db.VarChar(100)
+  truck_type     String   @db.VarChar(50)
+  tank_capacity  Decimal  @db.Decimal(10, 2)
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  transactions diesel_stock_transactions[]
 }
 
 model pipes_company_master {
@@ -973,7 +1018,9 @@ model diesel_stock_transactions {
   supervisor_name String?  @db.VarChar(100)
   amount          Decimal? @db.Decimal(10, 2)
   bill_url        String?
+  diesel_vehicle_id Int?
 
   diesel_master diesel_master @relation(fields: [diesel_master_id], references: [id])
+  diesel_vehicle diesel_vehicle_master? @relation(fields: [diesel_vehicle_id], references: [id])
   user          users         @relation(fields: [created_by], references: [id])
 }

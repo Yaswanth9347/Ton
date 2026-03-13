@@ -1,10 +1,14 @@
 /* SparesInventory.css — module-specific overrides */
 /* Core design comes from InventoryPage.css */
 
-.spare-type-ob {
+.inv-action-btn--load:hover {
+    background: rgba(37, 99, 235, 0.1);
     color: var(--color-primary);
+    border-color: var(--color-primary);
 }
 
-.spare-type-bit {
-    color: var(--color-warning);
+.status-badge--add_stock {
+    background: rgba(37, 99, 235, 0.12);
+    color: #2563eb;
+    border: 1px solid rgba(37, 99, 235, 0.25);
 }

@@ -38,6 +38,7 @@ router.delete('/pipes/companies/:id', roleGuard('ADMIN'), inventoryController.de
 
 router.get('/spares', inventoryController.getSpares);
 router.post('/spares', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.createSpare);
+router.post('/spares/:id/add-stock', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.addSpareStock);
 router.post('/spares/:id/issue', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.issueSpare);
 router.post('/spares/:id/return', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.returnSpare);
 router.patch('/spares/:id/status', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.updateSpareStatus);
@@ -53,5 +54,8 @@ router.post('/diesel', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.cre
 router.put('/diesel/:id', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.updateDieselRecord);
 router.delete('/diesel/:id', roleGuard('ADMIN'), inventoryController.deleteDieselRecord);
 router.get('/diesel/summary', inventoryController.getDieselSummary);
+router.get('/diesel/vehicles', inventoryController.getDieselVehicleStatus);
+router.post('/diesel/vehicles', roleGuard('ADMIN'), inventoryController.createDieselVehicle);
+router.delete('/diesel/vehicles/:id', roleGuard('ADMIN'), inventoryController.deleteDieselVehicle);
 
 export default router;

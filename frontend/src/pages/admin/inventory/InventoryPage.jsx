@@ -3,9 +3,9 @@ import { Package, Wrench, Fuel, Boxes, IndianRupee, TrendingUp, AlertTriangle } 
 import axios from 'axios';
 import './InventoryPage.css';
 
-const PipesInventory = lazy(() => import('./PipesInventory').then(m => ({ default: m.PipesInventory })));
-const SparesInventory = lazy(() => import('./SparesInventory').then(m => ({ default: m.SparesInventory })));
-const DieselTracking = lazy(() => import('./DieselTracking').then(m => ({ default: m.DieselTracking })));
+const PipesInventory = lazy(() => import('./PipesInventory'));
+const SparesInventory = lazy(() => import('./SparesInventory'));
+const DieselTracking = lazy(() => import('./DieselTracking'));
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -96,9 +96,9 @@ export function InventoryPage() {
                         <div className="inv-summary-card__icon"><Wrench size={20} /></div>
                         <div className="inv-summary-card__content">
                             <div className="inv-summary-card__value">{summary.spares.total}</div>
-                            <div className="inv-summary-card__label">Spare Parts</div>
+                            <div className="inv-summary-card__label">Spare Materials</div>
                             <div className="inv-summary-card__sub">
-                                {summary.spares.available} available · {summary.spares.in_use} in use
+                                {summary.spares.stocked ?? summary.spares.available} stocked · {summary.spares.low_stock || 0} low stock
                                 {summary.spares.total_value > 0 && <> · {fmtCurrency(summary.spares.total_value)}</>}
                             </div>
                         </div>

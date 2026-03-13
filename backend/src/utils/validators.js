@@ -114,15 +114,15 @@ export const attendanceCorrectionValidator = [
 
 export const dateFilterValidator = [
     query('startDate')
-        .optional()
+        .optional({ checkFalsy: true, nullable: true })
         .isDate()
         .withMessage('Start date must be a valid date (YYYY-MM-DD)'),
     query('endDate')
-        .optional()
+        .optional({ checkFalsy: true, nullable: true })
         .isDate()
         .withMessage('End date must be a valid date (YYYY-MM-DD)'),
     query('userId')
-        .optional()
+        .optional({ checkFalsy: true, nullable: true })
         .isInt()
         .withMessage('User ID must be an integer'),
 ];

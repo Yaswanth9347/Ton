@@ -72,6 +72,18 @@ export const inventoryApi = {
     addPipeCompany: (data) => api.post('/inventory/pipes/companies', data),
     updatePipeCompany: (id, data) => api.put(`/inventory/pipes/companies/${id}`, data),
     deletePipeCompany: (id) => api.delete(`/inventory/pipes/companies/${id}`),
+
+    // Spares
+    getSpares: (params) => api.get('/inventory/spares', { params }),
+    addSpare: (data) => api.post('/inventory/spares', data),
+    addSpareStock: (id, data) => api.post(`/inventory/spares/${id}/add-stock`, data),
+    deleteSpare: (id) => api.delete(`/inventory/spares/${id}`),
+    getSpareTransactions: (params) => api.get('/inventory/spares/transactions', { params }),
+
+    // Diesel
+    getDieselVehicles: () => api.get('/inventory/diesel/vehicles'),
+    addDieselVehicle: (data) => api.post('/inventory/diesel/vehicles', data),
+    deleteDieselVehicle: (id) => api.delete(`/inventory/diesel/vehicles/${id}`),
 };
 
 // Auth API
@@ -115,7 +127,12 @@ export const adminApi = {
     reactivateEmployee: (id) => api.patch(`/admin/employees/${id}/reactivate`),
     unlockEmployee: (id) => api.patch(`/admin/employees/${id}/unlock`),
     resetEmployeePassword: (id, newPassword) => api.put(`/auth/users/${id}/reset-password`, { newPassword }),
-    getAllAttendance: (params) => api.get('/admin/attendance', { params }),
+    getAllAttendance: (params) => {
+        const normalizedParams = Object.fromEntries(
+            Object.entries(params || {}).filter(([, value]) => value !== '' && value !== null && value !== undefined)
+        );
+        return api.get('/admin/attendance', { params: normalizedParams });
+    },
     getEmployeeAttendance: (userId, params) => api.get(`/admin/attendance/${userId}`, { params }),
     correctAttendance: (id, data) => api.put(`/admin/attendance/${id}`, data),
     exportAttendance: (params) => api.get('/admin/attendance/export', { params, responseType: 'blob' }),
