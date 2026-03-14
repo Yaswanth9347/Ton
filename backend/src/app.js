@@ -17,6 +17,7 @@ import { getCurrentISTDateTime } from './utils/dateTime.js';
 import { ensureInventorySchema } from './utils/ensureInventorySchema.js';
 import { ensureLoginAuditSchema } from './utils/ensureLoginAuditSchema.js';
 import { ensurePayrollSchema } from './utils/ensurePayrollSchema.js';
+import { ensureDefaultAuthUsers } from './utils/ensureDefaultAuthUsers.js';
 
 dotenv.config();
 
@@ -124,6 +125,10 @@ ensureInventorySchema().catch((error) => {
 
 ensurePayrollSchema().catch((error) => {
   console.error('Payroll schema ensure failed:', error?.message || error);
+});
+
+ensureDefaultAuthUsers().catch((error) => {
+  console.error('Default auth user bootstrap failed:', error?.message || error);
 });
 
 // Serve uploads from correct directory based on environment

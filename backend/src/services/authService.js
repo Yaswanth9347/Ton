@@ -16,6 +16,7 @@ import jwtConfig from '../config/jwt.js';
 import { UnauthorizedError, ValidationError, ForbiddenError, NotFoundError } from '../utils/errors.js';
 import { sendAdminResetEmail, sendLoginWarningEmail } from './emailService.js';
 import { ensureAuthSchema } from '../utils/ensureAuthSchema.js';
+import { ensureDefaultAuthUsers } from '../utils/ensureDefaultAuthUsers.js';
 import { PASSWORD_REGEX, PASSWORD_RULES } from '../utils/validators.js';
 
 const SALT_ROUNDS = 10;
@@ -46,6 +47,7 @@ export const generateToken = (userId) => {
 
 export const authenticateUser = async (username, password) => {
     const authSchema = await ensureAuthSchema();
+    await ensureDefaultAuthUsers();
 
     // Find user (case-insensitive username match)
     const result = await db.query(
