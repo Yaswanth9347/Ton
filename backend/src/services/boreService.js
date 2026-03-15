@@ -182,7 +182,7 @@ export const deleteRecord = async (id, userId) => {
  */
 export const generateBoreReceipt = (record) => {
   const date = record.date
-    ? new Date(record.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    ? new Date(record.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })
     : 'N/A';
 
   const fmt = (v) => {
@@ -332,7 +332,7 @@ export const generateBoreReceipt = (record) => {
 
   <div class="footer">
     <p>This is a computer-generated receipt. Thank you for choosing JMJ BORE WELLS!</p>
-    <p style="margin-top: 5px;">Printed on ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+    <p style="margin-top: 5px;">Printed on ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })}</p>
   </div>
   <script>window.print();</script>
 </body>

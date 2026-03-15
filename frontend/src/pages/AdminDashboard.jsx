@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { adminApi, boreApi, govtBoreApi } from '../services/api';
+import { getCurrentISTDate } from '../utils/dateTime';
 import { SummaryCards } from '../components/admin/SummaryCards';
 import { EmployeeTable } from '../components/admin/EmployeeTable';
 import { EmployeeForm } from '../components/admin/EmployeeForm';
@@ -250,7 +251,7 @@ export function AdminDashboard({ tab = 'dashboard' }) {
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `attendance_report_${new Date().toISOString().split('T')[0]}.csv`);
+            link.setAttribute('download', `attendance_report_${getCurrentISTDate()}.csv`);
             document.body.appendChild(link);
             link.click();
             link.remove();

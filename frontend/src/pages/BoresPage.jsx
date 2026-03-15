@@ -10,6 +10,7 @@ import BoreModal from '../components/admin/BoreModal';
 import { boreApi } from '../services/api';
 import toast from 'react-hot-toast';
 import { formatTruckTypeDisplay } from '../utils/formatters';
+import { formatDateInIST, getCurrentISTDate } from '../utils/dateTime';
 
 // Column definitions for the table
 const DISPLAY_COLS = [
@@ -137,14 +138,9 @@ export default function BoresPage() {
         };
     }, []);
 
-    // Format date for display
+    // Format date for display (IST)
     const formatDate = (val) => {
-        if (!val) return '-';
-        try {
-            return new Date(val).toLocaleDateString('en-GB');
-        } catch {
-            return val;
-        }
+        return formatDateInIST(val);
     };
 
     // Format value for display
@@ -268,7 +264,7 @@ export default function BoresPage() {
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `Bores_${new Date().toISOString().split('T')[0]}.csv`;
+            link.download = `Bores_${getCurrentISTDate()}.csv`;
             link.click();
             URL.revokeObjectURL(url);
             toast.success('CSV exported successfully');

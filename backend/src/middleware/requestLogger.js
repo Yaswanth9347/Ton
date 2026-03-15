@@ -1,7 +1,9 @@
 
+import { getCurrentISTDateTime } from '../utils/dateTime.js';
+
 const requestLogger = (req, res, next) => {
     const start = Date.now();
-    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const timestamp = getCurrentISTDateTime();
     const { method, url, body, query, params } = req;
 
 

@@ -2,6 +2,20 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Calculator, Clock, CreditCard, Droplets, Layers, TrendingUp, Zap, CirclePlus, Calendar } from 'lucide-react';
 import { inventoryApi } from '../../services/api';
+import { getCurrentISTDate, toISTDate } from '../../utils/dateTime';
+
+const IST_TZ = 'Asia/Kolkata';
+
+const toISTDateString = (value) => {
+    if (!value) return '';
+    const d = toISTDate(value);
+    if (!d || isNaN(d.getTime())) return '';
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: IST_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(d);
+    const get = (type) => parts.find(p => p.type === type)?.value || '';
+    return `${get('year')}-${get('month')}-${get('day')}`;
+};
 
 // Helper Components
 const InputField = ({ label, name, type = 'text', value, onChange, onBlur, required, readOnly, viewMode, placeholder }) => (
@@ -46,7 +60,7 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
         if (record) {
             const data = { ...record };
             if (data.date) {
-                data.date = new Date(data.date).toISOString().split('T')[0];
+                data.date = toISTDateString(data.date);
             }
             // Parse pipe_details if it's a string
             if (typeof data.pipe_details === 'string') {
@@ -55,7 +69,7 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
             setFormData(data);
         } else {
             setFormData({
-                date: new Date().toISOString().split('T')[0],
+                date: getCurrentISTDate(),
                 bore_type: '6 1/2"',
                 pipe_details: {},
                 pipe_inventory_id: '',

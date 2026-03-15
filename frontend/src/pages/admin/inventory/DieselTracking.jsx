@@ -6,6 +6,7 @@ import {
 import axios from 'axios';
 import { inventoryApi } from '../../../services/api';
 import { formatTruckTypeDisplay } from '../../../utils/formatters';
+import { formatDateInIST, getCurrentISTDate } from '../../../utils/dateTime';
 import './InventoryPage.css';
 import './DieselTracking.css';
 
@@ -40,7 +41,7 @@ function ConfirmDialog({ message, onConfirm, onCancel }) {
     );
 }
 
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => getCurrentISTDate();
 
 export function DieselTracking() {
     const [transactions, setTransactions] = useState([]);
@@ -263,7 +264,7 @@ export function DieselTracking() {
                                     <tr key={row.truck_type}>
                                         <td style={{ fontWeight: 700, textAlign: 'center' }}>{formatTruckTypeDisplay(row.truck_type)}</td>
                                         <td style={{ textAlign: 'center' }}>{row.vehicle_number}</td>
-                                        <td style={{ textAlign: 'center' }}>{row.latest_purchase_date ? new Date(row.latest_purchase_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                                        <td style={{ textAlign: 'center' }}>{row.latest_purchase_date ? formatDateInIST(row.latest_purchase_date) : '—'}</td>
                                         <td style={{ textAlign: 'center', fontWeight: 600 }}>{row.total_liters.toFixed(2)} L</td>
                                         <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--color-warning)' }}>₹{row.total_cost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
                                         <td style={{ textAlign: 'center' }}>
@@ -384,7 +385,7 @@ export function DieselTracking() {
                                     return (
                                         <tr key={transaction.id}>
                                             <td style={{ textAlign: 'center', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-                                                {new Date(transaction.purchase_date || transaction.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                {formatDateInIST(transaction.purchase_date || transaction.created_at)}
                                             </td>
                                             <td style={{ textAlign: 'center', fontWeight: 700 }}>{transaction.truck_type ? formatTruckTypeDisplay(transaction.truck_type) : '—'}</td>
                                             <td style={{ textAlign: 'center' }}>{transaction.vehicle_name || '—'}</td>

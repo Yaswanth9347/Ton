@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { adminApi } from '../../services/api';
 import { Card } from '../common/Card';
+import { formatDateTimeInIST } from '../../utils/dateTime';
 import { Button } from '../common/Button';
 import {
     Shield, LogIn, LogOut, XCircle, Lock,
@@ -61,15 +62,7 @@ export function LoginHistoryPanel() {
     const totalPages = Math.ceil(total / PAGE_SIZE);
 
     const formatDate = (dateStr) => {
-        const d = new Date(dateStr);
-        return d.toLocaleString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-        });
+        return formatDateTimeInIST(dateStr);
     };
 
     const shortenUA = (ua) => {

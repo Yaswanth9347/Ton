@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, Plus, Edit2, Trash2, Download, ChevronLeft, ChevronRight, FileText, MapPin, IndianRupee, Droplets, Filter, X, Eye, Clock } from 'lucide-react';
 import BorewellForm from '../components/govt-bores/BorewellForm';
 import { formatTruckTypeDisplay } from '../utils/formatters';
+import { formatDateInIST, getCurrentISTDate } from '../utils/dateTime';
 import { govtBoreApi } from '../services/api';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -107,14 +108,9 @@ export default function GovtBoresPage() {
         fetchRecords();
     }, [fetchRecords]);
 
-    // Format date for display
+    // Format date for display (IST)
     const formatDate = (val) => {
-        if (!val) return '-';
-        try {
-            return new Date(val).toLocaleDateString('en-GB');
-        } catch {
-            return val;
-        }
+        return formatDateInIST(val);
     };
 
     // 🔍 Extract Unique Custom Fields (excluding materials)
@@ -372,7 +368,7 @@ export default function GovtBoresPage() {
             XLSX.utils.book_append_sheet(wb, ws, 'Govt Bores');
 
             // Save file
-            XLSX.writeFile(wb, `Govt_Bores_${new Date().toISOString().split('T')[0]}.xlsx`);
+            XLSX.writeFile(wb, `Govt_Bores_${getCurrentISTDate()}.xlsx`);
             toast.success('Excel exported successfully');
         } catch (error) {
             console.error('Export failed:', error);

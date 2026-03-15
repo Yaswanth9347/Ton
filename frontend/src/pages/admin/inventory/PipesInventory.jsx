@@ -8,6 +8,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { formatTruckTypeDisplay } from '../../../utils/formatters';
 import './InventoryPage.css';
 import './PipesInventory.css';
+import { formatDateInIST } from '../../../utils/dateTime';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 const FEET_PER_PIPE = 20;
@@ -539,7 +540,7 @@ export function PipesInventory() {
                                 transactions.map(tx => (
                                     <tr key={tx.id}>
                                         <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem', textAlign: 'center' }}>
-                                            {new Date(tx.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            {formatDateInIST(tx.created_at)}
                                         </td>
                                         <td style={{ textAlign: 'center' }}>
                                             <span className={`status-badge status-badge--${tx.transaction_type.toLowerCase()}`} style={{ justifyContent: 'center' }}>

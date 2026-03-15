@@ -83,7 +83,7 @@ export const generatePayslipPDF = async (payslipData) => {
 
          detailRow('Employee Name:', payslipData.employeeName, 'Employee ID:', payslipData.employeeId);
          detailRow('Designation:', payslipData.designation || 'Employee', 'Pay Period:', `${payslipData.monthName} ${payslipData.year}`);
-         detailRow('Pay Date:', payslipData.payDate || new Date().toLocaleDateString('en-IN'), '', '');
+         detailRow('Pay Date:', payslipData.payDate || new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }), '', '');
 
          // ── ATTENDANCE SUMMARY ──
          drawSectionTitle('Attendance Summary');
@@ -186,7 +186,7 @@ export const generatePayslipPDF = async (payslipData) => {
          const line2Y = doc.page.height - 16;
          doc.fontSize(7).font('Helvetica').fillColor(lightGray)
             .text('This is a computer-generated document. No signature is required.', m, line1Y, { align: 'center', width: cw, lineBreak: false });
-         doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, m, line2Y, { align: 'center', width: cw, lineBreak: false });
+         doc.text(`Generated on: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`, m, line2Y, { align: 'center', width: cw, lineBreak: false });
 
          doc.end();
       } catch (error) {

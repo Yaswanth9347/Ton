@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import './InventoryPage.css';
 import './SparesInventory.css';
+import { formatDateInIST } from '../../../utils/dateTime';
 import { inventoryApi } from '../../../services/api';
 
 const PAGE_SIZE = 10;
@@ -380,7 +381,7 @@ export function SparesInventory() {
                                 transactions.map(tx => (
                                     <tr key={tx.id}>
                                         <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem', textAlign: 'center' }}>
-                                            {new Date(tx.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            {formatDateInIST(tx.created_at)}
                                         </td>
                                         <td style={{ textAlign: 'center' }}>{tx.spare_type}</td>
                                         <td style={{ fontWeight: 600, textAlign: 'center' }}>{tx.spare_number}</td>

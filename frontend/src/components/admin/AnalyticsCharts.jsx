@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { adminApi, boreApi, govtBoreApi } from '../../services/api';
 import { Card } from '../common/Card';
+import { getCurrentISTDate, getDateDaysAgoIST, formatDateInIST } from '../../utils/dateTime';
 import {
     Users, Droplets, IndianRupee, TrendingUp,
     Landmark, BarChart3, Activity, Wallet
@@ -12,8 +13,8 @@ export function AnalyticsCharts() {
     const [govtBoreData, setGovtBoreData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [dateRange, setDateRange] = useState({
-        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        endDate: new Date().toISOString().split('T')[0]
+        startDate: getDateDaysAgoIST(30),
+        endDate: getCurrentISTDate()
     });
 
     const fetchAnalytics = useCallback(async () => {
@@ -291,7 +292,7 @@ export function AnalyticsCharts() {
                                 {dailyTrend.slice(-14).map((day, i) => (
                                     <div key={i} className="chart-x-item">
                                         <span className="chart-x-date">
-                                            {new Date(day.attendance_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
+                                            {formatDateInIST(day.attendance_date, { day: 'numeric', month: 'short' })}
                                         </span>
                                     </div>
                                 ))}

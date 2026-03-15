@@ -1,5 +1,19 @@
 import { useState, useEffect } from 'react';
 import { X, Receipt, CreditCard, Calculator } from 'lucide-react';
+import { toISTDate } from '../../../utils/dateTime';
+
+const IST_TIMEZONE = 'Asia/Kolkata';
+
+const toISTDateString = (value) => {
+    if (!value) return '';
+    const d = toISTDate(value);
+    if (!d || isNaN(d.getTime())) return '';
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: IST_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(d);
+    const get = (type) => parts.find(p => p.type === type)?.value || '';
+    return `${get('year')}-${get('month')}-${get('day')}`;
+};
 
 const initialBillData = {
     total_bill_amount: '',
@@ -30,9 +44,7 @@ export default function BorewellBillForm({ record, onClose, onSave, saving }) {
                 net_amount: record.net_amount || '',
                 voucher_no: record.voucher_no || '',
                 cheque_no: record.cheque_no || '',
-                cheque_date: record.cheque_date
-                    ? new Date(record.cheque_date).toISOString().split('T')[0]
-                    : '',
+                cheque_date: toISTDateString(record.cheque_date),
             });
         }
     }, [record]);
