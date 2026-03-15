@@ -85,7 +85,7 @@ export const upload = multer({
 });
 
 export const profileUpload = multer({
-    storage: profileStorage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit for profile photos
     fileFilter: imageOnlyFilter
 });

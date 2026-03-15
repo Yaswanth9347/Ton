@@ -14,11 +14,11 @@ router.get('/me', roleGuard('EMPLOYEE'), payrollController.getMyPayroll);
 router.get('/payslip/:month/:year', payrollController.downloadPayslip);
 router.get('/payslip-details/:month/:year', payrollController.getPayslipDetails);
 
-// Admin & Supervisor Routes (Supervisor has same privileges as Admin)
-router.get('/preview', roleGuard('ADMIN', 'SUPERVISOR'), payrollController.getPayrollPreview);
-router.post('/generate', roleGuard('ADMIN', 'SUPERVISOR'), payrollController.generatePayroll);
-router.get('/export', roleGuard('ADMIN', 'SUPERVISOR'), payrollController.exportPayroll);
-router.get('/admin-payslip/:userId/:month/:year', roleGuard('ADMIN', 'SUPERVISOR'), payrollController.downloadEmployeePayslip);
+// Admin-only Payroll Routes (Supervisor cannot access)
+router.get('/preview', roleGuard('ADMIN'), payrollController.getPayrollPreview);
+router.post('/generate', roleGuard('ADMIN'), payrollController.generatePayroll);
+router.get('/export', roleGuard('ADMIN'), payrollController.exportPayroll);
+router.get('/admin-payslip/:userId/:month/:year', roleGuard('ADMIN'), payrollController.downloadEmployeePayslip);
 
 // Admin-only Lifecycle Routes
 router.put('/:id/approve', roleGuard('ADMIN'), payrollController.approvePayroll);

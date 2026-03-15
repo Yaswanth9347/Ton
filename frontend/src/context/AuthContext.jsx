@@ -109,9 +109,11 @@ export function AuthProvider({ children }) {
         logout,
         refreshUser,
         isAuthenticated: !!user,
-        // isAdmin is true for both ADMIN and SUPERVISOR (both access admin panel)
-        isAdmin: user?.role === 'ADMIN' || user?.role === 'SUPERVISOR',
-        // isStrictAdmin is ONLY true for the ADMIN role
+        // isAdmin is ONLY true for the ADMIN role
+        isAdmin: user?.role === 'ADMIN',
+        // isOperationalAdmin: ADMIN or SUPERVISOR — for Bores, Inventory access
+        isOperationalAdmin: user?.role === 'ADMIN' || user?.role === 'SUPERVISOR',
+        // isStrictAdmin is ONLY true for the ADMIN role (kept for backward compat)
         isStrictAdmin: user?.role === 'ADMIN',
         isSupervisor: user?.role === 'SUPERVISOR',
         isEmployee: user?.role === 'EMPLOYEE',

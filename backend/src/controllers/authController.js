@@ -291,16 +291,19 @@ export const uploadProfilePhoto = async (req, res, next) => {
             });
         }
 
-        // Get old photo to delete
+        // Convert the buffer to a base64 Data URI
+        const base64Str = req.file.buffer.toString('base64');
+        const photoUrl = `data:${req.file.mimetype};base64,${base64Str}`;
+
+        // Get old photo to delete (Only try if it was a file path, we can skip deleting data URIs)
         const currentUser = await authService.getUserProfile(req.user.id);
-        if (currentUser.profilePhotoUrl) {
+        if (currentUser.profilePhotoUrl && !currentUser.profilePhotoUrl.startsWith('data:')) {
             const oldPath = currentUser.profilePhotoUrl.replace('/uploads/', 'uploads/');
             if (fs.existsSync(oldPath)) {
                 fs.unlinkSync(oldPath);
             }
         }
 
-        const photoUrl = `/uploads/profiles/${req.file.filename}`;
         await userService.updateProfilePhoto(req.user.id, photoUrl);
 
         res.json({
@@ -321,7 +324,7 @@ export const deleteProfilePhoto = async (req, res, next) => {
     try {
         const currentUser = await authService.getUserProfile(req.user.id);
         
-        if (currentUser.profilePhotoUrl) {
+        if (currentUser.profilePhotoUrl && !currentUser.profilePhotoUrl.startsWith('data:')) {
             const photoPath = currentUser.profilePhotoUrl.replace('/uploads/', 'uploads/');
             if (fs.existsSync(photoPath)) {
                 fs.unlinkSync(photoPath);

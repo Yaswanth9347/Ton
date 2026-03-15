@@ -77,7 +77,7 @@ const DISPLAY_COLS = [
 const ITEMS_PER_PAGE = 25;
 
 export default function GovtBoresPage() {
-    const { isAdmin } = useAuth();
+    const { isAdmin, isOperationalAdmin } = useAuth();
     const [records, setRecords] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -464,7 +464,7 @@ export default function GovtBoresPage() {
                         <Download size={16} />
                         <span>Export Excel</span>
                     </button>
-                    {isAdmin && (
+                    {isOperationalAdmin && (
                         <button className="btn btn-primary" onClick={handleAdd}>
                             <Plus size={18} />
                             <span>Add Record</span>
@@ -501,7 +501,7 @@ export default function GovtBoresPage() {
                                 <td colSpan={combinedColumns.length + 3} className="govt-bores__empty">
                                     <Droplets size={40} strokeWidth={1} />
                                     <p>No records found</p>
-                                    {isAdmin && (
+                                    {isOperationalAdmin && (
                                         <button className="btn btn-primary" onClick={handleAdd}>
                                             <Plus size={16} /> Add First Record
                                         </button>
@@ -526,7 +526,7 @@ export default function GovtBoresPage() {
                                     ))}
                                     <td className="govt-bores__td govt-bores__td--actions-right" style={{ minWidth: '110px', width: '110px' }}>
                                         <div className="govt-bores__action-btns">
-                                            {!isAdmin ? (
+                                            {!isOperationalAdmin ? (
                                                 <button
                                                     className="govt-bores__action-btn govt-bores__action-btn--view"
                                                     onClick={() => handleView(rec)}

@@ -151,14 +151,14 @@ const payrollSchemaStatements = [
 
         IF NOT EXISTS (
             SELECT 1
-            FROM information_schema.table_constraints
-            WHERE table_schema = 'public'
-              AND table_name = 'payroll'
-              AND constraint_name = 'payroll_month_year_version_key'
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relname = 'payroll_month_year_version_key'
+              AND n.nspname = 'public'
         ) THEN
             ALTER TABLE payroll ADD CONSTRAINT payroll_month_year_version_key UNIQUE (month, year, version);
         END IF;
-    END $$
+    END $$;
     `,
 ];
 

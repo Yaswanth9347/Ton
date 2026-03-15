@@ -48,7 +48,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }) {
         }
     };
 
-    const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
+    const isAdmin = user?.role === 'ADMIN';
+    const isSupervisor = user?.role === 'SUPERVISOR';
 
     const employeeLinks = [
         { path: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -67,11 +68,22 @@ export function Sidebar({ mobileOpen = false, onMobileClose }) {
         { path: '/admin/settings', label: 'Settings', icon: <Settings size={20} /> },
     ];
 
-    const links = isAdmin ? adminLinks : employeeLinks;
+    // Supervisor: Employee-level access + operational modules (Bores, Inventory)
+    const supervisorLinks = [
+        { path: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+        { path: '/admin/govt-bores', label: 'Govt Bores', icon: <Landmark size={20} /> },
+        { path: '/admin/bores', label: 'Private Bores', icon: <Briefcase size={20} /> },
+        { path: '/admin/inventory', label: 'Inventory', icon: <Package size={20} /> },
+        { path: '/payroll', label: 'My Payroll', icon: <Wallet size={20} /> },
+    ];
+
+    const links = isAdmin ? adminLinks : isSupervisor ? supervisorLinks : employeeLinks;
 
     const getPhotoUrl = () => {
         if (user?.profilePhotoUrl) {
-            if (user.profilePhotoUrl.startsWith('http')) return user.profilePhotoUrl;
+            if (user.profilePhotoUrl.startsWith('data:') || user.profilePhotoUrl.startsWith('http')) {
+                return user.profilePhotoUrl;
+            }
             const apiUrl = import.meta.env.VITE_API_URL || '/api';
             const baseUrl = apiUrl.replace('/api', '');
             const photoPath = user.profilePhotoUrl.startsWith('/') ? user.profilePhotoUrl : `/${user.profilePhotoUrl}`;

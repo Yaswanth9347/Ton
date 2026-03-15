@@ -52,7 +52,7 @@ export const authenticateUser = async (username, password) => {
     // Find user (case-insensitive username match)
     const result = await db.query(
         `SELECT u.id, u.username, u.email, u.password_hash, u.first_name, u.last_name,
-                u.is_active,
+                u.is_active, u.profile_photo_url,
                 ${authSchema.failed_login_attempts ? 'u.failed_login_attempts' : '0'} as failed_login_attempts,
                 ${authSchema.account_locked ? 'u.account_locked' : 'false'} as account_locked,
                 r.name as role
@@ -185,6 +185,7 @@ export const authenticateUser = async (username, password) => {
             firstName: user.first_name,
             lastName: user.last_name,
             role: user.role,
+            profilePhotoUrl: user.profile_photo_url,
         },
     };
 };

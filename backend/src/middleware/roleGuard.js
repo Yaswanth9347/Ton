@@ -19,7 +19,9 @@ export const roleGuard = (...allowedRoles) => {
 };
 
 // Convenience exports for common role checks
-// SUPERVISOR has the same privileges as ADMIN
-export const adminOnly = roleGuard('ADMIN', 'SUPERVISOR');
+// adminOnly: strictly ADMIN — for employee mgmt, payroll, settings, attendance mgmt
+export const adminOnly = roleGuard('ADMIN');
+// operationalAdmin: ADMIN + SUPERVISOR — for Bores, Inventory (operational modules)
+export const operationalAdmin = roleGuard('ADMIN', 'SUPERVISOR');
 export const employeeOnly = roleGuard('EMPLOYEE');
 export const anyRole = roleGuard('ADMIN', 'SUPERVISOR', 'EMPLOYEE');

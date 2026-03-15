@@ -153,6 +153,16 @@ export async function ensureGovtBoreSchema() {
       )
     `);
 
+    // 1.5 Ensure BorewellWork table exists
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "BorewellWork" (
+        "id" SERIAL PRIMARY KEY,
+        "mandalId" INTEGER NOT NULL,
+        "villageId" INTEGER NOT NULL,
+        "sNo" INTEGER
+      )
+    `);
+
     // 2. Add pipe_company_id column
     await prisma.$executeRawUnsafe(`
       ALTER TABLE "BorewellWork"

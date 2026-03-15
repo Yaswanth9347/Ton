@@ -17,7 +17,7 @@ export function LoginPage() {
             // Reset on successful login
             adminFailCount.current = 0;
             setShowForgotPassword(false);
-            if (user.role === 'ADMIN' || user.role === 'SUPERVISOR') {
+            if (user.role === 'ADMIN') {
                 navigate('/admin');
             } else {
                 navigate('/dashboard');

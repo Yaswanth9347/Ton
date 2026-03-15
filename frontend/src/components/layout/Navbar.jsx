@@ -13,7 +13,8 @@ export function Navbar({ activeTab, onTabChange }) {
         navigate('/login');
     };
 
-    const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
+    const isAdmin = user?.role === 'ADMIN';
+    const isSupervisor = user?.role === 'SUPERVISOR';
 
     // Employee navigation links
     const employeeLinks = [
@@ -84,7 +85,7 @@ export function Navbar({ activeTab, onTabChange }) {
                         </div>
                         <div className="navbar-user-info">
                             <div className="navbar-user-name">{user?.firstName} {user?.lastName}</div>
-                            <div className="navbar-user-role">{isAdmin ? 'Administrator' : 'Employee'}</div>
+                            <div className="navbar-user-role">{isAdmin ? 'Administrator' : isSupervisor ? 'Supervisor' : 'Employee'}</div>
                         </div>
                     </Link>
 

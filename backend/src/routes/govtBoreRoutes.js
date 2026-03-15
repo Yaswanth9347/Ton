@@ -1,7 +1,7 @@
 import express from 'express';
 import * as govtBoreController from '../controllers/govtBoreController.js';
 import { authenticate } from '../middleware/auth.js';
-import { adminOnly, anyRole } from '../middleware/roleGuard.js';
+import { operationalAdmin, anyRole } from '../middleware/roleGuard.js';
 
 const router = express.Router();
 
@@ -21,13 +21,14 @@ router.get('/mandals/:id/villages', govtBoreController.getVillages);
 // GET /api/govt-bores/:id - Get single record (Read-only for everyone)
 router.get('/:id', anyRole, govtBoreController.getRecord);
 
-// POST /api/govt-bores - Create new record (Admin only)
-router.post('/', adminOnly, govtBoreController.createRecord);
+// POST /api/govt-bores - Create new record (Admin + Supervisor)
+router.post('/', operationalAdmin, govtBoreController.createRecord);
 
-// PUT /api/govt-bores/:id - Update record (Admin only)
-router.put('/:id', adminOnly, govtBoreController.updateRecord);
+// PUT /api/govt-bores/:id - Update record (Admin + Supervisor)
+router.put('/:id', operationalAdmin, govtBoreController.updateRecord);
 
-// DELETE /api/govt-bores/:id - Delete record (Admin only)
-router.delete('/:id', adminOnly, govtBoreController.deleteRecord);
+// DELETE /api/govt-bores/:id - Delete record (Admin + Supervisor)
+router.delete('/:id', operationalAdmin, govtBoreController.deleteRecord);
 
 export default router;
+

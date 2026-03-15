@@ -67,7 +67,8 @@ const ProfilePage = () => {
         try {
             await authApi.uploadProfilePhoto(file);
             toast.success('Profile photo updated');
-            if (refreshUser) refreshUser();
+            if (refreshUser) await refreshUser();
+            window.dispatchEvent(new Event('userUpdated'));
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to upload photo');
         } finally {
@@ -83,7 +84,8 @@ const ProfilePage = () => {
         try {
             await authApi.deleteProfilePhoto();
             toast.success('Profile photo removed');
-            if (refreshUser) refreshUser();
+            if (refreshUser) await refreshUser();
+            window.dispatchEvent(new Event('userUpdated'));
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to remove photo');
         } finally {
@@ -97,7 +99,8 @@ const ProfilePage = () => {
         try {
             await authApi.updateProfile(profileData);
             toast.success('Profile updated successfully');
-            if (refreshUser) refreshUser();
+            if (refreshUser) await refreshUser();
+            window.dispatchEvent(new Event('userUpdated'));
         } catch (error) {
             console.error(error);
             toast.error(error.response?.data?.message || 'Failed to update profile');
@@ -134,8 +137,8 @@ const ProfilePage = () => {
 
     const getPhotoUrl = () => {
         if (user?.profilePhotoUrl) {
-            // Handle both relative and absolute URLs
-            if (user.profilePhotoUrl.startsWith('http')) {
+            // Handle both relative, absolute URLs, and data URIs
+            if (user.profilePhotoUrl.startsWith('data:') || user.profilePhotoUrl.startsWith('http')) {
                 return user.profilePhotoUrl;
             }
             const baseUrl = API_URL.replace('/api', '');

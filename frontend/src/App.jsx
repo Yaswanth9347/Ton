@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -14,12 +14,16 @@ import { Layout } from './components/layout/Layout';
 import { EmployeePayrollPage } from './pages/EmployeePayrollPage';
 import { InventoryPage } from './pages/admin/inventory/InventoryPage';
 
-// Helper: SUPERVISOR has the same privileges as ADMIN
-const isAdminRole = (role) => role === 'ADMIN' || role === 'SUPERVISOR';
+// Helper: strict admin check
+const isAdminRole = (role) => role === 'ADMIN';
+
+// Operational paths that SUPERVISOR can access at admin level
+const SUPERVISOR_ALLOWED_PATHS = ['/admin/govt-bores', '/admin/bores', '/admin/inventory'];
 
 // Protected route component
 function ProtectedRoute({ children, requiredRole }) {
     const { user, loading, isAuthenticated } = useAuth();
+    const location = useLocation();
 
     if (loading) {
         return (
@@ -34,9 +38,18 @@ function ProtectedRoute({ children, requiredRole }) {
     }
 
     if (requiredRole && user.role !== requiredRole) {
-        // SUPERVISOR can access ADMIN routes
-        if (requiredRole === 'ADMIN' && isAdminRole(user.role)) {
+        // SUPERVISOR inherits Employee access — allow Employee routes
+        if (requiredRole === 'EMPLOYEE' && user.role === 'SUPERVISOR') {
             return children;
+        }
+        // SUPERVISOR can access specific operational admin routes
+        if (requiredRole === 'ADMIN' && user.role === 'SUPERVISOR') {
+            const currentPath = location.pathname;
+            if (SUPERVISOR_ALLOWED_PATHS.some(p => currentPath.startsWith(p))) {
+                return children;
+            }
+            // Supervisor trying to access restricted admin routes → redirect to employee dashboard
+            return <Navigate to="/dashboard" replace />;
         }
         if (isAdminRole(user.role)) {
             return <Navigate to="/admin" replace />;
@@ -63,6 +76,7 @@ function PublicRoute({ children }) {
         if (isAdminRole(user.role)) {
             return <Navigate to="/admin" replace />;
         }
+        // SUPERVISOR and EMPLOYEE -> employee dashboard
         return <Navigate to="/dashboard" replace />;
     }
 

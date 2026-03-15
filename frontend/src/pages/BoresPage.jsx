@@ -56,7 +56,7 @@ const DISPLAY_COLS = [
 const ITEMS_PER_PAGE = 25;
 
 export default function BoresPage() {
-    const { isAdmin, isSupervisor } = useAuth();
+    const { isAdmin, isSupervisor, isOperationalAdmin } = useAuth();
     const [records, setRecords] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -334,7 +334,7 @@ export default function BoresPage() {
                         <Download size={16} />
                         <span>Export CSV</span>
                     </button>
-                    {isAdmin && (
+                    {isOperationalAdmin && (
                         <button className="btn btn-primary" onClick={handleAdd}>
                             <Plus size={18} />
                             <span>Add Entry</span>
@@ -371,7 +371,7 @@ export default function BoresPage() {
                                     <div className="bores__empty-content">
                                         <Droplets size={40} strokeWidth={1} />
                                         <p>{search ? 'No records match your search' : 'No bore entries yet'}</p>
-                                        {!search && isAdmin && (
+                                        {!search && isOperationalAdmin && (
                                             <button className="btn btn-primary" onClick={handleAdd}>
                                                 Add First Entry
                                             </button>
@@ -413,7 +413,7 @@ export default function BoresPage() {
                                     })}
                                     <td className="bores__td bores__td--actions-right" style={{ minWidth: '160px', width: '160px' }}>
                                         <div className="bores__action-btns">
-                                            {(isAdmin || isSupervisor) && (
+                                            {isOperationalAdmin && (
                                                 <button
                                                     className="bores__action-btn bores__action-btn--download"
                                                     onClick={() => handleDownloadReceipt(rec)}
@@ -422,7 +422,7 @@ export default function BoresPage() {
                                                     <FileDown size={18} />
                                                 </button>
                                             )}
-                                            {isAdmin ? (
+                                            {isOperationalAdmin ? (
                                                 <>
                                                     <button
                                                         className="bores__action-btn bores__action-btn--edit"
