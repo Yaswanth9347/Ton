@@ -12,6 +12,7 @@ import boreRoutes from './routes/boreRoutes.js';
 import govtBoreRoutes from './routes/govtBoreRoutes.js';
 import payrollRoutes from './routes/payrollRoutes.js';
 import inventoryRoutes from './routes/inventory.js';
+import requestLogger from './middleware/requestLogger.js';
 import { ensureAuthSchema } from './utils/ensureAuthSchema.js';
 import { getCurrentISTDateTime } from './utils/dateTime.js';
 import { ensureInventorySchema } from './utils/ensureInventorySchema.js';
@@ -102,6 +103,7 @@ app.use(helmet());
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(requestLogger);
 
 app.use('/api', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');

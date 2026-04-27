@@ -23,6 +23,8 @@ export function LoginPage() {
                 navigate('/dashboard');
             }
         } catch (err) {
+            console.error('Login failed:', err);
+
             const data = err.response?.data;
             const errMsg = data?.message || data?.error || 'Login failed. Please try again.';
             setError(errMsg);

@@ -5,6 +5,32 @@ const AuthContext = createContext(null);
 
 // Refresh token 1 hour before expiry (token is 24h, so refresh at 23h)
 const TOKEN_REFRESH_INTERVAL = 23 * 60 * 60 * 1000; // 23 hours in ms
+const DATA_URL_STORAGE_LIMIT = 100_000;
+
+function getPersistableUser(user) {
+    if (!user) return user;
+
+    const shouldOmitPhoto =
+        typeof user.profilePhotoUrl === 'string' &&
+        user.profilePhotoUrl.startsWith('data:') &&
+        user.profilePhotoUrl.length > DATA_URL_STORAGE_LIMIT;
+
+    if (!shouldOmitPhoto) return user;
+
+    return {
+        ...user,
+        profilePhotoUrl: null,
+    };
+}
+
+function persistUser(user) {
+    try {
+        localStorage.setItem('user', JSON.stringify(getPersistableUser(user)));
+    } catch (error) {
+        console.warn('Unable to persist user session details:', error);
+        localStorage.removeItem('user');
+    }
+}
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
@@ -43,7 +69,7 @@ export function AuthProvider({ children }) {
                 .then(response => {
                     if (isMounted) {
                         setUser(response.data.data);
-                        localStorage.setItem('user', JSON.stringify(response.data.data));
+                        persistUser(response.data.data);
                         scheduleTokenRefresh();
                     }
                 })
@@ -72,7 +98,7 @@ export function AuthProvider({ children }) {
         const { user, token } = response.data.data;
 
         localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(user));
+        persistUser(user);
         setUser(user);
         scheduleTokenRefresh();
 
@@ -96,7 +122,7 @@ export function AuthProvider({ children }) {
         try {
             const response = await authApi.getCurrentUser();
             setUser(response.data.data);
-            localStorage.setItem('user', JSON.stringify(response.data.data));
+            persistUser(response.data.data);
         } catch (error) {
             console.error('Failed to refresh user:', error);
         }

@@ -16,27 +16,28 @@ const TX_PAGE_SIZE = 10;
 const INVENTORY_SUMMARY_REFRESH_EVENT = 'inventory:summary-refresh';
 
 /* ── Conversion helpers ── */
-const toFeet = (qty, unit) => unit === 'feet' ? parseFloat(qty) : parseFloat(qty) * FEET_PER_PIPE;
-
-const fmtQty = (val, lengthFeet) => {
-    const pipeFt = parseFloat(lengthFeet) || FEET_PER_PIPE;
-    const feet = parseFloat(val || 0);
-    if (!feet || feet === 0) return '0 pipes (0 ft)';
-    const pipes = Math.floor(feet / pipeFt);
-    const rem = Math.round((feet % pipeFt) * 100) / 100;
-    
-    const pipeStr = pipes === 1 ? '1 pipe' : `${pipes} pipes`;
-    const formattedFeet = rem === 0 ? `${feet} ft` : `${feet.toFixed(1)} ft`;
-    
-    if (pipes === 0) return `${formattedFeet}`;
-    return `${pipeStr} (${formattedFeet})`;
+const formatNumber = (value) => {
+    const num = Math.round(parseFloat(value || 0) * 100) / 100;
+    return Number.isInteger(num) ? String(num) : num.toFixed(2);
 };
 
-const getPipeCount = (feetValue, lengthFeet) => {
+const fmtQty = (val) => {
+    const feet = parseFloat(val || 0);
+    if (!feet || feet === 0) return '0 pipes (0 ft)';
+
+    const fullPipes = Math.floor(feet / FEET_PER_PIPE);
+    const remainingFeet = Math.round((feet % FEET_PER_PIPE) * 100) / 100;
+    const totalFeet = `${formatNumber(feet)} ft`;
+    const pipeLabel = fullPipes === 1 ? '1 pipe' : `${fullPipes} pipes`;
+
+    if (remainingFeet === 0) return `${pipeLabel} (${totalFeet})`;
+    if (fullPipes === 0) return `${formatNumber(remainingFeet)} ft (${totalFeet})`;
+    return `${pipeLabel} + ${formatNumber(remainingFeet)} ft (${totalFeet})`;
+};
+
+const getPipeCount = (feetValue) => {
     const totalFeet = parseFloat(feetValue || 0);
-    const pipeFt = parseFloat(lengthFeet) || FEET_PER_PIPE;
-    if (!pipeFt) return 0;
-    return totalFeet / pipeFt;
+    return totalFeet / FEET_PER_PIPE;
 };
 
 const formatPipeLabel = (company, size) => {
@@ -106,7 +107,7 @@ export function PipesInventory() {
     const [toast, setToast] = useState(null);
     const [confirm, setConfirm] = useState(null);
     const [formData, setFormData] = useState({
-        quantity: '', unit: 'pipes',
+        quantity: '', extra_feet: '', unit: 'pipes',
         bore_type: '', bore_id: '',
         vehicle_name: '', supervisor_name: '', remarks: '',
         size: '', company: '',
@@ -172,7 +173,7 @@ export function PipesInventory() {
         setSelPipe(pipe);
         setSelAllocation(allocation);
         setFormData({
-            quantity: '', unit: 'pipes', bore_type: allocation?.bore_type?.toUpperCase() || '', bore_id: allocation?.bore_id || '',
+            quantity: '', extra_feet: '', unit: 'pipes', bore_type: allocation?.bore_type?.toUpperCase() || '', bore_id: allocation?.bore_id || '',
             vehicle_name: allocation?.vehicle_name || '', supervisor_name: allocation?.supervisor_name || '', remarks: '',
             size: '', company: '', material_type: '', quality_grade: '', length_feet: '20', cost_per_unit: '',
             allocation_id: allocation?.id || ''
@@ -181,23 +182,54 @@ export function PipesInventory() {
     };
     const closeModal = () => { setShowModal(false); setSelPipe(null); setSelAllocation(null); };
 
+    const getFormQuantityFeet = () => {
+        const quantity = parseFloat(formData.quantity || 0);
+        if (!Number.isFinite(quantity) || quantity < 0) return NaN;
+
+        if (formData.unit === 'feet') {
+            return quantity;
+        }
+
+        const extraFeet = parseFloat(formData.extra_feet || 0);
+        if (!Number.isFinite(extraFeet) || extraFeet < 0 || extraFeet >= FEET_PER_PIPE) return NaN;
+
+        return (quantity * FEET_PER_PIPE) + extraFeet;
+    };
+
+    const getQuantityPayload = (required = true) => {
+        const quantityFeet = getFormQuantityFeet();
+
+        if (!Number.isFinite(quantityFeet)) {
+            throw new Error(`Enter valid pipe quantity. Extra feet must be between 0 and ${FEET_PER_PIPE - 0.01}.`);
+        }
+
+        if (required && quantityFeet <= 0) {
+            throw new Error('Pipe quantity must be greater than 0.');
+        }
+
+        return {
+            quantity: quantityFeet,
+            unit: 'feet',
+        };
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
         try {
             const headers = authHeaders();
             if (modalType === 'add') {
+                const quantityPayload = getQuantityPayload();
                 await axios.post(`${API_URL}/inventory/pipes/add-stock`, {
                     pipe_id: selPipe.id,
-                    quantity: parseFloat(formData.quantity),
-                    unit: formData.unit
+                    ...quantityPayload
                 }, { headers });
                 showToast('success', 'Stock added successfully');
             } else if (modalType === 'issue') {
+                const quantityPayload = getQuantityPayload();
                 await axios.post(`${API_URL}/inventory/pipes/issue`, {
                     pipe_inventory_id: selPipe.id,
-                    quantity: parseFloat(formData.quantity),
-                    unit: formData.unit,
+                    ...quantityPayload,
                     bore_type: formData.bore_type || null,
                     bore_id: formData.bore_id ? parseInt(formData.bore_id) : null,
                     vehicle_name: formData.vehicle_name,
@@ -206,21 +238,22 @@ export function PipesInventory() {
                 }, { headers });
                 showToast('success', 'Pipes issued successfully');
             } else if (modalType === 'return') {
+                const quantityPayload = getQuantityPayload();
                 await axios.post(`${API_URL}/inventory/pipes/return`, {
                     allocation_id: formData.allocation_id ? parseInt(formData.allocation_id) : null,
-                    quantity: parseFloat(formData.quantity),
-                    unit: formData.unit,
+                    ...quantityPayload,
                     remarks: formData.remarks
                 }, { headers });
                 showToast('success', 'Pipes returned successfully');
             } else if (modalType === 'new-pipe') {
+                const quantityPayload = getQuantityPayload(false);
                 const payload = {
                     size: formData.size, company: formData.company,
-                    quantity: formData.quantity ? parseInt(formData.quantity) : 0,
-                    unit: formData.unit,
+                    quantity: quantityPayload.quantity,
+                    unit: quantityPayload.unit,
                     material_type: formData.material_type || null,
                     quality_grade: formData.quality_grade || null,
-                    length_feet: formData.length_feet ? parseFloat(formData.length_feet) : 20,
+                    length_feet: FEET_PER_PIPE,
                     cost_per_unit: formData.cost_per_unit ? parseFloat(formData.cost_per_unit) : 0
                 };
                 const res = await axios.post(`${API_URL}/inventory/pipes`, payload, { headers });
@@ -270,8 +303,8 @@ export function PipesInventory() {
     let totalFullPipes = 0, totalPieceFt = 0, totalInUseFeet = 0;
     pipes.forEach(pipe => {
         const q = parseFloat((pipe.store_quantity ?? pipe.quantity) || 0);
-        totalFullPipes += Math.floor(q / (parseFloat(pipe.length_feet || FEET_PER_PIPE) || FEET_PER_PIPE));
-        totalPieceFt += q % (parseFloat(pipe.length_feet || FEET_PER_PIPE) || FEET_PER_PIPE);
+        totalFullPipes += Math.floor(q / FEET_PER_PIPE);
+        totalPieceFt += q % FEET_PER_PIPE;
         totalInUseFeet += parseFloat(pipe.in_use_quantity || 0);
     });
     const lowStock = pipes.filter(p => {
@@ -376,7 +409,7 @@ export function PipesInventory() {
                                         const stockFeet = parseFloat((pipe.store_quantity ?? pipe.quantity) || 0);
                                         const st = stockStatus(stockFeet);
                                         const costPerUnit = parseFloat(pipe.cost_per_unit || 0);
-                                        const totalValue = getPipeCount(stockFeet, pipe.length_feet) * costPerUnit;
+                                        const totalValue = getPipeCount(stockFeet) * costPerUnit;
                                         return (
                                             <tr key={pipe.id} style={st === 'critical' ? { background: 'rgba(239,68,68,0.04)' } : st === 'low' ? { background: 'rgba(245,158,11,0.04)' } : {}}>
                                                 <td style={{ textAlign: 'center' }}>
@@ -397,7 +430,7 @@ export function PipesInventory() {
                                                         }}>{pipe.quality_grade}</span>
                                                     ) : '—'}
                                                 </td>
-                                                <td style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', textAlign: 'center' }}>{fmtQty(stockFeet, pipe.length_feet)}</td>
+                                                <td style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', textAlign: 'center' }}>{fmtQty(stockFeet)}</td>
                                                 <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem', textAlign: 'center' }}>
                                                     {costPerUnit > 0 ? `₹${costPerUnit.toLocaleString('en-IN')}` : '—'}
                                                 </td>
@@ -459,9 +492,9 @@ export function PipesInventory() {
                                     <td style={{ textTransform: 'capitalize', textAlign: 'center' }}>{allocation.bore_type}</td>
                                     <td style={{ textAlign: 'center' }}>{formatVehicleDisplay(allocation.vehicle_name)}</td>
                                     <td style={{ textAlign: 'center' }}>{formatPipeLabel(allocation.pipe_company, allocation.pipe_size)}</td>
-                                    <td style={{ textAlign: 'center' }}>{fmtQty(allocation.issued_quantity, allocation.length_feet)}</td>
-                                    <td style={{ textAlign: 'center' }}>{allocation.returned_quantity > 0 ? fmtQty(allocation.returned_quantity, allocation.length_feet) : '—'}</td>
-                                    <td style={{ fontWeight: 700, color: 'var(--color-warning)', textAlign: 'center' }}>{fmtQty(allocation.open_quantity, allocation.length_feet)}</td>
+                                    <td style={{ textAlign: 'center' }}>{fmtQty(allocation.issued_quantity)}</td>
+                                    <td style={{ textAlign: 'center' }}>{allocation.returned_quantity > 0 ? fmtQty(allocation.returned_quantity) : '—'}</td>
+                                    <td style={{ fontWeight: 700, color: 'var(--color-warning)', textAlign: 'center' }}>{fmtQty(allocation.open_quantity)}</td>
                                     <td style={{ textAlign: 'center' }}>
                                         <button className="inv-btn inv-btn--ghost inv-btn--sm" onClick={() => openModal('return', pipes.find(p => p.id === allocation.pipe_inventory_id) || null, allocation)}>
                                             <RotateCcw size={13} /> Return
@@ -553,7 +586,7 @@ export function PipesInventory() {
                                         </td>
                                         <td style={{ fontWeight: 600, textAlign: 'center' }}>{tx.size}</td>
                                         <td style={{ textAlign: 'center' }}>{tx.company}</td>
-                                        <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, textAlign: 'center' }}>{fmtQty(tx.quantity, tx.length_feet)}</td>
+                                        <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, textAlign: 'center' }}>{fmtQty(tx.quantity)}</td>
                                         <td style={{ color: 'var(--text-muted)', textAlign: 'center' }}>
                                             {(() => {
                                                 const val = tx.bore_type;
@@ -655,17 +688,26 @@ export function PipesInventory() {
                                         <div className="inv-form-row">
                                             <div className="inv-form-group">
                                                 <label>Length per pipe (feet)</label>
-                                                <input type="number" step="0.5" min="1" value={formData.length_feet} onChange={e => setFormData(f => ({ ...f, length_feet: e.target.value }))} placeholder="20" />
+                                                <input type="number" value={FEET_PER_PIPE} readOnly />
                                             </div>
                                             <div className="inv-form-group">
                                                 <label>Cost per Unit (₹)</label>
                                                 <input type="number" step="0.01" min="0" value={formData.cost_per_unit} onChange={e => setFormData(f => ({ ...f, cost_per_unit: e.target.value }))} placeholder="0.00" />
                                             </div>
                                         </div>
-                                        <div className="inv-form-group">
-                                            <label>Initial Quantity (optional)</label>
-                                            <input type="number" min="0" value={formData.quantity} onChange={e => setFormData(f => ({ ...f, quantity: e.target.value }))} placeholder="0" />
+                                        <div className="inv-form-row">
+                                            <div className="inv-form-group">
+                                                <label>Initial Full Pipes (optional)</label>
+                                                <input type="number" step="1" min="0" value={formData.quantity} onChange={e => setFormData(f => ({ ...f, quantity: e.target.value, unit: 'pipes' }))} placeholder="0" />
+                                            </div>
+                                            <div className="inv-form-group">
+                                                <label>Extra Feet (optional)</label>
+                                                <input type="number" step="0.01" min="0" max="19.99" value={formData.extra_feet} onChange={e => setFormData(f => ({ ...f, extra_feet: e.target.value, unit: 'pipes' }))} placeholder="0" />
+                                            </div>
                                         </div>
+                                        {(formData.quantity || formData.extra_feet) && Number.isFinite(getFormQuantityFeet()) && (
+                                            <div className="inv-form-hint">Total stock: {fmtQty(getFormQuantityFeet())}</div>
+                                        )}
                                     </>
                                 ) : (
                                     <>
@@ -674,23 +716,28 @@ export function PipesInventory() {
                                             <input type="text" value={`${selPipe?.size} — ${selPipe?.company}`} disabled />
                                         </div>
                                         <div className="inv-form-group">
-                                            <label>Quantity *</label>
+                                            <label>{formData.unit === 'pipes' ? 'Full Pipes *' : 'Total Feet *'}</label>
                                             <div className="inv-form-group-inline">
-                                                <input type="number" step="0.1" min="0.1" value={formData.quantity}
-                                                    onChange={e => setFormData(f => ({ ...f, quantity: e.target.value }))} placeholder="Enter quantity" required />
-                                                <select value={formData.unit} onChange={e => setFormData(f => ({ ...f, unit: e.target.value }))}>
+                                                <input type="number" step={formData.unit === 'pipes' ? '1' : '0.01'} min={formData.unit === 'pipes' ? '0' : '0.01'} value={formData.quantity}
+                                                    onChange={e => setFormData(f => ({ ...f, quantity: e.target.value }))} placeholder="Enter quantity" required={formData.unit === 'feet'} />
+                                                <select value={formData.unit} onChange={e => setFormData(f => ({ ...f, unit: e.target.value, extra_feet: '' }))}>
                                                     <option value="pipes">Pipes</option>
                                                     <option value="feet">Feet</option>
                                                 </select>
                                             </div>
-                                            {formData.quantity && (
-                                                <div className="inv-form-hint">
-                                                    ≈ {formData.unit === 'pipes'
-                                                        ? `${(parseFloat(formData.quantity) * FEET_PER_PIPE).toFixed(1)} feet`
-                                                        : `${(parseFloat(formData.quantity) / FEET_PER_PIPE).toFixed(2)} pipes`}
-                                                </div>
-                                            )}
                                         </div>
+                                        {formData.unit === 'pipes' && (
+                                            <div className="inv-form-group">
+                                                <label>Extra Feet</label>
+                                                <input type="number" step="0.01" min="0" max="19.99" value={formData.extra_feet}
+                                                    onChange={e => setFormData(f => ({ ...f, extra_feet: e.target.value }))} placeholder="0" />
+                                            </div>
+                                        )}
+                                        {(formData.quantity || formData.extra_feet) && Number.isFinite(getFormQuantityFeet()) && (
+                                            <div className="inv-form-hint">
+                                                Total: {fmtQty(getFormQuantityFeet())}
+                                            </div>
+                                        )}
                                         {(modalType === 'issue' || modalType === 'return') && (
                                             <>
                                                 {modalType === 'return' && (
@@ -713,7 +760,7 @@ export function PipesInventory() {
                                                                 .filter(a => !selPipe || a.pipe_inventory_id === selPipe.id)
                                                                 .map(a => (
                                                                     <option key={a.id} value={a.id}>
-                                                                        {a.bore_reference} · {a.vehicle_name || 'No vehicle'} · Open {fmtQty(a.open_quantity, a.length_feet)}
+                                                                        {a.bore_reference} · {a.vehicle_name || 'No vehicle'} · Open {fmtQty(a.open_quantity)}
                                                                     </option>
                                                                 ))}
                                                         </select>
