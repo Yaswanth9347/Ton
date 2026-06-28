@@ -86,7 +86,6 @@ export function PipesInventory() {
     const [selPipe, setSelPipe] = useState(null);
     const [selAllocation, setSelAllocation] = useState(null);
     const [confirm, setConfirm] = useState(null);
-    const [reorderModal, setReorderModal] = useState(null);
     const [showCompanyModal, setShowCompanyModal] = useState(false);
     const [companySubmitting, setCompanySubmitting] = useState(false);
     const [companyForm, setCompanyForm] = useState({ company_name: '', edit_id: null });
@@ -251,25 +250,6 @@ export function PipesInventory() {
         }
     };
 
-    const handleUpdatePipeSettings = (pipe) => {
-        setReorderModal({
-            type: 'pipe',
-            id: pipe.id,
-            name: `${pipe.company} (${pipe.size})`,
-            currentValue: pipe.reorder_level || 10
-        });
-    };
-
-    const submitPipeReorder = async (id, reorderLevel) => {
-        try {
-            await inventoryApi.updatePipeSettings(id, { reorder_level: reorderLevel });
-            toast.success('Pipe reorder level updated');
-            await Promise.all([fetchPipes(), fetchTxns()]);
-            refreshInventorySummary();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to update pipe settings');
-        }
-    };
 
     const getFormQuantityFeet = () => {
         const selectedLengthFeet = getSelectedPipeLengthFeet();
@@ -312,7 +292,8 @@ export function PipesInventory() {
                 const quantityPayload = getQuantityPayload();
                 await inventoryApi.addStock({
                     pipe_id: selPipe.id,
-                    ...quantityPayload
+                    ...quantityPayload,
+                    remarks: formData.remarks
                 });
                 toast.success('Stock added successfully');
             } else if (modalType === 'issue') {
@@ -369,22 +350,6 @@ export function PipesInventory() {
         }
     };
 
-    const handleDelete = (pipeId) => {
-        setConfirm({
-            message: 'Archive this pipe type? Stock must be 0, active bore allocations must be cleared, and historical transactions will be kept.',
-            onConfirm: async () => {
-                setConfirm(null);
-                try {
-                    await inventoryApi.deletePipe(pipeId);
-                    toast.success('Pipe type archived');
-                    fetchPipes();
-                    refreshInventorySummary();
-                } catch (err) {
-                    toast.error(err.response?.data?.message || 'Error archiving pipe');
-                }
-            }
-        });
-    };
 
     if (loading) {
         return <div className="inv-spinner"><div className="inv-spinner__ring" />Loading pipes inventory…</div>;
@@ -481,45 +446,7 @@ export function PipesInventory() {
     return (
         <div>
             {confirm && <ConfirmDialog message={confirm.message} onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />}
-            {reorderModal && (
-                <div className="modal-overlay" onClick={() => setReorderModal(null)}>
-                    <div className="inv-modal" onClick={e => e.stopPropagation()}>
-                        <div className="inv-modal__header">
-                            <span className="inv-modal__title"><SlidersHorizontal size={16} /> Set Reorder Level</span>
-                            <button className="inv-modal__close" onClick={() => setReorderModal(null)}>×</button>
-                        </div>
-                        <form onSubmit={(e) => {
-                            e.preventDefault();
-                            const val = parseInt(e.target.reorderLevel.value, 10);
-                            if (isNaN(val) || val < 0) {
-                                toast.error('Reorder level must be a non-negative integer');
-                                return;
-                            }
-                            submitPipeReorder(reorderModal.id, val);
-                            setReorderModal(null);
-                        }}>
-                            <div className="inv-modal__body">
-                                <div className="inv-form-group">
-                                    <label className="inv-form-label">Reorder Level for {reorderModal.name}</label>
-                                    <input
-                                        type="number"
-                                        name="reorderLevel"
-                                        className="inv-form-input"
-                                        defaultValue={reorderModal.currentValue}
-                                        min="0"
-                                        required
-                                        autoFocus
-                                    />
-                                </div>
-                            </div>
-                            <div className="inv-modal__footer">
-                                <button type="button" className="inv-btn inv-btn--secondary" onClick={() => setReorderModal(null)}>Cancel</button>
-                                <button type="submit" className="inv-btn inv-btn--primary">Save Settings</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+
             {topErrors.length > 0 && (
                 <div style={{
                     marginBottom: 'var(--spacing-4)',
@@ -598,13 +525,12 @@ export function PipesInventory() {
                                 <th style={{ textAlign: 'center' }}>Store Stock</th>
                                 <th style={{ textAlign: 'center' }}>Cost/Unit</th>
                                 <th style={{ textAlign: 'center' }}>Value</th>
-                                <th style={{ textAlign: 'center' }}>Status</th>
                                 <th style={{ textAlign: 'center' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {pipes.length === 0 ? (
-                                <tr><td colSpan="9" className="inv-table__empty" style={{ textAlign: 'center' }}>No pipe types found. Add one to get started.</td></tr>
+                                <tr><td colSpan="8" className="inv-table__empty" style={{ textAlign: 'center' }}>No pipe types found. Add one to get started.</td></tr>
                             ) : (
                                 Object.entries(pipesBySize).flatMap(([size, sizePipes]) =>
                                     sizePipes.map((pipe, idx) => {
@@ -614,12 +540,6 @@ export function PipesInventory() {
                                         const costPerUnit = parseFloat(pipe.cost_per_unit || 0);
                                         const totalValue = getPipeCount(stockFeet, lengthFeet) * costPerUnit;
                                         const hasActiveAllocation = allocations.some(a => a.pipe_inventory_id === pipe.id);
-                                        const canArchive = stockFeet === 0 && !hasActiveAllocation;
-                                        const archiveTitle = !canArchive
-                                            ? stockFeet > 0
-                                                ? 'Set stock to 0 before archiving'
-                                                : 'Return active bore allocations before archiving'
-                                            : 'Archive Pipe Type';
                                         return (
                                             <tr key={pipe.id} style={st === 'critical' ? { background: 'rgba(239,68,68,0.04)' } : st === 'low' ? { background: 'rgba(245,158,11,0.04)' } : {}}>
                                                 <td style={{ textAlign: 'center' }}>
@@ -634,8 +554,14 @@ export function PipesInventory() {
                                                 <td style={{ fontSize: '0.8rem', textAlign: 'center' }}>
                                                     {pipe.quality_grade ? (
                                                         <span style={{
-                                                            background: pipe.quality_grade === 'Premium' ? 'rgba(16,185,129,0.1)' : pipe.quality_grade === 'Standard' ? 'rgba(37,99,235,0.1)' : 'rgba(156,163,175,0.1)',
-                                                            color: pipe.quality_grade === 'Premium' ? 'var(--color-success)' : pipe.quality_grade === 'Standard' ? 'var(--color-primary)' : 'var(--text-muted)',
+                                                            background: pipe.quality_grade === 'Gold' ? 'rgba(245,158,11,0.1)' : 
+                                                                        (pipe.quality_grade === 'Special' || pipe.quality_grade === 'Premium') ? 'rgba(16,185,129,0.1)' : 
+                                                                        pipe.quality_grade === 'Standard' ? 'rgba(37,99,235,0.1)' : 
+                                                                        'rgba(156,163,175,0.1)',
+                                                            color: pipe.quality_grade === 'Gold' ? 'var(--color-warning)' : 
+                                                                   (pipe.quality_grade === 'Special' || pipe.quality_grade === 'Premium') ? 'var(--color-success)' : 
+                                                                   pipe.quality_grade === 'Standard' ? 'var(--color-primary)' : 
+                                                                   'var(--text-muted)',
                                                             padding: '2px 8px', borderRadius: 'var(--radius-full)', fontWeight: 600, fontSize: '0.7rem'
                                                         }}>{pipe.quality_grade}</span>
                                                     ) : '—'}
@@ -648,29 +574,12 @@ export function PipesInventory() {
                                                     {totalValue > 0 ? `₹${totalValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}
                                                 </td>
                                                 <td style={{ textAlign: 'center' }}>
-                                                    <span className={`status-badge status-badge--${st}`}>
-                                                        <span className="status-badge__dot" />
-                                                        {st === 'good' ? 'Good' : st === 'low' ? 'Low' : 'Critical'}
-                                                    </span>
-                                                </td>
-                                                <td style={{ textAlign: 'center' }}>
                                                     <div className="inv-actions" style={{ justifyContent: 'center' }}>
                                                         <button className="inv-action-btn inv-action-btn--add" title="Add Stock" onClick={() => openModal('add', pipe)}><Plus size={14} /></button>
                                                         <button className="inv-action-btn inv-action-btn--issue" title="Issue to Bore" onClick={() => openModal('issue', pipe)} disabled={parseFloat(pipe.store_quantity ?? pipe.quantity) === 0}><Minus size={14} /></button>
-                                                        <button className="inv-action-btn inv-action-btn--return" title="Return from Bore" onClick={() => openModal('return', pipe)} disabled={!allocations.some(a => a.pipe_inventory_id === pipe.id)}><RotateCcw size={14} /></button>
+                                                        <button className="inv-action-btn inv-action-btn--return" title="Return from Bore" onClick={() => openModal('return', pipe)} disabled={!hasActiveAllocation}><RotateCcw size={14} /></button>
                                                         {user?.role === 'ADMIN' && (
-                                                            <>
-                                                                <button className="inv-action-btn inv-action-btn--load" title="Adjust Stock" onClick={() => openModal('adjust', pipe)}><SlidersHorizontal size={14} /></button>
-                                                                <button className="inv-action-btn inv-action-btn--issue" title="Set Reorder Level" onClick={() => handleUpdatePipeSettings(pipe)}><Pencil size={14} /></button>
-                                                                <button
-                                                                    className="inv-action-btn inv-action-btn--delete"
-                                                                    title={archiveTitle}
-                                                                    onClick={() => handleDelete(pipe.id)}
-                                                                    disabled={!canArchive}
-                                                                >
-                                                                    <Trash2 size={14} />
-                                                                </button>
-                                                            </>
+                                                            <button className="inv-action-btn inv-action-btn--load" title="Adjust Stock" onClick={() => openModal('adjust', pipe)}><SlidersHorizontal size={14} /></button>
                                                         )}
                                                     </div>
                                                 </td>
@@ -893,19 +802,12 @@ export function PipesInventory() {
                                             </div>
                                         </div>
                                         <div className="inv-form-row">
-                                            <div className="inv-form-group">
-                                                <label>Material Type</label>
-                                                <select value={formData.material_type} onChange={e => setFormData(f => ({ ...f, material_type: e.target.value }))}>
-                                                    <option value="">Select material</option>
-                                                    <option value="PVC">PVC</option>
-                                                    <option value="Mild Steel">Mild Steel</option>
-                                                </select>
-                                            </div>
-                                            <div className="inv-form-group">
+                                            <div className="inv-form-group" style={{ flex: 1 }}>
                                                 <label>Quality Grade</label>
                                                 <select value={formData.quality_grade} onChange={e => setFormData(f => ({ ...f, quality_grade: e.target.value }))}>
                                                     <option value="">Select quality</option>
-                                                    <option value="Premium">Premium</option>
+                                                    <option value="Gold">Gold</option>
+                                                    <option value="Special">Special</option>
                                                     <option value="Standard">Standard</option>
                                                 </select>
                                             </div>
@@ -961,6 +863,12 @@ export function PipesInventory() {
                                         {(formData.quantity || formData.extra_feet) && Number.isFinite(getFormQuantityFeet()) && (
                                             <div className="inv-form-hint">
                                                 Total: {fmtQty(getFormQuantityFeet())}
+                                            </div>
+                                        )}
+                                        {modalType === 'add' && (
+                                            <div className="inv-form-group">
+                                                <label>Remarks</label>
+                                                <textarea value={formData.remarks} onChange={e => setFormData(f => ({ ...f, remarks: e.target.value }))} rows={2} placeholder="Optional notes…" />
                                             </div>
                                         )}
                                         {modalType === 'adjust' && (

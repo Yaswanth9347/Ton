@@ -198,7 +198,7 @@ export const addPipeStock = async (pipeId, quantity, unit, userId, options = {})
                 created_by: userId,
                 source_location: options.source_location || 'SUPPLIER',
                 destination_location: options.destination_location || 'MAIN_STORE',
-                remarks: 'Stock received into main store'
+                remarks: options.remarks ? options.remarks.trim() : 'Stock received into main store'
             }
         });
 

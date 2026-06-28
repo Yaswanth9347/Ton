@@ -56,7 +56,7 @@ export const createPipe = async (req, res, next) => {
 
 export const addStock = async (req, res, next) => {
     try {
-        const { pipe_id, quantity, unit, source_location, destination_location } = req.body;
+        const { pipe_id, quantity, unit, source_location, destination_location, remarks } = req.body;
 
         if (!pipe_id || !quantity || quantity <= 0) {
             return res.status(400).json({
@@ -72,7 +72,8 @@ export const addStock = async (req, res, next) => {
             req.user.id,
             {
                 source_location,
-                destination_location
+                destination_location,
+                remarks
             }
         );
 
