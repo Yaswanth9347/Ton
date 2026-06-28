@@ -18,7 +18,7 @@ const DISPLAY_COLS = [
     { key: 'customer_name', label: 'Customer', width: '180px' },
     { key: 'village', label: 'Village', width: '140px' },
     { key: 'vehicle_name', label: 'Vehicle', width: '120px' },
-    { key: 'supervisor_name', label: 'Supervisor', width: '150px' },
+    { key: 'supervisor_name', label: 'Location', width: '150px' },
     { key: 'bore_type', label: 'Type', width: '80px', align: 'center' },
     // Drilling Details
     { key: 'drill_upto_casing_feet', label: 'Upto Cas (Ft)', width: '100px', type: 'number', align: 'center' },
@@ -323,7 +323,7 @@ export default function BoresPage() {
                     <Search size={18} className="bores__search-icon" />
                     <input
                         type="text"
-                        placeholder="Search by customer, village, supervisor, vehicle..."
+                        placeholder="Search by customer, village, location, vehicle..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="bores__search-input"

@@ -5,6 +5,8 @@ import { getCurrentISTDate, getCurrentISTMonthYear, getISTDateDaysAgo } from '..
 import * as overtimeService from '../services/overtimeService.js';
 import { logAudit } from '../middleware/auditLogger.js';
 import db from '../models/db.js';
+import prisma from '../config/prisma.js';
+
 
 /**
  * Get dashboard statistics
@@ -494,48 +496,36 @@ export const getEmployeePayrollHistory = async (req, res, next) => {
 export const getLoginHistory = async (req, res, next) => {
     try {
         const { limit = 50, offset = 0, username, action } = req.query;
+        const take = parseInt(limit, 10) || 50;
+        const skip = parseInt(offset, 10) || 0;
 
-        let whereClause = '';
-        const params = [];
-        const conditions = [];
-
+        const where = {};
         if (username) {
-            params.push(`%${username}%`);
-            conditions.push(`la.username ILIKE $${params.length}`);
+            where.username = {
+                contains: username,
+                mode: 'insensitive',
+            };
         }
-
         if (action) {
-            params.push(action);
-            conditions.push(`la.action = $${params.length}`);
+            where.action = action;
         }
 
-        if (conditions.length > 0) {
-            whereClause = 'WHERE ' + conditions.join(' AND ');
-        }
-
-        params.push(parseInt(limit));
-        params.push(parseInt(offset));
-
-        const result = await db.query(
-            `SELECT la.id, la.user_id, la.username, la.action,
-                    la.ip_address, la.user_agent, la.details, la.created_at
-             FROM login_audit la
-             ${whereClause}
-             ORDER BY la.created_at DESC
-             LIMIT $${params.length - 1} OFFSET $${params.length}`,
-            params
-        );
-
-        // Get total count for pagination
-        const countResult = await db.query(
-            `SELECT COUNT(*) as total FROM login_audit la ${whereClause}`,
-            params.slice(0, -2) // exclude limit & offset
-        );
+        const [records, total] = await Promise.all([
+            prisma.login_audit.findMany({
+                where,
+                orderBy: {
+                    created_at: 'desc',
+                },
+                take,
+                skip,
+            }),
+            prisma.login_audit.count({ where }),
+        ]);
 
         res.json({
             success: true,
             data: {
-                records: result.rows.map((r) => ({
+                records: records.map((r) => ({
                     id: r.id,
                     userId: r.user_id,
                     username: r.username,
@@ -545,16 +535,12 @@ export const getLoginHistory = async (req, res, next) => {
                     details: r.details,
                     createdAt: r.created_at,
                 })),
-                total: parseInt(countResult.rows[0].total),
-                limit: parseInt(limit),
-                offset: parseInt(offset),
+                total,
+                limit: take,
+                offset: skip,
             },
         });
     } catch (error) {
-        // Table might not exist yet
-        if (error.code === '42P01') {
-            return res.json({ success: true, data: { records: [], total: 0, limit: 50, offset: 0 } });
-        }
         next(error);
     }
 };

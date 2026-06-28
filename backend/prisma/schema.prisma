@@ -1024,3 +1024,18 @@ model diesel_stock_transactions {
   diesel_vehicle diesel_vehicle_master? @relation(fields: [diesel_vehicle_id], references: [id])
   user          users         @relation(fields: [created_by], references: [id])
 }
+
+model login_audit {
+  id         Int      @id @default(autoincrement())
+  user_id    Int?
+  username   String?  @db.VarChar(100)
+  action     String   @db.VarChar(30)
+  ip_address String?  @db.VarChar(45)
+  user_agent String?  @db.Text
+  details    String?  @db.Text
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([created_at(sort: Desc)], map: "idx_login_audit_created")
+  @@index([user_id], map: "idx_login_audit_user")
+}
+

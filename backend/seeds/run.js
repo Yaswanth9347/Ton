@@ -33,7 +33,7 @@ async function seed() {
         await pool.query(
             `INSERT INTO users (username, email, password_hash, first_name, last_name, role_id, is_active, base_salary)
        VALUES ($1, $2, $3, $4, $5, $6, true, 50000.00)
-       ON CONFLICT (username) DO UPDATE SET password_hash = $3, base_salary = 50000.00`,
+       ON CONFLICT (username) DO NOTHING`,
             ['Admin', 'yaswanthyerra2025@gmail.com', adminPassword, 'System', 'Administrator', roles.ADMIN]
         );
         console.log('Admin user created: Admin / Admin@13');
@@ -43,7 +43,7 @@ async function seed() {
         await pool.query(
             `INSERT INTO users (username, email, password_hash, first_name, last_name, role_id, is_active, base_salary)
        VALUES ($1, $2, $3, $4, $5, $6, true, 0)
-       ON CONFLICT (username) DO UPDATE SET password_hash = $3, role_id = $6`,
+       ON CONFLICT (username) DO NOTHING`,
             ['Supervisor', 'supervisor@company.com', supervisorPassword, 'Site', 'Supervisor', roles.SUPERVISOR]
         );
         console.log('Supervisor user created: Supervisor / Super@13');
@@ -53,7 +53,7 @@ async function seed() {
         await pool.query(
             `INSERT INTO users (username, email, password_hash, first_name, last_name, role_id, is_active, base_salary)
        VALUES ($1, $2, $3, $4, $5, $6, true, 3000.00)
-       ON CONFLICT (username) DO UPDATE SET password_hash = $3, base_salary = 3000.00`,
+       ON CONFLICT (username) DO NOTHING`,
             ['User1', 'user1@company.com', userPassword, 'John', 'Doe', roles.EMPLOYEE]
         );
         console.log('Employee user created: User1 / User@123');

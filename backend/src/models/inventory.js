@@ -1,4 +1,6 @@
 import db from './db.js';
+import prisma from '../config/prisma.js';
+
 
 // =============================================
 // PIPES INVENTORY
@@ -40,21 +42,13 @@ export const updatePipeQuantity = async (id, quantity, pieces) => {
 };
 
 export const deletePipe = async (id) => {
-    const client = await db.getClient();
-    try {
-        await client.query('BEGIN');
+    return await prisma.$transaction(async (tx) => {
         // Delete related transactions first to satisfy foreign key constraints
-        await client.query('DELETE FROM pipe_transactions WHERE pipe_inventory_id = $1', [id]);
+        await tx.$executeRawUnsafe('DELETE FROM pipe_transactions WHERE pipe_inventory_id = $1', id);
         // Delete the pipe inventory record
-        const result = await client.query('DELETE FROM pipe_inventory WHERE id = $1 RETURNING *', [id]);
-        await client.query('COMMIT');
-        return result.rows[0];
-    } catch (e) {
-        await client.query('ROLLBACK');
-        throw e;
-    } finally {
-        client.release();
-    }
+        const result = await tx.$queryRawUnsafe('DELETE FROM pipe_inventory WHERE id = $1 RETURNING *', id);
+        return result[0];
+    });
 };
 
 export const getPipeTransactions = async (filters = {}) => {

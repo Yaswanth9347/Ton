@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
-dotenv.config();
+dotenv.config({ override: true });
+
 
 let config;
 

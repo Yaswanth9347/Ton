@@ -1,13 +1,11 @@
 import { useState, useEffect, Suspense, lazy, useCallback } from 'react';
 import { Package, Wrench, Fuel, Boxes, IndianRupee, TrendingUp, AlertTriangle } from 'lucide-react';
-import axios from 'axios';
+import { inventoryApi } from '../../../services/api';
 import './InventoryPage.css';
 
 const PipesInventory = lazy(() => import('./PipesInventory'));
 const SparesInventory = lazy(() => import('./SparesInventory'));
 const DieselTracking = lazy(() => import('./DieselTracking'));
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const tabs = [
     { id: 'pipes', label: 'Pipes', icon: <Package size={17} /> },
@@ -34,15 +32,16 @@ function LoadingSpinner() {
 export function InventoryPage() {
     const [activeTab, setActiveTab] = useState(() => localStorage.getItem('inventoryActiveTab') || 'pipes');
     const [summary, setSummary] = useState(null);
-
-    const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
+    const [summaryError, setSummaryError] = useState('');
 
     const fetchSummary = useCallback(async () => {
         try {
-            const r = await axios.get(`${API_URL}/inventory/summary`, { headers: authHeaders() });
+            const r = await inventoryApi.getSummary();
             setSummary(r.data.data);
+            setSummaryError('');
         } catch (err) {
-            console.error('[Inventory] Failed to fetch summary:', err.message);
+            const message = err.response?.data?.message || err.message || 'Failed to fetch inventory summary';
+            setSummaryError(message);
         }
     }, []);
 
@@ -74,6 +73,20 @@ export function InventoryPage() {
             </div>
 
             {/* Summary Dashboard */}
+            {summaryError && (
+                <div style={{
+                    marginBottom: 'var(--spacing-4)',
+                    padding: '10px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'rgba(239,68,68,0.08)',
+                    border: '1px solid rgba(239,68,68,0.22)',
+                    color: 'var(--color-danger)',
+                    fontSize: 'var(--font-size-sm)',
+                    fontWeight: 500
+                }}>
+                    Unable to load summary: {summaryError}
+                </div>
+            )}
             {summary && (
                 <div className="inv-summary-dashboard">
                     <div className="inv-summary-card inv-summary-card--pipes">
@@ -82,7 +95,7 @@ export function InventoryPage() {
                             <div className="inv-summary-card__value">{summary.pipes.total_types}</div>
                             <div className="inv-summary-card__label">Pipe Types</div>
                             <div className="inv-summary-card__sub">
-                                {(summary.pipes.total_stock_feet / 20).toFixed(0)} pipes total
+                                {parseFloat(summary.pipes.total_stock_units ?? (summary.pipes.total_stock_feet / 20)).toFixed(0)} pipes total
                                 {summary.pipes.total_value > 0 && <> · {fmtCurrency(summary.pipes.total_value)} value</>}
                             </div>
                         </div>
@@ -107,9 +120,9 @@ export function InventoryPage() {
                         <div className="inv-summary-card__icon"><Fuel size={20} /></div>
                         <div className="inv-summary-card__content">
                             <div className="inv-summary-card__value">{fmtCurrency(summary.diesel.last_30_days_amount)}</div>
-                            <div className="inv-summary-card__label">Diesel (30 days)</div>
+                            <div className="inv-summary-card__label">Diesel Purchases (30 days)</div>
                             <div className="inv-summary-card__sub">
-                                {parseFloat(summary.diesel.last_30_days_liters).toFixed(0)}L consumed · {summary.diesel.last_30_days_entries} entries
+                                {parseFloat(summary.diesel.last_30_days_purchase_liters ?? summary.diesel.last_30_days_liters).toFixed(0)}L refilled · {parseFloat(summary.diesel.last_30_days_consumed_liters || 0).toFixed(0)}L used
                             </div>
                         </div>
                     </div>

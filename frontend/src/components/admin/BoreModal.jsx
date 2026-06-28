@@ -203,7 +203,7 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                             </h3>
                             <div className="govt-bore-modal__grid govt-bore-modal__grid--3">
                                 <InputField label="Village" name="village" value={formData.village} onChange={handleChange} viewMode={viewMode} placeholder="Enter Village" />
-                                <InputField label="Point / Supervisor" name="supervisor_name" value={formData.supervisor_name} onChange={handleChange} viewMode={viewMode} placeholder="Enter Point / Supervisor" />
+                                <InputField label="Location" name="supervisor_name" value={formData.supervisor_name} onChange={handleChange} viewMode={viewMode} placeholder="Enter location" />
                                 <InputField label="Customer Name" name="customer_name" value={formData.customer_name} onChange={handleChange} required viewMode={viewMode} placeholder="Enter Customer Name" />
 
                                 <div className="form-field">

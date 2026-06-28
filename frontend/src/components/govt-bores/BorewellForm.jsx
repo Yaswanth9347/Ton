@@ -878,7 +878,7 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
                                 {!!fieldErrors.mandal && <span className="form-field__error">{fieldErrors.mandal}</span>}
                             </div>
                             <InputField label="Village" name="village" formData={formData} handleChange={handleChange} viewMode={viewMode} error={fieldErrors.village} />
-                            <InputField label="Point / Supervisor" name="location" formData={formData} handleChange={handleChange} viewMode={viewMode} error={fieldErrors.location} />
+                            <InputField label="Location" name="location" formData={formData} handleChange={handleChange} viewMode={viewMode} error={fieldErrors.location} />
 
                             <SelectField
                                 label="Vehicle Type"

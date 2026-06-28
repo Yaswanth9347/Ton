@@ -1,39 +1,39 @@
-import pg from 'pg';
-import dbConfig from '../config/database.js';
+import prisma from '../config/prisma.js';
 
-const { Pool } = pg;
-
-// Use a global variable to store the pool instance across hot reloads and function invocations
-// This prevents "Too Many Connections" errors in serverless environments
-let pool;
-
-if (process.env.NODE_ENV === 'production') {
-    pool = new Pool(dbConfig);
-} else {
-    if (!global.pgPool) {
-        global.pgPool = new Pool(dbConfig);
-    }
-    pool = global.pgPool;
-}
-
-// Test connection on startup (only once per pool creation)
-const connectListeners = pool.listenerCount('connect');
-if (connectListeners === 0) {
-    pool.on('connect', (client) => {
-        client.query("SET TIME ZONE 'Asia/Kolkata'").catch((err) => {
-            console.error('Failed to set PostgreSQL timezone:', err.message);
-        });
-        console.log('Connected to PostgreSQL database');
-    });
-
-    pool.on('error', (err) => {
-        console.error('Unexpected error on idle client', err);
-        process.exit(-1);
-    });
-}
-
+/**
+ * Compatibility wrapper to route raw SQL queries through the Prisma client.
+ * This ensures the application uses a single consolidated database connection pool,
+ * eliminating the overhead and connection-limit exhaustion issues of having multiple pools.
+ */
 export default {
-    query: (text, params) => pool.query(text, params),
-    getClient: () => pool.connect(),
-    pool,
+    query: async (text, params) => {
+        try {
+            const rows = await prisma.$queryRawUnsafe(text, ...(params || []));
+            return {
+                rows,
+                rowCount: rows.length,
+            };
+        } catch (error) {
+            console.error('[DB ADAPTER ERROR]:', error.message, 'Query:', text);
+            throw error;
+        }
+    },
+
+    // Deprecated methods maintained for safety/backward compatibility
+    getClient: async () => {
+        throw new Error('db.getClient() is deprecated. Use prisma.$transaction or raw prisma client queries instead.');
+    },
+
+    pool: {
+        connect: async () => {
+            throw new Error('db.pool.connect() is deprecated. Use prisma.$transaction or raw prisma client queries instead.');
+        },
+        end: async () => {
+            // No-op
+        },
+        on: () => {
+            // No-op
+        },
+        listenerCount: () => 0,
+    }
 };

@@ -62,8 +62,10 @@ export const inventoryApi = {
     getPipeAllocations: () => api.get('/inventory/pipes/allocations'),
     addPipe: (data) => api.post('/inventory/pipes', data),
     addStock: (data) => api.post('/inventory/pipes/add-stock', data),
+    adjustPipeStock: (id, data) => api.post(`/inventory/pipes/${id}/adjust-stock`, data),
     issuePipes: (data) => api.post('/inventory/pipes/issue', data),
     returnPipes: (data) => api.post('/inventory/pipes/return', data),
+    updatePipeSettings: (id, data) => api.patch(`/inventory/pipes/${id}/settings`, data),
     deletePipe: (id) => api.delete(`/inventory/pipes/${id}`),
     getPipeTransactions: (params) => api.get('/inventory/pipes/transactions', { params }),
 
@@ -77,10 +79,17 @@ export const inventoryApi = {
     getSpares: (params) => api.get('/inventory/spares', { params }),
     addSpare: (data) => api.post('/inventory/spares', data),
     addSpareStock: (id, data) => api.post(`/inventory/spares/${id}/add-stock`, data),
+    adjustSpareStock: (id, data) => api.post(`/inventory/spares/${id}/adjust-stock`, data),
+    updateSpareSettings: (id, data) => api.patch(`/inventory/spares/${id}/settings`, data),
     deleteSpare: (id) => api.delete(`/inventory/spares/${id}`),
     getSpareTransactions: (params) => api.get('/inventory/spares/transactions', { params }),
 
     // Diesel
+    getDieselRecords: (params) => api.get('/inventory/diesel', { params }),
+    createDieselRecord: (data) => api.post('/inventory/diesel', data),
+    updateDieselRecord: (id, data) => api.put(`/inventory/diesel/${id}`, data),
+    deleteDieselRecord: (id) => api.delete(`/inventory/diesel/${id}`),
+    getDieselSummary: (params) => api.get('/inventory/diesel/summary', { params }),
     getDieselVehicles: () => api.get('/inventory/diesel/vehicles'),
     addDieselVehicle: (data) => api.post('/inventory/diesel/vehicles', data),
     deleteDieselVehicle: (id) => api.delete(`/inventory/diesel/vehicles/${id}`),

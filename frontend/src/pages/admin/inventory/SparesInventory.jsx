@@ -1,43 +1,18 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import toast from 'react-hot-toast';
+import { ConfirmDialog } from '../../../components/common/ConfirmDialog';
 import {
     Plus, Boxes, PackagePlus, Wrench, CheckCircle, AlertCircle,
-    Trash2, X, Filter, ChevronLeft, ChevronRight, PackageSearch, Layers3
+    Trash2, X, Filter, ChevronLeft, ChevronRight, PackageSearch, Layers3, SlidersHorizontal, Pencil
 } from 'lucide-react';
 import './InventoryPage.css';
 import './SparesInventory.css';
 import { formatDateInIST } from '../../../utils/dateTime';
 import { inventoryApi } from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
 const PAGE_SIZE = 10;
 const INVENTORY_SUMMARY_REFRESH_EVENT = 'inventory:summary-refresh';
-
-/* ── Toast ── */
-function Toast({ type, message, onClose }) {
-    useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t); }, [onClose]);
-    return (
-        <div className={`inv-toast inv-toast--${type}`}>
-            {type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
-            {message}
-            <button onClick={onClose} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}><X size={16} /></button>
-        </div>
-    );
-}
-
-/* ── Confirm ── */
-function ConfirmDialog({ message, onConfirm, onCancel }) {
-    return (
-        <div className="modal-overlay" onClick={onCancel}>
-            <div className="inv-confirm" onClick={e => e.stopPropagation()}>
-                <div className="inv-confirm__title">Confirm Delete</div>
-                <p className="inv-confirm__msg">{message}</p>
-                <div className="inv-confirm__actions">
-                    <button className="inv-btn inv-btn--ghost inv-btn--sm" onClick={onCancel}>Cancel</button>
-                    <button className="inv-btn inv-btn--danger inv-btn--sm" onClick={onConfirm}>Delete</button>
-                </div>
-            </div>
-        </div>
-    );
-}
 
 const STATUS_LABEL = { IN_STOCK: 'In Stock', LOW_STOCK: 'Low Stock', OUT_OF_STOCK: 'Out of Stock' };
 const STATUS_KEY = { IN_STOCK: 'good', LOW_STOCK: 'low', OUT_OF_STOCK: 'critical' };
@@ -54,6 +29,7 @@ const fmtCurrency = (value) => {
 };
 
 export function SparesInventory() {
+    const { user } = useAuth();
     const [spares, setSpares] = useState([]);
     const [transactions, setTxns] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -61,11 +37,12 @@ export function SparesInventory() {
     const [showModal, setShowModal] = useState(false);
     const [modalType, setModalType] = useState('');
     const [selSpare, setSelSpare] = useState(null);
-    const [toast, setToast] = useState(null);
     const [confirm, setConfirm] = useState(null);
+    const [reorderModal, setReorderModal] = useState(null);
     const [txPage, setTxPage] = useState(1);
     const [txFilters, setTxFilters] = useState({ spareName: '', transactionType: '', dateFrom: '', dateTo: '' });
     const [txPagination, setTxPagination] = useState({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 0 });
+    const [loadErrors, setLoadErrors] = useState({ spares: '', transactions: '' });
     const [search, setSearch] = useState('');
     const [filterType, setFilterType] = useState('ALL');
     const [filterStatus, setFilterStatus] = useState('ALL');
@@ -76,9 +53,10 @@ export function SparesInventory() {
         unit_type: 'Piece',
         cost_per_unit: '',
         quantity: '',
+        adjustment_type: 'INCREASE',
+        remarks: '',
     });
 
-    const showToast = (type, msg) => setToast({ type, message: msg });
     const refreshSummary = () => window.dispatchEvent(new Event(INVENTORY_SUMMARY_REFRESH_EVENT));
 
     const fetchSpares = useCallback(async () => {
@@ -88,7 +66,10 @@ export function SparesInventory() {
             if (filterStatus !== 'ALL') params.status = filterStatus;
             const r = await inventoryApi.getSpares(params);
             setSpares(r.data.data);
-        } catch { /* silent */ }
+            setLoadErrors(prev => ({ ...prev, spares: '' }));
+        } catch (err) {
+            setLoadErrors(prev => ({ ...prev, spares: err.response?.data?.message || 'Failed to load spares list' }));
+        }
     }, [filterType, filterStatus]);
 
     const fetchTxns = useCallback(async () => {
@@ -105,7 +86,10 @@ export function SparesInventory() {
             const r = await inventoryApi.getSpareTransactions(params);
             setTxns(r.data.data);
             setTxPagination(r.data.pagination || { page: txPage, limit: PAGE_SIZE, total: r.data.data?.length || 0, totalPages: 1 });
-        } catch { /* silent */ }
+            setLoadErrors(prev => ({ ...prev, transactions: '' }));
+        } catch (err) {
+            setLoadErrors(prev => ({ ...prev, transactions: err.response?.data?.message || 'Failed to load spare transactions' }));
+        }
     }, [txPage, txFilters]);
 
     useEffect(() => {
@@ -125,6 +109,8 @@ export function SparesInventory() {
             unit_type: spare?.unit_type || 'Piece',
             cost_per_unit: spare?.cost_per_unit ? String(spare.cost_per_unit) : '',
             quantity: '',
+            adjustment_type: 'INCREASE',
+            remarks: '',
         });
         setShowModal(true);
     };
@@ -135,26 +121,40 @@ export function SparesInventory() {
         setSubmitting(true);
         try {
             if (modalType === 'add') {
-                await inventoryApi.addSpare({
-                    spare_type: formData.spare_type,
+                const r = await inventoryApi.addSpare({
+                    spare_type: formData.spare_type || 'MATERIAL',
                     spare_number: formData.spare_number,
-                    unit_type: formData.unit_type,
+                    unit_type: 'Piece',
                     brand: formData.brand || null,
                     cost_per_unit: formData.cost_per_unit ? parseFloat(formData.cost_per_unit) : 0
                 });
-                showToast('success', `${formData.spare_number} added`);
+                const newSpare = r.data?.data;
+                if (newSpare && formData.quantity && parseFloat(formData.quantity) > 0) {
+                    await inventoryApi.addSpareStock(newSpare.id, {
+                        quantity: parseFloat(formData.quantity),
+                        cost_per_unit: formData.cost_per_unit ? parseFloat(formData.cost_per_unit) : 0,
+                    });
+                }
+                toast.success(`${formData.spare_number} added`);
             } else if (modalType === 'stock') {
                 await inventoryApi.addSpareStock(selSpare.id, {
                     quantity: parseFloat(formData.quantity),
                     cost_per_unit: formData.cost_per_unit === '' ? null : parseFloat(formData.cost_per_unit),
                 });
-                showToast('success', `${selSpare.spare_number} stock updated`);
+                toast.success(`${selSpare.spare_number} stock updated`);
+            } else if (modalType === 'adjust') {
+                await inventoryApi.adjustSpareStock(selSpare.id, {
+                    adjustment_type: formData.adjustment_type,
+                    quantity: parseFloat(formData.quantity),
+                    remarks: formData.remarks,
+                });
+                toast.success(`${selSpare.spare_number} stock adjusted`);
             }
             await Promise.all([fetchSpares(), fetchTxns()]);
             refreshSummary();
             closeModal();
         } catch (err) {
-            showToast('error', err.response?.data?.message || 'An error occurred');
+            toast.error(err.response?.data?.message || 'An error occurred');
         } finally {
             setSubmitting(false);
         }
@@ -167,14 +167,34 @@ export function SparesInventory() {
                 setConfirm(null);
                 try {
                     await inventoryApi.deleteSpare(spare.id);
-                    showToast('success', 'Spare deleted');
+                    toast.success('Spare deleted');
                     await Promise.all([fetchSpares(), fetchTxns()]);
                     refreshSummary();
                 } catch (err) {
-                    showToast('error', err.response?.data?.message || 'Error deleting spare');
+                    toast.error(err.response?.data?.message || 'Error deleting spare');
                 }
             }
         });
+    };
+
+    const handleUpdateSpareSettings = (spare) => {
+        setReorderModal({
+            type: 'spare',
+            id: spare.id,
+            name: spare.spare_number,
+            currentValue: spare.reorder_level || 5
+        });
+    };
+
+    const submitSpareReorder = async (id, reorderLevel) => {
+        try {
+            await inventoryApi.updateSpareSettings(id, { reorder_level: reorderLevel });
+            toast.success('Spare reorder level updated');
+            await Promise.all([fetchSpares(), fetchTxns()]);
+            refreshSummary();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to update spare settings');
+        }
     };
 
     const stats = useMemo(() => ({
@@ -210,13 +230,66 @@ export function SparesInventory() {
     if (loading) return <div className="inv-spinner"><div className="inv-spinner__ring" />Loading spares…</div>;
 
     /* Stats */
+    const topErrors = [...new Set(Object.values(loadErrors).filter(Boolean))];
 
     const totalTxPages = txPagination.totalPages || 0;
 
     return (
         <div>
-            {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
             {confirm && <ConfirmDialog message={confirm.message} onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />}
+            {reorderModal && (
+                <div className="modal-overlay" onClick={() => setReorderModal(null)}>
+                    <div className="inv-modal" onClick={e => e.stopPropagation()}>
+                        <div className="inv-modal__header">
+                            <span className="inv-modal__title"><SlidersHorizontal size={16} /> Set Reorder Level</span>
+                            <button className="inv-modal__close" onClick={() => setReorderModal(null)}>×</button>
+                        </div>
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            const val = parseInt(e.target.reorderLevel.value, 10);
+                            if (isNaN(val) || val < 0) {
+                                toast.error('Reorder level must be a non-negative integer');
+                                return;
+                            }
+                            submitSpareReorder(reorderModal.id, val);
+                            setReorderModal(null);
+                        }}>
+                            <div className="inv-modal__body">
+                                <div className="inv-form-group">
+                                    <label className="inv-form-label">Reorder Level for {reorderModal.name}</label>
+                                    <input
+                                        type="number"
+                                        name="reorderLevel"
+                                        className="inv-form-input"
+                                        defaultValue={reorderModal.currentValue}
+                                        min="0"
+                                        required
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+                            <div className="inv-modal__footer">
+                                <button type="button" className="inv-btn inv-btn--secondary" onClick={() => setReorderModal(null)}>Cancel</button>
+                                <button type="submit" className="inv-btn inv-btn--primary">Save Settings</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+            {topErrors.length > 0 && (
+                <div style={{
+                    marginBottom: 'var(--spacing-4)',
+                    padding: '10px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'rgba(239,68,68,0.08)',
+                    border: '1px solid rgba(239,68,68,0.22)',
+                    color: 'var(--color-danger)',
+                    fontSize: 'var(--font-size-sm)',
+                    fontWeight: 500
+                }}>
+                    {topErrors.join(' • ')}
+                </div>
+            )}
 
             {/* Stats */}
             <div className="inv-stats">
@@ -279,43 +352,32 @@ export function SparesInventory() {
                     <table className="inv-table">
                         <thead>
                             <tr>
-                                <th style={{ textAlign: 'center' }}>Type</th>
                                 <th style={{ textAlign: 'center' }}>Material</th>
                                 <th style={{ textAlign: 'center' }}>Available</th>
-                                <th style={{ textAlign: 'center' }}>Unit</th>
-                                <th style={{ textAlign: 'center' }}>Status</th>
                                 <th style={{ textAlign: 'center' }}>Value</th>
                                 <th style={{ textAlign: 'center' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredSpares.length === 0 ? (
-                                <tr><td colSpan="7" className="inv-table__empty" style={{ textAlign: 'center' }}>No spares found. Add one to get started.</td></tr>
+                                <tr><td colSpan="4" className="inv-table__empty" style={{ textAlign: 'center' }}>No spares found. Add one to get started.</td></tr>
                             ) : (
                                 filteredSpares.map(spare => (
                                     <tr key={spare.id}>
-                                        <td style={{ textAlign: 'center' }}>
-                                            <span style={{
-                                                display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: '0.8rem',
-                                                color: 'var(--color-primary)',
-                                                background: 'rgba(37,99,235,0.1)',
-                                                padding: '3px 10px', borderRadius: 'var(--radius-full)',
-                                                justifyContent: 'center'
-                                            }}>
-                                                <Wrench size={12} />
-                                                {spare.spare_type}
-                                            </span>
-                                        </td>
                                         <td style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', textAlign: 'center' }}>{spare.spare_number}</td>
                                         <td style={{ fontWeight: 700, textAlign: 'center' }}>{fmtQty(spare.available_quantity)}</td>
-                                        <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem', textAlign: 'center' }}>{spare.unit_type || '—'}</td>
-                                        <td style={{ textAlign: 'center' }}><span className={`status-badge status-badge--${STATUS_KEY[spare.status]}`} style={{ justifyContent: 'center' }}><span className="status-badge__dot" />{STATUS_LABEL[spare.status]}</span></td>
                                         <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem', textAlign: 'center' }}>
                                             {fmtCurrency(spare.total_value)}
                                         </td>
                                         <td>
                                             <div className="inv-actions" style={{ justifyContent: 'center' }}>
                                                 <button className="inv-action-btn inv-action-btn--load" title="Add Stock" onClick={() => openModal('stock', spare)}><PackagePlus size={13} /></button>
+                                                {user?.role === 'ADMIN' && (
+                                                    <>
+                                                        <button className="inv-action-btn inv-action-btn--issue" title="Adjust Stock" onClick={() => openModal('adjust', spare)}><SlidersHorizontal size={13} /></button>
+                                                        <button className="inv-action-btn inv-action-btn--issue" title="Set Reorder Level" onClick={() => handleUpdateSpareSettings(spare)}><Pencil size={13} /></button>
+                                                    </>
+                                                )}
                                                 {!spare.is_default && (
                                                     <button className="inv-action-btn inv-action-btn--delete" title="Delete Spare" onClick={() => handleDelete(spare)}><Trash2 size={13} /></button>
                                                 )}
@@ -350,6 +412,8 @@ export function SparesInventory() {
                             <option value="ADD_STOCK">Add Stock</option>
                             <option value="ISSUE">Issue</option>
                             <option value="RETURN">Return</option>
+                            <option value="ADJUST_IN">Adjust In</option>
+                            <option value="ADJUST_OUT">Adjust Out</option>
                         </select>
                         <input type="date" className="inv-filter-input" value={txFilters.dateFrom} onChange={e => { setTxFilters(f => ({ ...f, dateFrom: e.target.value })); setTxPage(1); }} />
                         <input type="date" className="inv-filter-input" value={txFilters.dateTo} onChange={e => { setTxFilters(f => ({ ...f, dateTo: e.target.value })); setTxPage(1); }} />
@@ -366,24 +430,22 @@ export function SparesInventory() {
                         <thead>
                             <tr>
                                 <th style={{ textAlign: 'center' }}>Date</th>
-                                <th style={{ textAlign: 'center' }}>Type</th>
                                 <th style={{ textAlign: 'center' }}>Material</th>
                                 <th style={{ textAlign: 'center' }}>Action</th>
                                 <th style={{ textAlign: 'center' }}>Qty</th>
-                                <th style={{ textAlign: 'center' }}>Govt Bore</th>
+                                <th style={{ textAlign: 'center' }}>Issue</th>
                                 <th style={{ textAlign: 'center' }}>Remarks</th>
                             </tr>
                         </thead>
                         <tbody>
                             {transactions.length === 0 ? (
-                                <tr><td colSpan="7" className="inv-table__empty" style={{ textAlign: 'center' }}>No transactions found.</td></tr>
+                                <tr><td colSpan="6" className="inv-table__empty" style={{ textAlign: 'center' }}>No transactions found.</td></tr>
                             ) : (
                                 transactions.map(tx => (
                                     <tr key={tx.id}>
                                         <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem', textAlign: 'center' }}>
                                             {formatDateInIST(tx.created_at)}
                                         </td>
-                                        <td style={{ textAlign: 'center' }}>{tx.spare_type}</td>
                                         <td style={{ fontWeight: 600, textAlign: 'center' }}>{tx.spare_number}</td>
                                         <td style={{ textAlign: 'center' }}><span className={`status-badge status-badge--${tx.transaction_type.toLowerCase()}`} style={{ justifyContent: 'center' }}>{tx.transaction_type}</span></td>
                                         <td style={{ textAlign: 'center' }}>{fmtQty(tx.quantity)}</td>
@@ -418,6 +480,7 @@ export function SparesInventory() {
                             <span className="inv-modal__title">
                                 {modalType === 'add' && <><Plus size={16} /> Add New Spare</>}
                                 {modalType === 'stock' && <><PackagePlus size={16} /> Add Spare Stock</>}
+                                {modalType === 'adjust' && <><SlidersHorizontal size={16} /> Adjust Spare Stock</>}
                             </span>
                             <button className="inv-modal__close" onClick={closeModal}>×</button>
                         </div>
@@ -426,35 +489,26 @@ export function SparesInventory() {
                                 {modalType === 'add' && (
                                     <>
                                         <div className="inv-form-group">
-                                            <label>Spare Type *</label>
-                                            <select value={formData.spare_type} onChange={e => setFormData(f => ({ ...f, spare_type: e.target.value }))} required>
-                                                <option value="MATERIAL">Material</option>
-                                                <option value="CUSTOM">Custom</option>
-                                            </select>
-                                        </div>
-                                        <div className="inv-form-group">
                                             <label>Spare Name *</label>
                                             <input type="text" value={formData.spare_number} onChange={e => setFormData(f => ({ ...f, spare_number: e.target.value }))} placeholder="e.g. Bore Cap" required />
                                         </div>
                                         <div className="inv-form-row">
                                             <div className="inv-form-group">
-                                                <label>Brand</label>
-                                                <input type="text" value={formData.brand} onChange={e => setFormData(f => ({ ...f, brand: e.target.value }))} placeholder="e.g. Kirloskar, Atlas Copco…" />
-                                            </div>
-                                            <div className="inv-form-group">
                                                 <label>Cost (₹)</label>
                                                 <input type="number" step="0.01" min="0" value={formData.cost_per_unit} onChange={e => setFormData(f => ({ ...f, cost_per_unit: e.target.value }))} placeholder="0.00" />
                                             </div>
-                                        </div>
-                                        <div className="inv-form-row">
                                             <div className="inv-form-group">
-                                                <label>Unit Type</label>
-                                                <input type="text" value={formData.unit_type} onChange={e => setFormData(f => ({ ...f, unit_type: e.target.value }))} placeholder="Piece / Unit / Set" />
+                                                <label>Quantity</label>
+                                                <input type="number" step="0.01" min="0" value={formData.quantity} onChange={e => setFormData(f => ({ ...f, quantity: e.target.value }))} placeholder="0.00" />
                                             </div>
+                                        </div>
+                                        <div className="inv-form-group">
+                                            <label>From</label>
+                                            <input type="text" value={formData.brand} onChange={e => setFormData(f => ({ ...f, brand: e.target.value }))} placeholder="e.g. Supplier name, vendor..." />
                                         </div>
                                     </>
                                 )}
-                                {modalType === 'stock' && (
+                                {(modalType === 'stock' || modalType === 'adjust') && (
                                     <div className="inv-form-group">
                                         <label>Spare</label>
                                         <input type="text" value={`${selSpare?.spare_type} — ${selSpare?.spare_number}`} disabled />
@@ -478,6 +532,31 @@ export function SparesInventory() {
                                         </div>
                                     </>
                                 )}
+                                {modalType === 'adjust' && (
+                                    <>
+                                        <div className="inv-form-row">
+                                            <div className="inv-form-group">
+                                                <label>Current Available</label>
+                                                <input type="text" value={fmtQty(selSpare?.available_quantity)} disabled />
+                                            </div>
+                                            <div className="inv-form-group">
+                                                <label>Adjustment Type *</label>
+                                                <select value={formData.adjustment_type} onChange={e => setFormData(f => ({ ...f, adjustment_type: e.target.value }))} required>
+                                                    <option value="INCREASE">Increase Stock</option>
+                                                    <option value="DECREASE">Decrease Stock</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div className="inv-form-group">
+                                            <label>Quantity *</label>
+                                            <input type="number" step="0.01" min="0.01" value={formData.quantity} onChange={e => setFormData(f => ({ ...f, quantity: e.target.value }))} placeholder="0.00" required />
+                                        </div>
+                                        <div className="inv-form-group">
+                                            <label>Reason *</label>
+                                            <textarea value={formData.remarks} onChange={e => setFormData(f => ({ ...f, remarks: e.target.value }))} rows={2} placeholder="Required correction reason…" required />
+                                        </div>
+                                    </>
+                                )}
                             </div>
                             <div className="inv-modal__footer">
                                 <button type="button" className="inv-btn inv-btn--ghost" onClick={closeModal}>Cancel</button>
@@ -486,6 +565,7 @@ export function SparesInventory() {
                                         <>
                                             {modalType === 'add' && 'Add Spare'}
                                             {modalType === 'stock' && 'Add Stock'}
+                                            {modalType === 'adjust' && 'Adjust Stock'}
                                         </>
                                     )}
                                 </button>

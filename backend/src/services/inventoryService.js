@@ -212,6 +212,66 @@ export const addPipeStock = async (pipeId, quantity, unit, userId, options = {})
     });
 };
 
+export const adjustPipeStock = async (pipeId, data, userId) => {
+    return await prisma.$transaction(async (tx) => {
+        const pipeMaster = await tx.pipes_master.findUnique({
+            where: { id: parseInt(pipeId) },
+            include: { stock: true }
+        });
+        if (!pipeMaster || !pipeMaster.is_active) throw new Error('Pipe not found');
+
+        const adjustmentType = String(data.adjustment_type || '').toUpperCase();
+        if (!['INCREASE', 'DECREASE'].includes(adjustmentType)) {
+            throw new Error('Adjustment type must be INCREASE or DECREASE');
+        }
+
+        const lengthFeet = pipeMaster.length_feet ? parseFloat(pipeMaster.length_feet) : 20;
+        const validation = validateQuantity(data.quantity, data.unit || 'feet', lengthFeet);
+        if (!validation.valid) throw new Error(validation.error);
+        const quantityInFeet = validation.feet;
+        if (quantityInFeet <= 0) throw new Error('Adjustment quantity must be greater than 0');
+
+        const currentStock = parseDecimal(pipeMaster.stock?.available_quantity, 0);
+        if (adjustmentType === 'DECREASE' && currentStock + 0.0001 < quantityInFeet) {
+            throw new Error(`Cannot decrease below zero. Available ${currentStock.toFixed(2)} ft, requested ${quantityInFeet.toFixed(2)} ft.`);
+        }
+
+        const stock = await tx.pipes_stock.upsert({
+            where: { pipe_master_id: pipeMaster.id },
+            update: {
+                available_quantity: adjustmentType === 'INCREASE'
+                    ? { increment: quantityInFeet }
+                    : { decrement: quantityInFeet }
+            },
+            create: {
+                pipe_master_id: pipeMaster.id,
+                available_quantity: adjustmentType === 'INCREASE' ? quantityInFeet : 0
+            }
+        });
+
+        await tx.pipes_stock_transactions.create({
+            data: {
+                pipe_master_id: pipeMaster.id,
+                transaction_type: adjustmentType === 'INCREASE' ? 'ADJUST_IN' : 'ADJUST_OUT',
+                quantity: quantityInFeet,
+                reference_type: 'STOCK_ADJUSTMENT',
+                created_by: userId,
+                source_location: adjustmentType === 'INCREASE' ? 'ADJUSTMENT' : 'MAIN_STORE',
+                destination_location: adjustmentType === 'INCREASE' ? 'MAIN_STORE' : 'ADJUSTMENT',
+                remarks: data.remarks.trim()
+            }
+        });
+
+        return {
+            id: pipeMaster.id,
+            size: pipeMaster.pipe_size,
+            company: pipeMaster.pipe_type_name,
+            quantity: stock.available_quantity,
+            unit: pipeMaster.unit
+        };
+    });
+};
+
 export const issuePipesToBore = async (data, userId) => {
     return await prisma.$transaction(async (tx) => {
         const pipeMaster = await tx.pipes_master.findUnique({ where: { id: parseInt(data.pipe_inventory_id) } });
@@ -219,11 +279,15 @@ export const issuePipesToBore = async (data, userId) => {
         const lengthFeet = pipeMaster.length_feet ? parseFloat(pipeMaster.length_feet) : 20;
         const validation = validateQuantity(data.quantity, data.unit || 'pipes', lengthFeet);
         if (!validation.valid) throw new Error(validation.error);
+        const boreType = String(data.bore_type || '').toLowerCase();
+        if (!['govt', 'private'].includes(boreType)) {
+            throw new Error('Bore type must be govt or private');
+        }
 
         const allocation = await issuePipeAllocation({
             tx,
             pipeMasterId: parseInt(data.pipe_inventory_id),
-            boreType: data.bore_type === 'govt' ? 'govt' : 'private',
+            boreType,
             boreId: parseInt(data.bore_id),
             quantity: validation.feet,
             unit: 'feet',
@@ -333,6 +397,8 @@ export const getPipeTransactions = async (filters = {}) => {
             'LOAD': { in: ['LOAD', 'DEDUCT'] },
             'ISSUE': { equals: 'ISSUE' },
             'RETURN': { equals: 'RETURN' },
+            'ADJUST_IN': { equals: 'ADJUST_IN' },
+            'ADJUST_OUT': { equals: 'ADJUST_OUT' },
         };
         const mapped = typeMap[filters.transactionType];
         if (mapped) {
@@ -448,6 +514,57 @@ export const getPipeTransactions = async (filters = {}) => {
 
 export const getPipeAllocations = async () => {
     return getOpenPipeAllocations();
+};
+
+export const updatePipeSettings = async (pipeId, data) => {
+    const id = parseInt(pipeId, 10);
+    if (!Number.isInteger(id)) throw new Error('Invalid pipe ID');
+
+    const updateData = {};
+
+    if (data.reorder_level !== undefined) {
+        const reorderLevel = parseInt(data.reorder_level, 10);
+        if (!Number.isInteger(reorderLevel) || reorderLevel < 0) {
+            throw new Error('Reorder level must be a valid non-negative integer');
+        }
+        updateData.reorder_level = reorderLevel;
+    }
+
+    if (data.length_feet !== undefined && data.length_feet !== null && data.length_feet !== '') {
+        const lengthFeet = parseFloat(data.length_feet);
+        if (!Number.isFinite(lengthFeet) || lengthFeet <= 0) {
+            throw new Error('Length feet must be greater than 0');
+        }
+        updateData.length_feet = lengthFeet;
+    }
+
+    if (data.cost_per_unit !== undefined && data.cost_per_unit !== null && data.cost_per_unit !== '') {
+        const costPerUnit = parseFloat(data.cost_per_unit);
+        if (!Number.isFinite(costPerUnit) || costPerUnit < 0) {
+            throw new Error('Cost per unit must be 0 or greater');
+        }
+        updateData.cost_per_unit = costPerUnit;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+        throw new Error('No valid settings provided to update');
+    }
+
+    const updated = await prisma.pipes_master.update({
+        where: { id },
+        data: updateData,
+        include: { stock: true }
+    });
+
+    return {
+        id: updated.id,
+        size: updated.pipe_size,
+        company: updated.pipe_type_name,
+        reorder_level: updated.reorder_level || 10,
+        length_feet: parseFloat(updated.length_feet || 20),
+        cost_per_unit: parseFloat(updated.cost_per_unit || 0),
+        quantity: parseFloat(updated.stock?.available_quantity || 0)
+    };
 };
 
 
@@ -742,6 +859,66 @@ export const addSpareStock = async (spareId, data, userId) => {
     });
 };
 
+export const adjustSpareStock = async (spareId, data, userId) => {
+    return await prisma.$transaction(async (tx) => {
+        const spare = await tx.spares_master.findUnique({
+            where: { id: parseInt(spareId) },
+            include: { stock: true },
+        });
+        if (!spare || !spare.is_active) throw new Error('Spare not found');
+
+        const adjustmentType = String(data.adjustment_type || '').toUpperCase();
+        if (!['INCREASE', 'DECREASE'].includes(adjustmentType)) {
+            throw new Error('Adjustment type must be INCREASE or DECREASE');
+        }
+
+        const quantity = parseFloat(data.quantity || 0);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            throw new Error('Adjustment quantity must be greater than 0');
+        }
+
+        const currentStock = parseFloat(spare.stock?.available_quantity || 0);
+        if (adjustmentType === 'DECREASE' && currentStock + 0.0001 < quantity) {
+            throw new Error(`Cannot decrease below zero. Available ${currentStock.toFixed(2)}, requested ${quantity.toFixed(2)}.`);
+        }
+
+        const stock = await tx.spares_stock.upsert({
+            where: { spare_master_id: spare.id },
+            update: {
+                available_quantity: adjustmentType === 'INCREASE'
+                    ? { increment: quantity }
+                    : { decrement: quantity }
+            },
+            create: {
+                spare_master_id: spare.id,
+                available_quantity: adjustmentType === 'INCREASE' ? quantity : 0
+            },
+        });
+
+        await tx.spares_stock_transactions.create({
+            data: {
+                spare_master_id: spare.id,
+                transaction_type: adjustmentType === 'INCREASE' ? 'ADJUST_IN' : 'ADJUST_OUT',
+                quantity,
+                reference_type: 'STOCK_ADJUSTMENT',
+                created_by: userId || 1,
+                remarks: data.remarks.trim(),
+            },
+        });
+
+        const availableQty = parseFloat(stock.available_quantity || 0);
+        return {
+            id: spare.id,
+            spare_type: spare.category,
+            spare_number: spare.spare_name,
+            status: getSpareStockStatus(availableQty, spare.reorder_level || 5),
+            available_quantity: availableQty,
+            cost_per_unit: spare.cost_per_unit ? parseFloat(spare.cost_per_unit) : 0,
+            total_value: availableQty * (spare.cost_per_unit ? parseFloat(spare.cost_per_unit) : 0),
+        };
+    });
+};
+
 export const issueSpareToVehicle = async (_spareId, _data, _userId) => {
     throw new Error('Manual spare issue is disabled. Govt bore material quantities now drive spare deductions automatically.');
 };
@@ -752,6 +929,50 @@ export const returnSpareToHome = async (_spareId, _data, _userId) => {
 
 export const updateSpareStatus = async (_spareId, _status) => {
     return { success: true, message: 'Status is derived from quantity and reorder level.' };
+};
+
+export const updateSpareSettings = async (spareId, data) => {
+    const id = parseInt(spareId, 10);
+    if (!Number.isInteger(id)) throw new Error('Invalid spare ID');
+
+    const updateData = {};
+
+    if (data.reorder_level !== undefined) {
+        const reorderLevel = parseInt(data.reorder_level, 10);
+        if (!Number.isInteger(reorderLevel) || reorderLevel < 0) {
+            throw new Error('Reorder level must be a valid non-negative integer');
+        }
+        updateData.reorder_level = reorderLevel;
+    }
+
+    if (data.cost_per_unit !== undefined && data.cost_per_unit !== null && data.cost_per_unit !== '') {
+        const costPerUnit = parseFloat(data.cost_per_unit);
+        if (!Number.isFinite(costPerUnit) || costPerUnit < 0) {
+            throw new Error('Cost per unit must be 0 or greater');
+        }
+        updateData.cost_per_unit = costPerUnit;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+        throw new Error('No valid settings provided to update');
+    }
+
+    const updated = await prisma.spares_master.update({
+        where: { id },
+        data: updateData,
+        include: { stock: true }
+    });
+
+    const availableQty = parseFloat(updated.stock?.available_quantity || 0);
+    return {
+        id: updated.id,
+        spare_type: updated.category,
+        spare_number: updated.spare_name,
+        reorder_level: updated.reorder_level || 5,
+        cost_per_unit: parseFloat(updated.cost_per_unit || 0),
+        available_quantity: availableQty,
+        status: getSpareStockStatus(availableQty, updated.reorder_level || 5)
+    };
 };
 
 export const deleteSpare = async (spareId) => {
@@ -1552,6 +1773,7 @@ export const getInventorySummary = async () => {
 
     let totalPipeStock = 0;
     let totalPipeValue = 0;
+    let totalPipeUnits = 0;
     let lowStockPipes = 0;
     let totalPipeInUse = 0;
     pipes.forEach(p => {
@@ -1560,6 +1782,7 @@ export const getInventorySummary = async () => {
         const lengthFeet = parseFloat(p.length_feet || 20) || 20;
         const pipeCount = lengthFeet > 0 ? qty / lengthFeet : 0;
         totalPipeStock += qty;
+        totalPipeUnits += pipeCount;
         totalPipeValue += pipeCount * cost;
         if (pipeCount > 0 && pipeCount < (p.reorder_level || 10)) {
             lowStockPipes++;
@@ -1603,12 +1826,22 @@ export const getInventorySummary = async () => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const dieselAgg = await prisma.diesel_stock_transactions.aggregate({
+    const dieselPurchaseAgg = await prisma.diesel_stock_transactions.aggregate({
         where: {
             reference_type: 'INVENTORY_ENTRY',
+            transaction_type: { in: DIESEL_REFILL_TYPES },
             created_at: { gte: thirtyDaysAgo }
         },
         _sum: { amount: true, quantity: true },
+        _count: { id: true }
+    });
+
+    const dieselConsumptionAgg = await prisma.diesel_stock_transactions.aggregate({
+        where: {
+            transaction_type: { in: DIESEL_CONSUMPTION_TYPES },
+            created_at: { gte: thirtyDaysAgo }
+        },
+        _sum: { quantity: true },
         _count: { id: true }
     });
 
@@ -1618,6 +1851,7 @@ export const getInventorySummary = async () => {
         pipes: {
             total_types: pipes.length,
             total_stock_feet: totalPipeStock,
+            total_stock_units: totalPipeUnits,
             total_in_use_feet: totalPipeInUse,
             total_value: totalPipeValue,
             low_stock_count: lowStockPipes,
@@ -1635,9 +1869,14 @@ export const getInventorySummary = async () => {
         },
         diesel: {
             current_stock_liters: parseFloat(dieselStock?.available_quantity || 0),
-            last_30_days_liters: parseFloat(dieselAgg._sum.quantity || 0),
-            last_30_days_amount: parseFloat(dieselAgg._sum.amount || 0),
-            last_30_days_entries: dieselAgg._count.id || 0
+            last_30_days_liters: parseFloat(dieselPurchaseAgg._sum.quantity || 0),
+            last_30_days_amount: parseFloat(dieselPurchaseAgg._sum.amount || 0),
+            last_30_days_entries: dieselPurchaseAgg._count.id || 0,
+            last_30_days_purchase_liters: parseFloat(dieselPurchaseAgg._sum.quantity || 0),
+            last_30_days_purchase_amount: parseFloat(dieselPurchaseAgg._sum.amount || 0),
+            last_30_days_purchase_entries: dieselPurchaseAgg._count.id || 0,
+            last_30_days_consumed_liters: parseFloat(dieselConsumptionAgg._sum.quantity || 0),
+            last_30_days_consumption_entries: dieselConsumptionAgg._count.id || 0
         }
     };
 };
@@ -1646,15 +1885,19 @@ export default {
     getAllPipes,
     getPipeAllocations,
     addPipeStock,
+    adjustPipeStock,
     issuePipesToBore,
     returnPipesFromBore,
     getPipeTransactions,
     getAllSpares,
     addNewSpare,
     addSpareStock,
+    adjustSpareStock,
     issueSpareToVehicle,
     returnSpareToHome,
     updateSpareStatus,
+    updatePipeSettings,
+    updateSpareSettings,
     deleteSpare,
     getSparesTransactions,
     getAllDieselRecords,

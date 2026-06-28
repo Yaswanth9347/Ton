@@ -13,7 +13,7 @@ import { useAuth } from '../context/AuthContext';
 const DISPLAY_COLS = [
     // 📌 General Details
     { key: 'village', label: 'Village', width: '120px' },
-    { key: 'location', label: 'Point / Supervisor', width: '150px' },
+    { key: 'location', label: 'Location', width: '150px' },
     { key: 'vehicle', label: 'Vehicle Type', width: '100px' },
     { key: 'grant', label: 'Grant', width: '100px', align: 'center' },
     { key: 'date', label: 'Date', width: '110px', align: 'center' },

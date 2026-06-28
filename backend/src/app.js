@@ -20,7 +20,7 @@ import { ensureLoginAuditSchema } from './utils/ensureLoginAuditSchema.js';
 import { ensurePayrollSchema } from './utils/ensurePayrollSchema.js';
 import { ensureDefaultAuthUsers } from './utils/ensureDefaultAuthUsers.js';
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -155,22 +155,8 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/bores', boreRoutes);
 app.use('/api/govt-bores', govtBoreRoutes);
-app.use('/api/payroll', async (req, res, next) => {
-  try {
-    await ensurePayrollSchema();
-    next();
-  } catch (error) {
-    next(error);
-  }
-}, payrollRoutes);
-app.use('/api/inventory', async (req, res, next) => {
-  try {
-    await ensureInventorySchema();
-    next();
-  } catch (error) {
-    next(error);
-  }
-}, inventoryRoutes);
+app.use('/api/payroll', payrollRoutes);
+app.use('/api/inventory', inventoryRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

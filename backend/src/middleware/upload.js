@@ -2,7 +2,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
-dotenv.config();
+dotenv.config({ override: true });
+
 
 const isVercel = !!process.env.VERCEL;
 const projectRoot = path.resolve();

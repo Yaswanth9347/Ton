@@ -22,8 +22,10 @@ router.get('/pipes', inventoryController.getPipes);
 router.get('/pipes/allocations', inventoryController.getPipeAllocations);
 router.post('/pipes', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.createPipe);
 router.post('/pipes/add-stock', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.addStock);
+router.post('/pipes/:id/adjust-stock', roleGuard('ADMIN'), inventoryController.adjustPipeStock);
 router.post('/pipes/issue', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.issuePipes);
 router.post('/pipes/return', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.returnPipes);
+router.patch('/pipes/:id/settings', roleGuard('ADMIN'), inventoryController.updatePipeSettings);
 router.delete('/pipes/:id', roleGuard('ADMIN'), inventoryController.deletePipe);
 router.get('/pipes/transactions', inventoryController.getPipeTransactions);
 
@@ -39,9 +41,11 @@ router.delete('/pipes/companies/:id', roleGuard('ADMIN'), inventoryController.de
 router.get('/spares', inventoryController.getSpares);
 router.post('/spares', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.createSpare);
 router.post('/spares/:id/add-stock', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.addSpareStock);
+router.post('/spares/:id/adjust-stock', roleGuard('ADMIN'), inventoryController.adjustSpareStock);
 router.post('/spares/:id/issue', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.issueSpare);
 router.post('/spares/:id/return', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.returnSpare);
 router.patch('/spares/:id/status', roleGuard('ADMIN', 'SUPERVISOR'), inventoryController.updateSpareStatus);
+router.patch('/spares/:id/settings', roleGuard('ADMIN'), inventoryController.updateSpareSettings);
 router.delete('/spares/:id', roleGuard('ADMIN'), inventoryController.deleteSpare);
 router.get('/spares/transactions', inventoryController.getSparesTransactions);
 

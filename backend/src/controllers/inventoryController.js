@@ -86,6 +86,34 @@ export const addStock = async (req, res, next) => {
     }
 };
 
+export const adjustPipeStock = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { adjustment_type, quantity, remarks } = req.body;
+
+        if (!id || !adjustment_type || !quantity || parseFloat(quantity) <= 0 || !remarks?.trim()) {
+            return res.status(400).json({
+                status: 'fail',
+                message: 'Pipe ID, adjustment type, positive quantity, and remarks are required'
+            });
+        }
+
+        const updatedPipe = await inventoryService.adjustPipeStock(
+            parseInt(id),
+            req.body,
+            req.user.id
+        );
+
+        res.json({
+            status: 'success',
+            message: 'Pipe stock adjusted successfully',
+            data: updatedPipe
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 export const issuePipes = async (req, res, next) => {
     try {
         const data = req.body;
@@ -199,6 +227,27 @@ export const getPipeAllocations = async (req, res, next) => {
         res.json({
             status: 'success',
             data: allocations
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const updatePipeSettings = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({
+                status: 'fail',
+                message: 'Pipe ID is required'
+            });
+        }
+
+        const updatedPipe = await inventoryService.updatePipeSettings(id, req.body || {});
+        res.json({
+            status: 'success',
+            message: 'Pipe settings updated successfully',
+            data: updatedPipe
         });
     } catch (error) {
         next(error);
@@ -364,6 +413,30 @@ export const addSpareStock = async (req, res, next) => {
     }
 };
 
+export const adjustSpareStock = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { adjustment_type, quantity, remarks } = req.body;
+
+        if (!id || !adjustment_type || !quantity || parseFloat(quantity) <= 0 || !remarks?.trim()) {
+            return res.status(400).json({
+                status: 'fail',
+                message: 'Spare ID, adjustment type, positive quantity, and remarks are required'
+            });
+        }
+
+        const spare = await inventoryService.adjustSpareStock(parseInt(id), req.body, req.user.id);
+
+        res.json({
+            status: 'success',
+            message: 'Spare stock adjusted successfully',
+            data: spare
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 export const issueSpare = async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -412,6 +485,27 @@ export const updateSpareStatus = async (req, res, next) => {
             status: 'success',
             message: 'Spare status updated successfully',
             data: spare
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const updateSpareSettings = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({
+                status: 'fail',
+                message: 'Spare ID is required'
+            });
+        }
+
+        const updatedSpare = await inventoryService.updateSpareSettings(id, req.body || {});
+        res.json({
+            status: 'success',
+            message: 'Spare settings updated successfully',
+            data: updatedSpare
         });
     } catch (error) {
         next(error);

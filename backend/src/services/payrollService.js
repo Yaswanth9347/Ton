@@ -1,5 +1,7 @@
 import db from '../models/db.js';
+import prisma from '../config/prisma.js';
 import { AppError, ConflictError, NotFoundError } from '../utils/errors.js';
+
 import * as overtimeService from './overtimeService.js';
 import * as pdfService from './pdfService.js';
 import {
@@ -246,51 +248,48 @@ export const generatePayroll = async (adminId, month, year, callerUser) => {
     const preview = await calculatePayrollPreview(month, year, callerUser);
 
     // 3. Insert Payroll Record
-    const client = await db.pool.connect();
     try {
-        await client.query('BEGIN');
-
-        let payrollId = reusePayrollId;
-        if (payrollId) {
-            // Update existing payroll row and clear soft-delete fields if present.
-            await client.query(
-                `UPDATE payroll
-                 SET status = 'DRAFT', total_payout = $1, generated_by = $2
-                 WHERE id = $3`,
-                [preview.total_payout, adminId, payrollId]
-            );
-
-            try {
-                await client.query(
+        const payrollId = await prisma.$transaction(async (tx) => {
+            let pId = reusePayrollId;
+            if (pId) {
+                // Update existing payroll row and clear soft-delete fields if present.
+                await tx.$executeRawUnsafe(
                     `UPDATE payroll
-                     SET is_deleted = false, deleted_by = NULL, deleted_at = NULL, cancellation_reason = NULL
-                     WHERE id = $1`,
-                    [payrollId]
+                     SET status = 'DRAFT', total_payout = $1, generated_by = $2
+                     WHERE id = $3`,
+                    preview.total_payout, adminId, pId
                 );
-            } catch (e) {
-                // Ignore if columns don't exist in older schemas
+
+                try {
+                    await tx.$executeRawUnsafe(
+                        `UPDATE payroll
+                         SET is_deleted = false, deleted_by = NULL, deleted_at = NULL, cancellation_reason = NULL
+                         WHERE id = $1`,
+                        pId
+                    );
+                } catch (e) {
+                    // Ignore if columns don't exist in older schemas
+                }
+
+                // Replace items
+                await tx.$executeRawUnsafe('DELETE FROM payroll_items WHERE payroll_id = $1', pId);
+            } else {
+                const payrollRes = await tx.$queryRawUnsafe(
+                    `INSERT INTO payroll (month, year, status, version, total_payout, generated_by)
+                     VALUES ($1, $2, 'DRAFT', $3, $4, $5)
+                     RETURNING id`,
+                    month, year, nextVersion, preview.total_payout, adminId
+                );
+                pId = payrollRes[0].id;
             }
 
-            // Replace items
-            await client.query('DELETE FROM payroll_items WHERE payroll_id = $1', [payrollId]);
-        } else {
-            const payrollRes = await client.query(
-                `INSERT INTO payroll (month, year, status, version, total_payout, generated_by)
-                 VALUES ($1, $2, 'DRAFT', $3, $4, $5)
-                 RETURNING id`,
-                [month, year, nextVersion, preview.total_payout, adminId]
-            );
-            payrollId = payrollRes.rows[0].id;
-        }
-
-        // 4. Insert Items
-        for (const item of preview.items) {
-            await client.query(
-                `INSERT INTO payroll_items 
-                 (payroll_id, user_id, base_salary, present_days, total_attendance_deduction, approved_lunch_total, overtime_hours, overtime_amount, gross_salary, net_salary, details)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-                [
-                    payrollId,
+            // 4. Insert Items
+            for (const item of preview.items) {
+                await tx.$executeRawUnsafe(
+                    `INSERT INTO payroll_items 
+                     (payroll_id, user_id, base_salary, present_days, total_attendance_deduction, approved_lunch_total, overtime_hours, overtime_amount, gross_salary, net_salary, details)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                    pId,
                     item.user_id,
                     item.base_salary,
                     item.present_days,
@@ -310,17 +309,15 @@ export const generatePayroll = async (adminId, month, year, callerUser) => {
                         lop_deduction: item.lop_deduction,
                         role: item.role
                     })
-                ]
-            );
-        }
+                );
+            }
 
-        await client.query('COMMIT');
+            return pId;
+        });
+
         return { id: payrollId, ...preview };
     } catch (e) {
-        await client.query('ROLLBACK');
         throw e;
-    } finally {
-        client.release();
     }
 };
 

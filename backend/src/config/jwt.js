@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
-dotenv.config();
+dotenv.config({ override: true });
+
 
 const isProduction = process.env.NODE_ENV === 'production';
 

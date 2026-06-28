@@ -1,43 +1,11 @@
-import db from '../models/db.js';
-
-let loginAuditReady = false;
+import prisma from '../config/prisma.js';
 
 /**
  * Ensure the login_audit table exists.
- * Called once on startup; subsequent calls are no-ops.
+ * No-op for backward compatibility; schema is now managed via Prisma.
  */
 export async function ensureLoginAuditSchema() {
-    if (loginAuditReady) return;
-
-    try {
-        await db.query(`
-            CREATE TABLE IF NOT EXISTS login_audit (
-                id          SERIAL PRIMARY KEY,
-                user_id     INTEGER,
-                username    VARCHAR(100),
-                action      VARCHAR(30) NOT NULL,
-                ip_address  VARCHAR(45),
-                user_agent  TEXT,
-                details     TEXT,
-                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-
-        // Index for fast admin queries
-        await db.query(`
-            CREATE INDEX IF NOT EXISTS idx_login_audit_created
-            ON login_audit (created_at DESC)
-        `);
-
-        await db.query(`
-            CREATE INDEX IF NOT EXISTS idx_login_audit_user
-            ON login_audit (user_id)
-        `);
-
-        loginAuditReady = true;
-    } catch (error) {
-        console.error('[LOGIN_AUDIT] Schema setup failed:', error.message);
-    }
+    // No-op
 }
 
 /**
@@ -53,12 +21,16 @@ export async function ensureLoginAuditSchema() {
  */
 export async function logLoginEvent({ userId = null, username = '', action, ip = '', userAgent = '', details = '' }) {
     try {
-        await ensureLoginAuditSchema();
-        await db.query(
-            `INSERT INTO login_audit (user_id, username, action, ip_address, user_agent, details)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [userId, username, action, ip, userAgent, details]
-        );
+        await prisma.login_audit.create({
+            data: {
+                user_id: userId,
+                username: username || null,
+                action: action,
+                ip_address: ip || null,
+                user_agent: userAgent || null,
+                details: details || null,
+            },
+        });
     } catch (error) {
         // Never let audit logging break the auth flow
         console.error('[LOGIN_AUDIT] Failed to log event:', error.message);

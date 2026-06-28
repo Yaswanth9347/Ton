@@ -91,20 +91,7 @@ async function runEnsureDefaultAuthUsers() {
        ) VALUES (
          $1, $2, $3, $4, $5, $6, true, 0, false, NULL, NULL, NULL, $7, CURRENT_TIMESTAMP
        )
-       ON CONFLICT (username) DO UPDATE
-       SET email = COALESCE(users.email, EXCLUDED.email),
-           password_hash = EXCLUDED.password_hash,
-           first_name = EXCLUDED.first_name,
-           last_name = EXCLUDED.last_name,
-           role_id = EXCLUDED.role_id,
-           is_active = true,
-           failed_login_attempts = 0,
-           account_locked = false,
-           last_failed_login = NULL,
-           reset_token = NULL,
-           reset_token_expiry = NULL,
-           base_salary = EXCLUDED.base_salary,
-           updated_at = CURRENT_TIMESTAMP`,
+       ON CONFLICT (username) DO NOTHING`,
       [
         user.username,
         user.email,
