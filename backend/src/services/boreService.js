@@ -40,6 +40,7 @@ export const getRecordById = async (id) => {
  * Create a new borewell record
  */
 export const createRecord = async (data, userId) => {
+  const customData = data.custom_data ? JSON.stringify(data.custom_data) : '{}';
   const result = await db.query(
     `INSERT INTO borewell_data (
             date, vehicle_name, supervisor_name, customer_name, village, phone_number, bore_type,
@@ -52,9 +53,10 @@ export const createRecord = async (data, userId) => {
             cas180_4g_feet, cas180_4g_rate, cas180_4g_amt,
             cas180_6g_feet, cas180_6g_rate, cas180_6g_amt,
             cas250_4g_feet, cas250_4g_rate, cas250_4g_amt,
+            cas250_6g_feet, cas250_6g_rate, cas250_6g_amt,
             slotting_pipes, slotting_rate, slotting_amt,
             pipes_on_vehicle_before, pipes_used_qty, pipes_used_pieces_ft, pipes_left_on_vehicle,
-            pipe_details, pipe_inventory_id, labour_charge, rpm,
+            pipe_details, custom_data, pipe_inventory_id, labour_charge, rpm,
             start_time, end_time, total_hrs,
             phone_pe_received, phone_pe_receiver_name, cash_paid,
             total_amount, amount_paid, balance, discount,
@@ -65,22 +67,23 @@ export const createRecord = async (data, userId) => {
             $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
             $31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
             $41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
-            $51, $52, $53, $54, $55
+            $51, $52, $53, $54, $55, $56, $57, $58, $59
         ) RETURNING *`,
     [
       data.date, data.vehicle_name, data.supervisor_name, data.customer_name, data.village, data.phone_number, data.bore_type,
       data.drill_upto_casing_feet || 0, data.drill_upto_casing_rate || 0, data.drill_upto_casing_amt || 0,
       data.empty_drilling_feet || 0, data.empty_drilling_rate || 0, data.empty_drilling_amt || 0,
-      data.jump_300_feet || 0, data.jump_300_rate || 0, data.jump_300_amt || 0,
-      data.jump_400_feet || 0, data.jump_400_rate || 0, data.jump_400_amt || 0,
+      0, 0, 0,  // jump_300 legacy fields — now stored in custom_data
+      0, 0, 0,  // jump_400 legacy fields — now stored in custom_data
       data.total_drilling_feet || 0, data.total_drilling_amt || 0,
       data.cas140_feet || 0, data.cas140_rate || 0, data.cas140_amt || 0,
       data.cas180_4g_feet || 0, data.cas180_4g_rate || 0, data.cas180_4g_amt || 0,
       data.cas180_6g_feet || 0, data.cas180_6g_rate || 0, data.cas180_6g_amt || 0,
       data.cas250_4g_feet || 0, data.cas250_4g_rate || 0, data.cas250_4g_amt || 0,
+      data.cas250_6g_feet || 0, data.cas250_6g_rate || 0, data.cas250_6g_amt || 0,
       data.slotting_pipes || 0, data.slotting_rate || 0, data.slotting_amt || 0,
       data.pipes_on_vehicle_before || 0, data.pipes_used_qty || 0, data.pipes_used_pieces_ft || 0, data.pipes_left_on_vehicle || 0,
-      data.pipe_details || {}, data.pipe_inventory_id || null, data.labour_charge || 0, data.rpm || 0,
+      data.pipe_details || {}, customData, data.pipe_inventory_id || null, data.labour_charge || 0, data.rpm || 0,
       data.start_time, data.end_time, data.total_hrs || 0,
       data.phone_pe_received || 0, data.phone_pe_receiver_name, data.cash_paid || 0,
       data.total_amount || 0, data.amount_paid || 0, data.balance || 0, data.discount || 0,
@@ -103,6 +106,7 @@ export const createRecord = async (data, userId) => {
  */
 export const updateRecord = async (id, data, userId) => {
   const previousRecord = await getRecordById(id);
+  const customData = data.custom_data ? JSON.stringify(data.custom_data) : '{}';
   const result = await db.query(
     `UPDATE borewell_data SET
             date = $1, vehicle_name = $2, supervisor_name = $3, customer_name = $4, village = $5,
@@ -116,30 +120,32 @@ export const updateRecord = async (id, data, userId) => {
             cas180_4g_feet = $25, cas180_4g_rate = $26, cas180_4g_amt = $27,
             cas180_6g_feet = $28, cas180_6g_rate = $29, cas180_6g_amt = $30,
             cas250_4g_feet = $31, cas250_4g_rate = $32, cas250_4g_amt = $33,
-            slotting_pipes = $34, slotting_rate = $35, slotting_amt = $36,
-            pipes_on_vehicle_before = $37, pipes_used_qty = $38, pipes_used_pieces_ft = $39, pipes_left_on_vehicle = $40,
-            pipe_details = $41, pipe_inventory_id = $42, labour_charge = $43, rpm = $44,
-            start_time = $45, end_time = $46, total_hrs = $47,
-            phone_pe_received = $48, phone_pe_receiver_name = $49, cash_paid = $50,
-            total_amount = $51, amount_paid = $52, balance = $53, discount = $54,
+            cas250_6g_feet = $34, cas250_6g_rate = $35, cas250_6g_amt = $36,
+            slotting_pipes = $37, slotting_rate = $38, slotting_amt = $39,
+            pipes_on_vehicle_before = $40, pipes_used_qty = $41, pipes_used_pieces_ft = $42, pipes_left_on_vehicle = $43,
+            pipe_details = $44, custom_data = $45, pipe_inventory_id = $46, labour_charge = $47, rpm = $48,
+            start_time = $49, end_time = $50, total_hrs = $51,
+            phone_pe_received = $52, phone_pe_receiver_name = $53, cash_paid = $54,
+            total_amount = $55, amount_paid = $56, balance = $57, discount = $58,
             updated_at = CURRENT_TIMESTAMP
-          WHERE id = $55
+          WHERE id = $59
         RETURNING *`,
     [
       data.date, data.vehicle_name, data.supervisor_name, data.customer_name, data.village,
       data.phone_number, data.bore_type,
       data.drill_upto_casing_feet || 0, data.drill_upto_casing_rate || 0, data.drill_upto_casing_amt || 0,
       data.empty_drilling_feet || 0, data.empty_drilling_rate || 0, data.empty_drilling_amt || 0,
-      data.jump_300_feet || 0, data.jump_300_rate || 0, data.jump_300_amt || 0,
-      data.jump_400_feet || 0, data.jump_400_rate || 0, data.jump_400_amt || 0,
+      0, 0, 0,  // jump_300 legacy fields — now stored in custom_data
+      0, 0, 0,  // jump_400 legacy fields — now stored in custom_data
       data.total_drilling_feet || 0, data.total_drilling_amt || 0,
       data.cas140_feet || 0, data.cas140_rate || 0, data.cas140_amt || 0,
       data.cas180_4g_feet || 0, data.cas180_4g_rate || 0, data.cas180_4g_amt || 0,
       data.cas180_6g_feet || 0, data.cas180_6g_rate || 0, data.cas180_6g_amt || 0,
       data.cas250_4g_feet || 0, data.cas250_4g_rate || 0, data.cas250_4g_amt || 0,
+      data.cas250_6g_feet || 0, data.cas250_6g_rate || 0, data.cas250_6g_amt || 0,
       data.slotting_pipes || 0, data.slotting_rate || 0, data.slotting_amt || 0,
       data.pipes_on_vehicle_before || 0, data.pipes_used_qty || 0, data.pipes_used_pieces_ft || 0, data.pipes_left_on_vehicle || 0,
-      data.pipe_details || {}, data.pipe_inventory_id || null, data.labour_charge || 0, data.rpm || 0,
+      data.pipe_details || {}, customData, data.pipe_inventory_id || null, data.labour_charge || 0, data.rpm || 0,
       data.start_time, data.end_time, data.total_hrs || 0,
       data.phone_pe_received || 0, data.phone_pe_receiver_name, data.cash_paid || 0,
       data.total_amount || 0, data.amount_paid || 0, data.balance || 0, data.discount || 0,
@@ -265,18 +271,18 @@ export const generateBoreReceipt = (record) => {
           <td class="text-right">${fmt(record.empty_drilling_rate)}</td>
           <td class="text-right">${fmt(record.empty_drilling_amt)}</td>
         </tr>
+        ${(() => {
+          let cData = record.custom_data;
+          if (typeof cData === 'string') { try { cData = JSON.parse(cData); } catch { cData = {}; } }
+          const rows = (cData && Array.isArray(cData.drilling)) ? cData.drilling : [];
+          return rows.map(row => `
         <tr>
-          <td>Jump after 300ft</td>
-          <td class="text-right">${record.jump_300_feet}</td>
-          <td class="text-right">${fmt(record.jump_300_rate)}</td>
-          <td class="text-right">${fmt(record.jump_300_amt)}</td>
-        </tr>
-        <tr>
-          <td>Jump after 400ft</td>
-          <td class="text-right">${record.jump_400_feet}</td>
-          <td class="text-right">${fmt(record.jump_400_rate)}</td>
-          <td class="text-right">${fmt(record.jump_400_amt)}</td>
-        </tr>
+          <td>${row.label || 'Jump Rate'}</td>
+          <td class="text-right">${parseFloat(row.feet) || 0}</td>
+          <td class="text-right">${fmt(row.rate)}</td>
+          <td class="text-right">${fmt(row.amt)}</td>
+        </tr>`).join('');
+        })()}
         <tr class="total-row">
           <td>Total Drilling</td>
           <td class="text-right">${record.total_drilling_feet} ft</td>
@@ -302,11 +308,67 @@ export const generateBoreReceipt = (record) => {
         ${record.cas140_feet > 0 ? `<tr><td>140mm Casing</td><td class="text-right">${record.cas140_feet}</td><td class="text-right">${fmt(record.cas140_rate)}</td><td class="text-right">${fmt(record.cas140_amt)}</td></tr>` : ''}
         ${record.cas180_4g_feet > 0 ? `<tr><td>180mm 4G Casing</td><td class="text-right">${record.cas180_4g_feet}</td><td class="text-right">${fmt(record.cas180_4g_rate)}</td><td class="text-right">${fmt(record.cas180_4g_amt)}</td></tr>` : ''}
         ${record.cas180_6g_feet > 0 ? `<tr><td>180mm 6G Casing</td><td class="text-right">${record.cas180_6g_feet}</td><td class="text-right">${fmt(record.cas180_6g_rate)}</td><td class="text-right">${fmt(record.cas180_6g_amt)}</td></tr>` : ''}
-        ${record.cas250_4g_feet > 0 ? `<tr><td>250mm 4G Casing</td><td class="text-right">${record.cas250_4g_feet}</td><td class="text-right">${fmt(record.cas250_4g_rate)}</td><td class="text-right">${fmt(record.cas250_4g_amt)}</td></tr>` : ''}
+        ${record.cas250_4g_feet > 0 ? `<tr><td>250mm/10 inches 4kg Casing</td><td class="text-right">${record.cas250_4g_feet}</td><td class="text-right">${fmt(record.cas250_4g_rate)}</td><td class="text-right">${fmt(record.cas250_4g_amt)}</td></tr>` : ''}
+        ${record.cas250_6g_feet > 0 ? `<tr><td>250mm/10 inches 6kg Casing</td><td class="text-right">${record.cas250_6g_feet}</td><td class="text-right">${fmt(record.cas250_6g_rate)}</td><td class="text-right">${fmt(record.cas250_6g_amt)}</td></tr>` : ''}
         ${record.slotting_pipes > 0 ? `<tr><td>Slotting</td><td class="text-right">${record.slotting_pipes} pipes</td><td class="text-right">${fmt(record.slotting_rate)}</td><td class="text-right">${fmt(record.slotting_amt)}</td></tr>` : ''}
       </tbody>
     </table>
   </div>
+
+  ${(() => {
+    let cData = record.custom_data;
+    if (typeof cData === 'string') { try { cData = JSON.parse(cData); } catch { cData = {}; } }
+    const pipes = (cData && Array.isArray(cData.pipes_tracking)) ? cData.pipes_tracking : [];
+    
+    // Legacy fallback mapping
+    if (pipes.length === 0 && (record.pipes_used_qty > 0 || record.pipes_on_vehicle_before > 0)) {
+       let pipeDetails = record.pipe_details;
+       if (typeof pipeDetails === 'string') { try { pipeDetails = JSON.parse(pipeDetails); } catch { pipeDetails = {}; } }
+       pipes.push({
+           source: 'Home Stock (Legacy)',
+           company_name: pipeDetails?.company || 'N/A',
+           pipe_size: '',
+           on_vehicle: record.pipes_on_vehicle_before,
+           used_nos: record.pipes_used_qty,
+           used_ft: record.pipes_used_pieces_ft,
+           left_auto: record.pipes_left_on_vehicle
+       });
+    }
+
+    if (pipes.length === 0) return '';
+
+    return `
+    <div class="section">
+      <div class="section-title">Pipes Tracking</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>Details (Company/Size)</th>
+            <th class="text-right">On Vehicle</th>
+            <th class="text-right">Used (Nos)</th>
+            <th class="text-right">Used (Ft)</th>
+            <th class="text-right">Left</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${pipes.map(p => `
+          <tr>
+            <td>${p.source || 'N/A'}</td>
+            <td>
+              ${p.source === 'Borrowed' ? `Borrowed From: ${p.borrowed_from || 'N/A'} <br/>` : ''}
+              ${p.company_name || 'N/A'} ${p.pipe_size ? '(' + p.pipe_size + ')' : ''}
+            </td>
+            <td class="text-right">Nos: ${p.on_vehicle || 0} <br/> Pcs: ${p.on_vehicle_pieces || 0}</td>
+            <td class="text-right">Nos: ${p.used_nos || 0} <br/> Pcs: ${p.used_pieces || 0}</td>
+            <td class="text-right">${p.used_ft || 0}</td>
+            <td class="text-right">Nos: ${p.left_auto || 0} <br/> Pcs: ${p.left_auto_pieces || 0}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  })()}
 
   <div class="section">
     <div class="section-title">Misc Details</div>
