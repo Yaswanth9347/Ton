@@ -541,17 +541,167 @@ const syncBorePipeInventoryInternal = async ({ tx = prisma, boreType, boreId, cu
     return true;
 };
 
+const parseCustomDataPipes = (record) => {
+    if (!record) return [];
+    let cData = record.custom_data;
+    if (typeof cData === 'string') {
+        try { cData = JSON.parse(cData); } catch { cData = {}; }
+    }
+    const pipes = (cData && Array.isArray(cData.pipes_tracking)) ? cData.pipes_tracking : [];
+    
+    // Legacy migration fallback
+    if (pipes.length === 0 && (record.pipes_used_qty > 0 || record.pipes_on_vehicle_before > 0 || record.pipe_inventory_id)) {
+       pipes.push({
+           source: 'Home Stock',
+           pipe_inventory_id: record.pipe_inventory_id,
+           on_vehicle: record.pipes_on_vehicle_before || 0
+       });
+    }
+    return pipes;
+};
+
 export const syncPrivateBorePipeInventory = async ({ tx, currentRecord, previousRecord = null, createdBy }) => {
     const boreId = currentRecord?.id || previousRecord?.id;
     if (!boreId) return null;
-    return syncBorePipeInventoryInternal({
-        tx: tx || prisma,
-        boreType: 'private',
-        boreId,
-        currentRecord,
-        previousRecord,
-        createdBy
-    });
+    
+    const dbTx = tx || prisma;
+    const currentPipes = parseCustomDataPipes(currentRecord).filter(p => p.source === 'Home Stock' && p.pipe_inventory_id);
+    const previousPipes = parseCustomDataPipes(previousRecord).filter(p => p.source === 'Home Stock' && p.pipe_inventory_id);
+    
+    const sumPipes = (pipes) => {
+        const map = new Map();
+        pipes.forEach(p => {
+            const id = parseInt(p.pipe_inventory_id);
+            if (!id) return;
+            map.set(id, (map.get(id) || 0) + parseDecimal(p.on_vehicle));
+        });
+        return map;
+    };
+    
+    const currentMap = sumPipes(currentPipes);
+    const previousMap = sumPipes(previousPipes);
+    
+    const allPipeIds = new Set([...currentMap.keys(), ...previousMap.keys()]);
+    
+    for (const pipeId of allPipeIds) {
+        const currentNos = currentMap.get(pipeId) || 0;
+        const previousNos = previousMap.get(pipeId) || 0;
+        
+        const pipeMaster = await getPipeMasterWithStock(dbTx, pipeId);
+        const lengthFeet = getPipeLengthFeet(pipeMaster);
+        
+        const currentFeet = currentNos * lengthFeet;
+        const previousFeet = previousNos * lengthFeet;
+        
+        const deltaFeet = currentFeet - previousFeet;
+        
+        if (deltaFeet > 0.0001) {
+             await issuePipeAllocation({
+                tx: dbTx,
+                pipeMasterId: pipeId,
+                boreType: 'private',
+                boreId,
+                quantity: deltaFeet,
+                unit: 'feet',
+                vehicleName: currentRecord?.vehicle_name || 'Unknown',
+                supervisorName: currentRecord?.supervisor_name || 'Unknown',
+                createdBy,
+                remarks: `Adjustment: pipe qty for private bore #${boreId}`,
+                autoCreated: true,
+                transactionType: previousFeet > 0 ? 'ISSUE' : 'LOAD'
+            });
+        } else if (deltaFeet < -0.0001) {
+            const allocation = await dbTx.pipe_bore_allocations.findFirst({
+                where: {
+                    pipe_master_id: pipeId,
+                    bore_type: 'private',
+                    private_bore_id: parseInt(boreId)
+                }
+            });
+            if (allocation) {
+                await returnPipeAllocation({
+                    tx: dbTx,
+                    allocationId: allocation.id,
+                    quantity: Math.abs(deltaFeet),
+                    unit: 'feet',
+                    createdBy,
+                    remarks: `Auto-returned after private bore update #${boreId}`
+                });
+            }
+        } else {
+             if (currentFeet > 0) {
+                 await updateAllocationVehicleOnly({
+                    tx: dbTx,
+                    boreType: 'private',
+                    boreId,
+                    pipeMasterId: pipeId,
+                    vehicleName: currentRecord?.vehicle_name || 'Unknown',
+                    supervisorName: currentRecord?.supervisor_name || 'Unknown'
+                });
+             }
+        }
+    }
+    
+    // --- Handle Borrowed Pipes ---
+    const borrowedPipes = parseCustomDataPipes(currentRecord).filter(p => p.source === 'Borrowed' && p.borrowed_from && p.pipe_size);
+    for (const pipe of borrowedPipes) {
+        const companyName = `Borrowed: ${pipe.borrowed_from}`;
+        const pipeSize = pipe.pipe_size;
+        
+        let pipeMaster = await dbTx.pipes_master.findFirst({
+            where: {
+                pipe_type_name: { equals: companyName, mode: 'insensitive' },
+                pipe_size: { equals: pipeSize, mode: 'insensitive' }
+            },
+            include: { stock: true }
+        });
+        
+        if (!pipeMaster) {
+            pipeMaster = await dbTx.pipes_master.create({
+                data: {
+                    pipe_type_name: companyName,
+                    pipe_size: pipeSize,
+                    unit: 'pieces',
+                    length_feet: 20,
+                    cost_per_unit: 0,
+                    stock: { create: { available_quantity: 0 } }
+                },
+                include: { stock: true }
+            });
+        }
+        
+        const existingTx = await dbTx.pipes_stock_transactions.findFirst({
+            where: {
+                pipe_master_id: pipeMaster.id,
+                transaction_type: 'BORROW',
+                reference_type: 'PRIVATE_BORE',
+                reference_id: boreId
+            }
+        });
+        
+        if (!existingTx && (parseInt(pipe.on_vehicle) > 0 || parseInt(pipe.on_vehicle_pieces) > 0)) {
+            const onV = parseFloat(pipe.on_vehicle) || 0;
+            const onVPc = parseFloat(pipe.on_vehicle_pieces) || 0;
+            const qtyFeet = (onV * 20) + (onVPc * 6.67); // roughly 20ft per pipe, 6.67ft per piece
+            
+            await dbTx.pipes_stock_transactions.create({
+                data: {
+                    pipe_master_id: pipeMaster.id,
+                    transaction_type: 'BORROW',
+                    quantity: qtyFeet,
+                    reference_type: 'PRIVATE_BORE',
+                    reference_id: boreId,
+                    created_by: createdBy,
+                    source_location: pipe.borrowed_from,
+                    destination_location: `VEHICLE:${currentRecord.vehicle_name || 'Unknown'}`,
+                    supplier_name: pipe.borrowed_from,
+                    remarks: `Borrowed pipe logged during private bore #${boreId}`
+                }
+            });
+        }
+    }
+
+    return true;
 };
 
 export const syncGovtBorePipeInventory = async ({ tx, currentRecord, previousRecord = null, createdBy }) => {
