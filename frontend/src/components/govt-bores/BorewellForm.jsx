@@ -379,7 +379,7 @@ const TaxRow = ({ label, prefix, formData, handleChange, viewMode = false }) => 
 };
 
 
-function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMode = false }) {
+function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMode = false, isInline = true }) {
 
     const REQUIRED_FIELDS = {
         mandal: 'Mandal',
@@ -797,6 +797,35 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
         }
     };
 
+    const handleReset = () => {
+        const resetData = mapRecordToFormData(record);
+        setFormData(resetData);
+        setFieldErrors({});
+
+        if (record && record.custom_data) {
+            let cData = record.custom_data;
+            if (typeof cData === 'string') {
+                try { cData = JSON.parse(cData); } catch (e) { cData = {}; }
+            }
+            if (cData.materials || cData.taxes || cData.payments) {
+                setCustomMaterials(cData.materials || []);
+                setCustomTaxes(cData.taxes || []);
+                setCustomPayments(cData.payments || []);
+            } else if (Array.isArray(cData)) {
+                setCustomPayments(cData);
+            } else if (typeof cData === 'object') {
+                const mapped = Object.entries(cData).map(([k, v], i) => ({ id: Date.now() + i, label: k, value: v }));
+                setCustomPayments(mapped);
+            }
+        } else {
+            setCustomMaterials([]);
+            setCustomTaxes([]);
+            setCustomPayments([]);
+        }
+
+        setFormNotice({ type: 'success', message: 'Form reset to original values.' });
+    };
+
     const validateMandatoryFields = () => {
         const errors = {};
         Object.entries(REQUIRED_FIELDS).forEach(([key, label]) => {
@@ -843,6 +872,494 @@ function BorewellForm({ record, onClose, onSave, saving, saveError = '', viewMod
     };
 
 
+
+    if (isInline) {
+        return (
+            <div className="govt-bore-editor">
+                <div className="govt-bore-editor__header">
+                    <h2 className="govt-bore-editor__title">
+                        {viewMode ? 'View Government Bore' : (record ? 'Edit Government Bore' : 'Add Government Bore')}
+                    </h2>
+                </div>
+
+                <form onSubmit={handleSubmit} className="govt-bore-editor__form">
+
+                    {!!formNotice && !viewMode && (
+                        <div className={`govt-bore-modal__notice govt-bore-modal__notice--${formNotice.type}`}>
+                            <div className="govt-bore-modal__notice-text">{formNotice.message}</div>
+                            <button type="button" className="govt-bore-modal__notice-close" onClick={() => setFormNotice(null)}>
+                                <X size={14} />
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Section 1: Project Information */}
+                    <div className="govt-bore-modal__section">
+                        <h3 className="govt-bore-modal__section-title">Project Information</h3>
+                        <div className="govt-bore-modal__grid govt-bore-modal__grid--3">
+                            <div className="form-field">
+                                <label className="form-field__label">Mandal</label>
+                                <input type="text" name="mandal" list="mandal-list" value={formData.mandal} onChange={handleChange} className={`form-field__input ${fieldErrors.mandal ? 'form-field__input--error' : ''}`} />
+                                <datalist id="mandal-list">{mandals.map((m, i) => <option key={i} value={m.name} />)}</datalist>
+                                {!!fieldErrors.mandal && <span className="form-field__error">{fieldErrors.mandal}</span>}
+                            </div>
+                            <InputField label="Village" name="village" formData={formData} handleChange={handleChange} viewMode={viewMode} error={fieldErrors.village} />
+                            <InputField label="Location" name="location" formData={formData} handleChange={handleChange} viewMode={viewMode} error={fieldErrors.location} />
+
+                            <SelectField
+                                label="Vehicle Type"
+                                name="vehicle"
+                                formData={formData}
+                                handleChange={handleChange}
+                                viewMode={viewMode}
+                                options={vehicleOptions}
+                                error={fieldErrors.vehicle}
+                            />
+                            <InputField label="Grant" name="grant" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            <DateField label="Date" name="date" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+
+                            <InputField label="Est. Cost" name="estCost" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            <InputField label="M Book No" name="mBookNo" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            <SelectField
+                                label="Status"
+                                name="status"
+                                formData={formData}
+                                handleChange={handleChange}
+                                viewMode={viewMode}
+                                options={[
+                                    { label: 'Pending', value: 'Pending' },
+                                    { label: 'To Be Recording', value: 'To be recording' },
+                                    { label: 'Done', value: 'Done' },
+                                    { label: 'Completed', value: 'Completed' }
+                                ]}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Section 2: Drilling & Casing */}
+                    <div className="govt-bore-modal__section">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <h3 className="govt-bore-modal__section-title" style={{ marginBottom: 0 }}>Drilling & Casing</h3>
+                            <div style={{ width: '200px' }}>
+                                <DateField label="Platform Date" name="platform_date" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            </div>
+                        </div>
+
+                        {/* Drilling Details */}
+                        <div style={{ marginBottom: '20px' }}>
+                            <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '10px', color: 'var(--text-secondary)' }}>Drilling Details</h4>
+                            <div className="govt-bore-modal__grid govt-bore-modal__grid--3">
+                                <InputField label="Total Feet" name="drilling_depth_mtrs" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                                <InputField label="Rate" name="drilling_rate" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                                <InputField label="Amount" name="drilling_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            </div>
+                        </div>
+
+                        {/* Casing Details */}
+                        <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                <h4 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-secondary)' }}>Casing Details</h4>
+                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                    <label style={{ fontSize: '12px', fontWeight: '600', opacity: 0.8 }}>Rate Type:</label>
+                                    <select name="casing_type" value={formData.casing_type} onChange={handleChange} className="form-field__input" style={{ width: 'auto', padding: '2px 8px', fontSize: '12px' }} disabled={viewMode}>
+                                        <option value="Government">Government</option>
+                                        <option value="Private">Private</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="qty-rate-table">
+                                <div className="qty-rate-table__header">
+                                    <span>Type</span>
+                                    <span>Per Feet</span>
+                                    <span>Rate</span>
+                                    <span>Amount</span>
+                                </div>
+                                <QtyRateAmountRow label="140mm (5 inches)" prefix="casing140" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                                <QtyRateAmountRow label="180mm (7 inches)" prefix="casing180" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                                <QtyRateAmountRow label="250mm (10 inches)" prefix="casing250" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Section 3: Materials & Equipment */}
+                    <div className="govt-bore-modal__section">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                <h3 className="govt-bore-modal__section-title" style={{ marginBottom: 0 }}>Materials & Equipment</h3>
+                                {!viewMode && formData.status !== 'Completed' && (
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary btn-sm"
+                                        onClick={addCustomMaterial}
+                                        style={{ fontSize: '11px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                                    >
+                                        <Plus size={12} /> Add Material
+                                    </button>
+                                )}
+                            </div>
+                            <div style={{ width: '200px' }}>
+                                <DateField label="Material Date" name="material_date" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            </div>
+                        </div>
+
+                        <div className="qty-rate-table">
+                            <div className="qty-rate-table__header">
+                                <span>Item</span>
+                                <span>Qty</span>
+                                <span>Rate</span>
+                                <span>Amount</span>
+                            </div>
+
+                            <QtyRateAmountRow label="Bore Cap" prefix="borecap" formData={formData} handleChange={handleChange} viewMode={viewMode} className="qty-rate-row--no-border qty-rate-row--compact" />
+                            <QtyRateAmountRow label="Cylinders" prefix="cylinders" formData={formData} handleChange={handleChange} viewMode={viewMode} className="qty-rate-row--no-border qty-rate-row--compact" />
+                            <QtyRateAmountRow label="Erection" prefix="erection" formData={formData} handleChange={handleChange} viewMode={viewMode} className="qty-rate-row--no-border qty-rate-row--compact" />
+                            <QtyRateAmountRow label="Head & Handle" prefix="head_handle" formData={formData} handleChange={handleChange} viewMode={viewMode} className="qty-rate-row--no-border qty-rate-row--compact" />
+                            <QtyRateAmountRow label="Plot/Farm" prefix="plotfarm" formData={formData} handleChange={handleChange} viewMode={viewMode} className="qty-rate-row--no-border qty-rate-row--compact" />
+                            <QtyRateAmountRow label="Pump Set" prefix="pumpset" formData={formData} handleChange={handleChange} viewMode={viewMode} className="qty-rate-row--no-border qty-rate-row--compact" />
+                            <QtyRateAmountRow label="Slotting" prefix="slotting" formData={formData} handleChange={handleChange} viewMode={viewMode} className="qty-rate-row--no-border qty-rate-row--compact" />
+                            <QtyRateAmountRow label="Stand" prefix="stand" formData={formData} handleChange={handleChange} viewMode={viewMode} className="qty-rate-row--no-border qty-rate-row--compact" />
+
+                            {/* Custom Materials inserted at the bottom */}
+                            {customMaterials.map((item) => (
+                                <div key={item.id} className="qty-rate-row qty-rate-row--no-border qty-rate-row--compact">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1 }}>
+                                        <input
+                                            type="text"
+                                            value={item.item}
+                                            onChange={(e) => handleCustomMaterialChange(item.id, 'item', e.target.value)}
+                                            placeholder="Item Name"
+                                            className="qty-rate-row__input"
+                                            disabled={viewMode || formData.status === 'Completed'}
+                                            style={{ width: '100%', border: 'none', background: 'transparent', fontWeight: '500', textAlign: 'left' }}
+                                        />
+                                    </div>
+                                    <input
+                                        type="number"
+                                        value={item.qty}
+                                        onChange={(e) => handleCustomMaterialChange(item.id, 'qty', e.target.value)}
+                                        placeholder="Qty"
+                                        className={`qty-rate-row__input ${viewMode ? 'qty-rate-row__input--readonly' : 'qty-rate-row__input--editable'}`}
+                                        disabled={viewMode || formData.status === 'Completed'}
+                                        style={{ textAlign: 'center' }}
+                                    />
+                                    <input
+                                        type="number"
+                                        value={item.rate}
+                                        onChange={(e) => handleCustomMaterialChange(item.id, 'rate', e.target.value)}
+                                        placeholder="Rate"
+                                        className={`qty-rate-row__input ${viewMode ? 'qty-rate-row__input--readonly' : 'qty-rate-row__input--editable'}`}
+                                        disabled={viewMode || formData.status === 'Completed'}
+                                        style={{ textAlign: 'center' }}
+                                    />
+                                    <input
+                                        type="number"
+                                        value={item.amount}
+                                        readOnly
+                                        placeholder="Amount"
+                                        className={`qty-rate-row__input ${viewMode ? 'qty-rate-row__input--readonly' : 'qty-rate-row__input--editable'}`}
+                                        style={{ textAlign: 'center' }}
+                                    />
+                                    {!viewMode && formData.status !== 'Completed' && (
+                                        <button
+                                            type="button"
+                                            className="delete-btn"
+                                            onClick={() => removeCustomMaterial(item.id)}
+                                            title="Remove Item"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="govt-bore-modal__subsection" style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '12px', flexWrap: 'wrap' }}>
+                                <h4 style={{ fontSize: '14px', fontWeight: '600', margin: 0 }}>Diesel Consumption</h4>
+                            </div>
+                            <div className="govt-bore-modal__grid govt-bore-modal__grid--3">
+                                <InputField label="Diesel Liters" name="diesel_liters" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
+                                <InputField label="Diesel Rate" name="diesel_rate" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
+                                <InputField label="Diesel Amount" name="diesel_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
+                            </div>
+                        </div>
+
+                        {/* Merged Pipes & Labour Section */}
+                        <div className="govt-bore-modal__subsection" style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-color)' }}>
+                            <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '10px' }}>GI Pipes & Labour</h4>
+                            <div className="govt-bore-modal__grid govt-bore-modal__grid--4">
+                                <div className="form-field">
+                                    <label className="form-field__label">Company</label>
+                                    <select name="pipe_inventory_id" value={formData.pipe_inventory_id || ''} onChange={handleChange} className="form-field__input" disabled={viewMode}>
+                                        <option value="">Select Company</option>
+                                        {uniqueInventoryPipes.map(pipe => {
+                                            const pipeCount = Math.round((pipe.pipeCount || 0) * 100) / 100;
+                                            const isLowStock = pipeCount <= 0;
+                                            return (
+                                                <option key={pipe.id} value={pipe.id} disabled={isLowStock}>
+                                                    {pipe.company} ({pipe.size}){isLowStock ? ' - No Stock' : ''}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                </div>
+                                <InputField label="Qty" name="gi_pipes_qty" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
+                                <InputField label="Rate" name="gi_pipes_rate" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
+                                <InputField label="Amount" name="gi_pipes_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} readOnly inputStyle={{ textAlign: 'center' }} />
+                            </div>
+                            {(formData.status === 'Done' || formData.status === 'Completed') && formData.gi_pipes_qty && (
+                                <div className="govt-bore-modal__grid govt-bore-modal__grid--4" style={{ marginTop: '10px' }}>
+                                    <InputField label="Returned Qty" name="gi_pipes_returned_qty" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} inputStyle={{ textAlign: 'center' }} />
+                                </div>
+                            )}
+                            <div className="govt-bore-modal__grid govt-bore-modal__grid--fixed-2" style={{ marginTop: '10px' }}>
+                                <InputField label="Geologist" name="geologist" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                                <InputField label="Labour Charges" name="labour_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            </div>
+                        </div>
+
+
+                    </div>
+
+
+                    <div className="govt-bore-modal__section" style={{ marginTop: '2rem' }}>
+                        {/* Row 1: NET AMOUNT (manual) | TBA - auto-calculated */}
+                        <div className="govt-bore-modal__grid govt-bore-modal__grid--fixed-2">
+                            <InputField
+                                label="NET AMOUNT"
+                                name="net_amount"
+                                type="number"
+                                formData={formData}
+                                handleChange={handleChange}
+                                viewMode={viewMode}
+                                className="form-field--highlight"
+                            />
+                            <InputField
+                                label="TBA (Total Bill Amount)"
+                                name="total_bill_amount"
+                                type="number"
+                                formData={formData}
+                                handleChange={handleChange}
+                                viewMode={true} // Auto-calculated — always read-only
+                                className="form-field--highlight"
+                                inputStyle={{ fontWeight: 'bold' }}
+                            />
+                        </div>
+                        {/* Row 2: Total Recoveries (auto-calc) | Gross (manual) */}
+                        <div className="govt-bore-modal__grid govt-bore-modal__grid--fixed-2" style={{ marginTop: '1rem' }}>
+                            <InputField
+                                label="Total Recoveries"
+                                name="total_recoveries"
+                                type="number"
+                                formData={formData}
+                                handleChange={handleChange}
+                                viewMode={viewMode} // Manually editable by admin
+                            />
+                            <InputField
+                                label="Gross"
+                                name="gross_amount"
+                                type="number"
+                                formData={formData}
+                                handleChange={handleChange}
+                                viewMode={viewMode} // Manually editable by admin
+                                className="form-field--highlight"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Section 6: Billing & Taxes */}
+                    <div className="govt-bore-modal__section" style={{ marginTop: '2rem' }}>
+                        <h3 className="govt-bore-modal__section-title">Billing & Taxes</h3>
+
+                        <div className="govt-bore-modal__grid govt-bore-modal__grid--2">
+                            <div>
+                                <div className="qty-rate-table">
+                                    <div className="qty-rate-table__header" style={{ gridTemplateColumns: '1.5fr 1fr 1.5fr', background: 'var(--bg-tertiary)' }}>
+                                        <span>Full Tax Table</span>
+                                        <span style={{ textAlign: 'center' }}>%</span>
+                                        <span style={{ textAlign: 'center' }}>Amount</span>
+                                    </div>
+                                    <TaxRow label="CGST" prefix="cgst" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                                    <TaxRow label="SGST" prefix="sgst" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                                    <TaxRow label="IGST" prefix="igst" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                                    <TaxRow label="GST" prefix="gst" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                                    <TaxRow label="SAS" prefix="sas" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                                    <TaxRow label="IT" prefix="it" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                                    <TaxRow label="VAT" prefix="vat" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+
+                                    {/* Custom Taxes */}
+                                    {customTaxes.map((item) => (
+                                        <div key={item.id} className="qty-rate-row" style={{ gridTemplateColumns: '1.5fr 1fr 1.5fr', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <input
+                                                    type="text"
+                                                    value={item.label}
+                                                    onChange={(e) => handleCustomTaxChange(item.id, 'label', e.target.value)}
+                                                    placeholder="Tax/Charge"
+                                                    className="qty-rate-row__input"
+                                                    disabled={viewMode || formData.status === 'Completed'}
+                                                    style={{ flex: 1, border: 'none', background: 'transparent', textAlign: 'left', padding: 0 }}
+                                                />
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '2px', alignItems: 'center', justifyContent: 'center' }}>
+                                                <select
+                                                    value={item.type}
+                                                    onChange={(e) => handleCustomTaxChange(item.id, 'type', e.target.value)}
+                                                    className="qty-rate-row__input"
+                                                    style={{ width: '30px', padding: '0', fontSize: '10px', border: 'none', background: 'transparent', textAlign: 'center' }}
+                                                    disabled={viewMode || formData.status === 'Completed'}
+                                                >
+                                                    <option value="percent">%</option>
+                                                    <option value="fixed">₹</option>
+                                                </select>
+                                                <input
+                                                    type="number"
+                                                    value={item.value}
+                                                    onChange={(e) => handleCustomTaxChange(item.id, 'value', e.target.value)}
+                                                    placeholder={item.type === 'percent' ? '%' : 'Amt'}
+                                                    className="qty-rate-row__input"
+                                                    style={{ textAlign: 'center', flex: 1, border: 'none', background: 'transparent', padding: 0 }}
+                                                    disabled={viewMode || formData.status === 'Completed'}
+                                                />
+                                            </div>
+                                            <input
+                                                type="number"
+                                                value={item.amount}
+                                                readOnly
+                                                placeholder="Amount"
+                                                className="qty-rate-row__input"
+                                                style={{ textAlign: 'center', border: 'none', background: 'transparent', padding: 0 }}
+                                            />
+                                            {!viewMode && formData.status !== 'Completed' && (
+                                                <button
+                                                    type="button"
+                                                    className="delete-btn"
+                                                    onClick={() => removeCustomTax(item.id)}
+                                                    title="Remove Tax"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+
+                                    {!viewMode && formData.status !== 'Completed' && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary btn-sm"
+                                            onClick={addCustomTax}
+                                            style={{ fontSize: '11px', padding: '2px 5px', marginTop: '5px', width: '100%', borderStyle: 'dashed' }}
+                                        >
+                                            <Plus size={10} /> Add Tax/Charge
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <div className="govt-bore-modal__grid govt-bore-modal__grid--fixed-2">
+                                    <InputField label="First Part" name="first_part_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                                    <InputField label="Second Part" name="second_part_amount" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Section 7: Payment Details */}
+                    <div className="govt-bore-modal__section">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
+                            <h3 className="govt-bore-modal__section-title" style={{ marginBottom: 0 }}>Payment Details</h3>
+                            {!viewMode && formData.status !== 'Completed' && (
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={addCustomPayment}
+                                    style={{ fontSize: '11px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                                >
+                                    <Plus size={12} /> Add Payment
+                                </button>
+                            )}
+                        </div>
+                        <div className="govt-bore-modal__grid govt-bore-modal__grid--4">
+                            <InputField label="Bank Name" name="bank_name" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            <InputField label="Cheque No" name="cheque_no" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            <DateField label="Cheque Date" name="cheque_date" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            <DateField label="Received Date" name="received_date" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                        </div>
+                        <div className="govt-bore-modal__grid govt-bore-modal__grid--3" style={{ marginTop: '1rem' }}>
+                            <InputField label="PCs" name="pcs" type="number" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            <InputField label="Voucher" name="voucher_no" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                            <InputField label="Remarks" name="remarks" formData={formData} handleChange={handleChange} viewMode={viewMode} />
+                        </div>
+
+                        {/* Custom Payment Payloads */}
+                        {(!viewMode || customPayments.length > 0) && (
+                            <div className="govt-bore-modal__grid govt-bore-modal__grid--4" style={{ marginTop: '1rem' }}>
+                                {customPayments.map((item) => (
+                                    <div key={item.id} className="form-field">
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            {editingLabelId === item.id ? (
+                                                <input
+                                                    type="text"
+                                                    value={tempLabelValue}
+                                                    onChange={(e) => setTempLabelValue(e.target.value)}
+                                                    onBlur={() => handleLabelSubmit(item.id)}
+                                                    onKeyDown={(e) => e.key === 'Enter' && handleLabelSubmit(item.id)}
+                                                    className="form-field__label"
+                                                    style={{ border: 'none', background: 'var(--bg-tertiary)', width: '80%', padding: '0 4px', marginBottom: '4px' }}
+                                                    autoFocus
+                                                />
+                                            ) : (
+                                                <label
+                                                    className="form-field__label"
+                                                    onDoubleClick={() => handleLabelDoubleClick(item)}
+                                                    style={{ cursor: (!viewMode && formData.status !== 'Completed') ? 'text' : 'default', marginBottom: '4px' }}
+                                                    title={(!viewMode && formData.status !== 'Completed') ? "Double click to rename" : ""}
+                                                >
+                                                    {item.label}
+                                                </label>
+                                            )}
+
+                                            {!viewMode && formData.status !== 'Completed' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeCustomPayment(item.id)}
+                                                    style={{ color: '#ef4444', background: 'none', border: 'none', padding: 0, cursor: 'pointer', marginBottom: '4px' }}
+                                                    title="Remove Field"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={item.value}
+                                            onChange={(e) => handleCustomPaymentChange(item.id, 'value', e.target.value)}
+                                            placeholder="Value"
+                                            className={`form-field__input ${(viewMode || formData.status === 'Completed') ? 'form-field__input--readonly' : ''}`}
+                                            disabled={viewMode || formData.status === 'Completed'}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="govt-bore-editor__actions">
+                        <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
+                        {!viewMode && (
+                            <>
+                                <button type="button" onClick={handleReset} className="btn btn-outline" style={{ border: '1px solid var(--border-color)' }}>Reset</button>
+                                <button type="submit" disabled={saving} className="btn btn-primary">
+                                    {saving ? 'Saving...' : 'Save Record'}
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </form>
+            </div>
+        );
+    }
 
     return (
         <div className="govt-bore-modal-overlay">

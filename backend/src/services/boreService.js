@@ -1,5 +1,24 @@
 import db from '../models/db.js';
+import prisma from '../config/prisma.js';
 import { releaseBorePipeAllocations, syncPrivateBorePipeInventory } from './pipeAllocationService.js';
+
+const asNumber = (value, fallback = 0) => {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? fallback : parsed;
+};
+
+const asInteger = (value, fallback = null) => {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+};
 
 /**
  * Get all borewell records with optional search and pagination
@@ -32,7 +51,7 @@ export const getAllRecords = async (search) => {
  * Get a single borewell record by ID
  */
 export const getRecordById = async (id) => {
-  const result = await db.query('SELECT * FROM borewell_data WHERE id = $1', [id]);
+  const result = await db.query('SELECT * FROM borewell_data WHERE id = CAST($1 AS INTEGER)', [id]);
   return result.rows[0] || null;
 };
 
@@ -40,9 +59,11 @@ export const getRecordById = async (id) => {
  * Create a new borewell record
  */
 export const createRecord = async (data, userId) => {
-  const customData = data.custom_data ? JSON.stringify(data.custom_data) : '{}';
-  const result = await db.query(
-    `INSERT INTO borewell_data (
+  const pipeDetails = data.pipe_details ? (typeof data.pipe_details === 'string' ? data.pipe_details : JSON.stringify(data.pipe_details)) : '{}';
+  const customData = data.custom_data ? (typeof data.custom_data === 'string' ? data.custom_data : JSON.stringify(data.custom_data)) : '{}';
+  const result = await prisma.$transaction(async (tx) => {
+    const inserted = await tx.$queryRawUnsafe(
+      `INSERT INTO borewell_data (
             date, vehicle_name, supervisor_name, customer_name, village, phone_number, bore_type,
             drill_upto_casing_feet, drill_upto_casing_rate, drill_upto_casing_amt,
             empty_drilling_feet, empty_drilling_rate, empty_drilling_amt,
@@ -62,43 +83,39 @@ export const createRecord = async (data, userId) => {
             total_amount, amount_paid, balance, discount,
             created_by
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+            CAST($1 AS DATE), $2, $3, $4, $5, $6, $7, $8, $9, $10,
             $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
             $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
             $31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
-            $41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
+            $41, $42, $43, CAST($44 AS JSONB), CAST($45 AS JSONB), $46, $47, $48, $49, $50,
             $51, $52, $53, $54, $55, $56, $57, $58, $59
         ) RETURNING *`,
-    [
       data.date, data.vehicle_name, data.supervisor_name, data.customer_name, data.village, data.phone_number, data.bore_type,
-      data.drill_upto_casing_feet || 0, data.drill_upto_casing_rate || 0, data.drill_upto_casing_amt || 0,
-      data.empty_drilling_feet || 0, data.empty_drilling_rate || 0, data.empty_drilling_amt || 0,
+      asNumber(data.drill_upto_casing_feet), asNumber(data.drill_upto_casing_rate), asNumber(data.drill_upto_casing_amt),
+      asNumber(data.empty_drilling_feet), asNumber(data.empty_drilling_rate), asNumber(data.empty_drilling_amt),
       0, 0, 0,  // jump_300 legacy fields — now stored in custom_data
       0, 0, 0,  // jump_400 legacy fields — now stored in custom_data
-      data.total_drilling_feet || 0, data.total_drilling_amt || 0,
-      data.cas140_feet || 0, data.cas140_rate || 0, data.cas140_amt || 0,
-      data.cas180_4g_feet || 0, data.cas180_4g_rate || 0, data.cas180_4g_amt || 0,
-      data.cas180_6g_feet || 0, data.cas180_6g_rate || 0, data.cas180_6g_amt || 0,
-      data.cas250_4g_feet || 0, data.cas250_4g_rate || 0, data.cas250_4g_amt || 0,
-      data.cas250_6g_feet || 0, data.cas250_6g_rate || 0, data.cas250_6g_amt || 0,
-      data.slotting_pipes || 0, data.slotting_rate || 0, data.slotting_amt || 0,
-      data.pipes_on_vehicle_before || 0, data.pipes_used_qty || 0, data.pipes_used_pieces_ft || 0, data.pipes_left_on_vehicle || 0,
-      data.pipe_details || {}, customData, data.pipe_inventory_id || null, data.labour_charge || 0, data.rpm || 0,
-      data.start_time, data.end_time, data.total_hrs || 0,
-      data.phone_pe_received || 0, data.phone_pe_receiver_name, data.cash_paid || 0,
-      data.total_amount || 0, data.amount_paid || 0, data.balance || 0, data.discount || 0,
+      asNumber(data.total_drilling_feet), asNumber(data.total_drilling_amt),
+      asNumber(data.cas140_feet), asNumber(data.cas140_rate), asNumber(data.cas140_amt),
+      asNumber(data.cas180_4g_feet), asNumber(data.cas180_4g_rate), asNumber(data.cas180_4g_amt),
+      asNumber(data.cas180_6g_feet), asNumber(data.cas180_6g_rate), asNumber(data.cas180_6g_amt),
+      asNumber(data.cas250_4g_feet), asNumber(data.cas250_4g_rate), asNumber(data.cas250_4g_amt),
+      asNumber(data.cas250_6g_feet), asNumber(data.cas250_6g_rate), asNumber(data.cas250_6g_amt),
+      asInteger(data.slotting_pipes), asNumber(data.slotting_rate), asNumber(data.slotting_amt),
+      asInteger(data.pipes_on_vehicle_before), asInteger(data.pipes_used_qty), asNumber(data.pipes_used_pieces_ft), asInteger(data.pipes_left_on_vehicle),
+      pipeDetails, customData, asInteger(data.pipe_inventory_id), asNumber(data.labour_charge), asNumber(data.rpm),
+      data.start_time, data.end_time, asNumber(data.total_hrs),
+      asNumber(data.phone_pe_received), data.phone_pe_receiver_name, asNumber(data.cash_paid),
+      asNumber(data.total_amount), asNumber(data.amount_paid), asNumber(data.balance), asNumber(data.discount),
       userId
-    ]
-  );
-  const record = result.rows[0];
-  try {
-    await syncPrivateBorePipeInventory({ currentRecord: record, createdBy: userId });
-  } catch (syncErr) {
-    console.error(`[Private Bore] Inventory sync failed for bore #${record.id}:`, syncErr.message);
-    // Bore record is already committed via raw SQL; log the sync failure.
-    // Admin can manually reconcile in Inventory → Stock Levels.
-  }
-  return record;
+    );
+
+    const record = inserted[0];
+    await syncPrivateBorePipeInventory({ tx, currentRecord: record, createdBy: userId });
+    return record;
+  });
+  
+  return result;
 };
 
 /**
@@ -106,10 +123,12 @@ export const createRecord = async (data, userId) => {
  */
 export const updateRecord = async (id, data, userId) => {
   const previousRecord = await getRecordById(id);
-  const customData = data.custom_data ? JSON.stringify(data.custom_data) : '{}';
-  const result = await db.query(
-    `UPDATE borewell_data SET
-            date = $1, vehicle_name = $2, supervisor_name = $3, customer_name = $4, village = $5,
+  const pipeDetails = data.pipe_details ? (typeof data.pipe_details === 'string' ? data.pipe_details : JSON.stringify(data.pipe_details)) : '{}';
+  const customData = data.custom_data ? (typeof data.custom_data === 'string' ? data.custom_data : JSON.stringify(data.custom_data)) : '{}';
+  const result = await prisma.$transaction(async (tx) => {
+    const updatedRows = await tx.$queryRawUnsafe(
+      `UPDATE borewell_data SET
+            date = CAST($1 AS DATE), vehicle_name = $2, supervisor_name = $3, customer_name = $4, village = $5,
             phone_number = $6, bore_type = $7,
             drill_upto_casing_feet = $8, drill_upto_casing_rate = $9, drill_upto_casing_amt = $10,
             empty_drilling_feet = $11, empty_drilling_rate = $12, empty_drilling_amt = $13,
@@ -123,64 +142,58 @@ export const updateRecord = async (id, data, userId) => {
             cas250_6g_feet = $34, cas250_6g_rate = $35, cas250_6g_amt = $36,
             slotting_pipes = $37, slotting_rate = $38, slotting_amt = $39,
             pipes_on_vehicle_before = $40, pipes_used_qty = $41, pipes_used_pieces_ft = $42, pipes_left_on_vehicle = $43,
-            pipe_details = $44, custom_data = $45, pipe_inventory_id = $46, labour_charge = $47, rpm = $48,
+            pipe_details = CAST($44 AS JSONB), custom_data = CAST($45 AS JSONB), pipe_inventory_id = $46, labour_charge = $47, rpm = $48,
             start_time = $49, end_time = $50, total_hrs = $51,
             phone_pe_received = $52, phone_pe_receiver_name = $53, cash_paid = $54,
             total_amount = $55, amount_paid = $56, balance = $57, discount = $58,
             updated_at = CURRENT_TIMESTAMP
-          WHERE id = $59
+          WHERE id = CAST($59 AS INTEGER)
         RETURNING *`,
-    [
       data.date, data.vehicle_name, data.supervisor_name, data.customer_name, data.village,
       data.phone_number, data.bore_type,
-      data.drill_upto_casing_feet || 0, data.drill_upto_casing_rate || 0, data.drill_upto_casing_amt || 0,
-      data.empty_drilling_feet || 0, data.empty_drilling_rate || 0, data.empty_drilling_amt || 0,
+      asNumber(data.drill_upto_casing_feet), asNumber(data.drill_upto_casing_rate), asNumber(data.drill_upto_casing_amt),
+      asNumber(data.empty_drilling_feet), asNumber(data.empty_drilling_rate), asNumber(data.empty_drilling_amt),
       0, 0, 0,  // jump_300 legacy fields — now stored in custom_data
       0, 0, 0,  // jump_400 legacy fields — now stored in custom_data
-      data.total_drilling_feet || 0, data.total_drilling_amt || 0,
-      data.cas140_feet || 0, data.cas140_rate || 0, data.cas140_amt || 0,
-      data.cas180_4g_feet || 0, data.cas180_4g_rate || 0, data.cas180_4g_amt || 0,
-      data.cas180_6g_feet || 0, data.cas180_6g_rate || 0, data.cas180_6g_amt || 0,
-      data.cas250_4g_feet || 0, data.cas250_4g_rate || 0, data.cas250_4g_amt || 0,
-      data.cas250_6g_feet || 0, data.cas250_6g_rate || 0, data.cas250_6g_amt || 0,
-      data.slotting_pipes || 0, data.slotting_rate || 0, data.slotting_amt || 0,
-      data.pipes_on_vehicle_before || 0, data.pipes_used_qty || 0, data.pipes_used_pieces_ft || 0, data.pipes_left_on_vehicle || 0,
-      data.pipe_details || {}, customData, data.pipe_inventory_id || null, data.labour_charge || 0, data.rpm || 0,
-      data.start_time, data.end_time, data.total_hrs || 0,
-      data.phone_pe_received || 0, data.phone_pe_receiver_name, data.cash_paid || 0,
-      data.total_amount || 0, data.amount_paid || 0, data.balance || 0, data.discount || 0,
+      asNumber(data.total_drilling_feet), asNumber(data.total_drilling_amt),
+      asNumber(data.cas140_feet), asNumber(data.cas140_rate), asNumber(data.cas140_amt),
+      asNumber(data.cas180_4g_feet), asNumber(data.cas180_4g_rate), asNumber(data.cas180_4g_amt),
+      asNumber(data.cas180_6g_feet), asNumber(data.cas180_6g_rate), asNumber(data.cas180_6g_amt),
+      asNumber(data.cas250_4g_feet), asNumber(data.cas250_4g_rate), asNumber(data.cas250_4g_amt),
+      asNumber(data.cas250_6g_feet), asNumber(data.cas250_6g_rate), asNumber(data.cas250_6g_amt),
+      asInteger(data.slotting_pipes), asNumber(data.slotting_rate), asNumber(data.slotting_amt),
+      asInteger(data.pipes_on_vehicle_before), asInteger(data.pipes_used_qty), asNumber(data.pipes_used_pieces_ft), asInteger(data.pipes_left_on_vehicle),
+      pipeDetails, customData, asInteger(data.pipe_inventory_id), asNumber(data.labour_charge), asNumber(data.rpm),
+      data.start_time, data.end_time, asNumber(data.total_hrs),
+      asNumber(data.phone_pe_received), data.phone_pe_receiver_name, asNumber(data.cash_paid),
+      asNumber(data.total_amount), asNumber(data.amount_paid), asNumber(data.balance), asNumber(data.discount),
       id
-    ]
-  );
-  const record = result.rows[0];
-  if (record) {
-    try {
-      await syncPrivateBorePipeInventory({ currentRecord: record, previousRecord, createdBy: userId });
-    } catch (syncErr) {
-      console.error(`[Private Bore] Inventory sync failed for bore #${record.id}:`, syncErr.message);
-    }
-  }
-  return record;
+    );
+
+    const record = updatedRows[0];
+    await syncPrivateBorePipeInventory({ tx, currentRecord: record, previousRecord, createdBy: userId });
+    return record;
+  });
+
+  return result;
 };
 
 /**
  * Delete a borewell record
  */
 export const deleteRecord = async (id, userId) => {
-  const result = await db.query('DELETE FROM borewell_data WHERE id = $1 RETURNING *', [id]);
-  if (result.rows[0]) {
-    try {
-      await releaseBorePipeAllocations({
-        boreType: 'private',
-        boreId: id,
-        createdBy: userId,
-        remarks: `Auto-returned to store after deleting private bore #${id}`
-      });
-    } catch (syncErr) {
-      console.error(`[Private Bore] Inventory release failed for bore #${id}:`, syncErr.message);
-    }
-  }
-  return result.rows[0];
+  return await prisma.$transaction(async (tx) => {
+    await releaseBorePipeAllocations({
+      tx,
+      boreType: 'private',
+      boreId: id,
+      createdBy: userId,
+      remarks: `Auto-returned to store after deleting private bore #${id}`
+    });
+
+    const result = await tx.$queryRawUnsafe('DELETE FROM borewell_data WHERE id = CAST($1 AS INTEGER) RETURNING *', id);
+    return result[0] || null;
+  });
 };
 
 /**

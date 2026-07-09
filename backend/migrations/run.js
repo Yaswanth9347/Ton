@@ -378,7 +378,7 @@ CREATE INDEX IF NOT EXISTS idx_govt_bores_date ON govt_bores(bore_date);
 CREATE TABLE IF NOT EXISTS borewell_data (
     id SERIAL PRIMARY KEY,
     date DATE NOT NULL,
-    client_name VARCHAR(255) NOT NULL,
+    customer_name VARCHAR(255) NOT NULL,
     village VARCHAR(255),
     total_feet DECIMAL(10, 2) DEFAULT 0,
     fell_feet DECIMAL(10, 2) DEFAULT 0,
@@ -399,7 +399,7 @@ CREATE TABLE IF NOT EXISTS borewell_data (
 
 -- Create indexes for borewell_data
 CREATE INDEX IF NOT EXISTS idx_borewell_data_date ON borewell_data(date);
-CREATE INDEX IF NOT EXISTS idx_borewell_data_client ON borewell_data(client_name);
+CREATE INDEX IF NOT EXISTS idx_borewell_data_customer ON borewell_data(customer_name);
 CREATE INDEX IF NOT EXISTS idx_borewell_data_village ON borewell_data(village);
 CREATE INDEX IF NOT EXISTS idx_borewell_data_point ON borewell_data(point_name);
 CREATE INDEX IF NOT EXISTS idx_borewell_data_created_by ON borewell_data(created_by);

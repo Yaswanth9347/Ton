@@ -81,7 +81,7 @@ export default function GovtBoresPage() {
     const [records, setRecords] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editorMode, setEditorMode] = useState('list'); // 'list', 'add', 'edit', 'view'
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
@@ -107,6 +107,10 @@ export default function GovtBoresPage() {
     useEffect(() => {
         fetchRecords();
     }, [fetchRecords]);
+
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [editorMode]);
 
     // Format date for display (IST)
     const formatDate = (val) => {
@@ -279,21 +283,21 @@ export default function GovtBoresPage() {
         setSelectedRecord(null);
         setViewMode(false);
         setSaveError('');
-        setIsModalOpen(true);
+        setEditorMode('add');
     };
 
     const handleEdit = (record) => {
         setSelectedRecord(record);
         setViewMode(false);
         setSaveError('');
-        setIsModalOpen(true);
+        setEditorMode('edit');
     };
 
     const handleView = (record) => {
         setSelectedRecord(record);
         setViewMode(true);
         setSaveError('');
-        setIsModalOpen(true);
+        setEditorMode('view');
     };
 
 
@@ -390,153 +394,145 @@ export default function GovtBoresPage() {
 
     return (
         <div className="govt-bores">
-            {/* Summary Cards */}
-            <div className="govt-bores__stats">
-                <div className="govt-bores__stat-card">
-                    <div className="govt-bores__stat-icon govt-bores__stat-icon--total">
-                        <FileText size={20} />
+            {editorMode === 'list' ? (
+                <>
+                    {/* Summary Cards */}
+                    <div className="govt-bores__stats">
+                        <div className="govt-bores__stat-card">
+                            <div className="govt-bores__stat-icon govt-bores__stat-icon--total">
+                                <FileText size={20} />
+                            </div>
+                            <div className="govt-bores__stat-info">
+                                <span className="govt-bores__stat-value">{stats.total}</span>
+                                <span className="govt-bores__stat-label">Total Records</span>
+                            </div>
+                        </div>
+                        <div className="govt-bores__stat-card">
+                            <div className="govt-bores__stat-icon govt-bores__stat-icon--amount">
+                                <IndianRupee size={20} />
+                            </div>
+                            <div className="govt-bores__stat-info">
+                                <span className="govt-bores__stat-value">₹{stats.totalAmount.toLocaleString('en-IN')}</span>
+                                <span className="govt-bores__stat-label">Total Work Value</span>
+                            </div>
+                        </div>
+                        <div className="govt-bores__stat-card">
+                            <div className="govt-bores__stat-icon govt-bores__stat-icon--pending">
+                                <Clock size={20} />
+                            </div>
+                            <div className="govt-bores__stat-info">
+                                <span className="govt-bores__stat-value">{stats.billPending}</span>
+                                <span className="govt-bores__stat-label">Bill Pendings</span>
+                            </div>
+                        </div>
+                        <div className="govt-bores__stat-card">
+                            <div className="govt-bores__stat-icon govt-bores__stat-icon--paid">
+                                <Droplets size={20} />
+                            </div>
+                            <div className="govt-bores__stat-info">
+                                <span className="govt-bores__stat-value">{stats.billPaid}</span>
+                                <span className="govt-bores__stat-label">Bills Paid</span>
+                            </div>
+                        </div>
                     </div>
-                    <div className="govt-bores__stat-info">
-                        <span className="govt-bores__stat-value">{stats.total}</span>
-                        <span className="govt-bores__stat-label">Total Records</span>
-                    </div>
-                </div>
-                <div className="govt-bores__stat-card">
-                    <div className="govt-bores__stat-icon govt-bores__stat-icon--amount">
-                        <IndianRupee size={20} />
-                    </div>
-                    <div className="govt-bores__stat-info">
-                        <span className="govt-bores__stat-value">₹{stats.totalAmount.toLocaleString('en-IN')}</span>
-                        <span className="govt-bores__stat-label">Total Work Value</span>
-                    </div>
-                </div>
-                <div className="govt-bores__stat-card">
-                    <div className="govt-bores__stat-icon govt-bores__stat-icon--pending">
-                        <Clock size={20} />
-                    </div>
-                    <div className="govt-bores__stat-info">
-                        <span className="govt-bores__stat-value">{stats.billPending}</span>
-                        <span className="govt-bores__stat-label">Bill Pendings</span>
-                    </div>
-                </div>
-                <div className="govt-bores__stat-card">
-                    <div className="govt-bores__stat-icon govt-bores__stat-icon--paid">
-                        <Droplets size={20} />
-                    </div>
-                    <div className="govt-bores__stat-info">
-                        <span className="govt-bores__stat-value">{stats.billPaid}</span>
-                        <span className="govt-bores__stat-label">Bills Paid</span>
-                    </div>
-                </div>
-            </div>
 
-            {/* Toolbar */}
-            <div className="govt-bores__toolbar">
-                <div className="govt-bores__search-wrap">
-                    <Search size={18} className="govt-bores__search-icon" />
-                    <input
-                        type="text"
-                        placeholder="Search by village, mandal, vehicle type, location..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="govt-bores__search-input"
-                    />
-                </div>
+                    {/* Toolbar */}
+                    <div className="govt-bores__toolbar">
+                        <div className="govt-bores__search-wrap">
+                            <Search size={18} className="govt-bores__search-icon" />
+                            <input
+                                type="text"
+                                placeholder="Search by village, mandal, vehicle type, location..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="govt-bores__search-input"
+                            />
+                        </div>
 
-                {/* Status Filter */}
-                <div className="govt-bores__filter-wrap">
-                    <Filter size={16} />
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="govt-bores__filter-select"
-                    >
-                        <option value="">All Status</option>
-                        <option value="Pending">Pending</option>
-                        <option value="To be recording">To Be Recording</option>
-                        <option value="Done">Done</option>
-                        <option value="Completed">Completed</option>
-                    </select>
-                </div>
+                        {/* Status Filter */}
+                        <div className="govt-bores__filter-wrap">
+                            <Filter size={16} />
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="govt-bores__filter-select"
+                            >
+                                <option value="">All Status</option>
+                                <option value="Pending">Pending</option>
+                                <option value="To be recording">To Be Recording</option>
+                                <option value="Done">Done</option>
+                                <option value="Completed">Completed</option>
+                            </select>
+                        </div>
 
-                <div className="govt-bores__toolbar-actions">
-                    <button className="btn btn-secondary" onClick={handleExportExcel}>
-                        <Download size={16} />
-                        <span>Export Excel</span>
-                    </button>
-                    {isOperationalAdmin && (
-                        <button className="btn btn-primary" onClick={handleAdd}>
-                            <Plus size={18} />
-                            <span>Add Record</span>
-                        </button>
-                    )}
-                </div>
-            </div>
+                        <div className="govt-bores__toolbar-actions">
+                            <button className="btn btn-secondary" onClick={handleExportExcel}>
+                                <Download size={16} />
+                                <span>Export Excel</span>
+                            </button>
+                            {isOperationalAdmin && (
+                                <button className="btn btn-primary" onClick={handleAdd}>
+                                    <Plus size={18} />
+                                    <span>Add Record</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
 
-            {/* Table */}
-            <div className="govt-bores__table-wrap" ref={scrollContainerRef}>
-                <table className="govt-bores__table">
-                    <thead>
-                        <tr>
-                            <th className="govt-bores__th govt-bores__th--sticky-sno">S.No</th>
-                            <th className="govt-bores__th" style={{ minWidth: '140px', width: '140px' }}>Mandal</th>
-                            {combinedColumns.map((col) => (
-                                <th key={col.key} className="govt-bores__th" style={{ minWidth: col.width, width: col.width, textAlign: col.align || 'left' }}>
-                                    {col.label}
-                                </th>
-                            ))}
-                            <th className="govt-bores__th govt-bores__th--actions-right" style={{ minWidth: '110px', width: '110px' }}>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr>
-                                <td colSpan={combinedColumns.length + 3} className="govt-bores__empty">
-                                    <div className="spinner" style={{ margin: '0 auto' }}></div>
-                                    <p>Loading records...</p>
-                                </td>
-                            </tr>
-                        ) : paginatedRecords.length === 0 ? (
-                            <tr>
-                                <td colSpan={combinedColumns.length + 3} className="govt-bores__empty">
-                                    <Droplets size={40} strokeWidth={1} />
-                                    <p>No records found</p>
-                                    {isOperationalAdmin && (
-                                        <button className="btn btn-primary" onClick={handleAdd}>
-                                            <Plus size={16} /> Add First Record
-                                        </button>
-                                    )}
-                                </td>
-                            </tr>
-                        ) : (
-                            paginatedRecords.map((rec, idx) => (
-                                <tr key={rec.id || idx} className={idx % 2 === 1 ? 'govt-bores__row--alt' : ''}>
-                                    <td className="govt-bores__td govt-bores__td--sticky-sno">
-                                        {rec.sNo || (currentPage - 1) * ITEMS_PER_PAGE + idx + 1}
-                                    </td>
-                                    <td className="govt-bores__td" style={{ minWidth: '140px', width: '140px' }}>{rec.mandal?.name || '-'}</td>
+                    {/* Table */}
+                    <div className="govt-bores__table-wrap" ref={scrollContainerRef}>
+                        <table className="govt-bores__table">
+                            <thead>
+                                <tr>
+                                    <th className="govt-bores__th govt-bores__th--sticky-sno">S.No</th>
+                                    <th className="govt-bores__th" style={{ minWidth: '140px', width: '140px' }}>Mandal</th>
                                     {combinedColumns.map((col) => (
-                                        <td key={col.key} className="govt-bores__td" style={{ minWidth: col.width, width: col.width, textAlign: col.align || 'left' }}>
-                                            {col.key === 'status' ? (
-                                                <span className={getStatusBadgeClass(rec.status)}>
-                                                    {rec.status || '-'}
-                                                </span>
-                                            ) : formatValue(col, getValue(rec, col.key))}
-                                        </td>
+                                        <th key={col.key} className="govt-bores__th" style={{ minWidth: col.width, width: col.width, textAlign: col.align || 'left' }}>
+                                            {col.label}
+                                        </th>
                                     ))}
-                                    <td className="govt-bores__td govt-bores__td--actions-right" style={{ minWidth: '110px', width: '110px' }}>
-                                        <div className="govt-bores__action-btns">
-                                            {!isOperationalAdmin ? (
-                                                <button
-                                                    className="govt-bores__action-btn govt-bores__action-btn--view"
-                                                    onClick={() => handleView(rec)}
-                                                    title="View Details"
-                                                >
-                                                    <Eye size={18} />
+                                    <th className="govt-bores__th govt-bores__th--actions-right" style={{ minWidth: '110px', width: '110px' }}>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={combinedColumns.length + 3} className="govt-bores__empty">
+                                            <div className="spinner" style={{ margin: '0 auto' }}></div>
+                                            <p>Loading records...</p>
+                                        </td>
+                                    </tr>
+                                ) : paginatedRecords.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={combinedColumns.length + 3} className="govt-bores__empty">
+                                            <Droplets size={40} strokeWidth={1} />
+                                            <p>No records found</p>
+                                            {isOperationalAdmin && (
+                                                <button className="btn btn-primary" onClick={handleAdd}>
+                                                    <Plus size={16} /> Add First Record
                                                 </button>
-                                            ) : (
-                                                <>
-                                                    {rec.status === 'Completed' ? (
+                                            )}
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    paginatedRecords.map((rec, idx) => (
+                                        <tr key={rec.id || idx} className={idx % 2 === 1 ? 'govt-bores__row--alt' : ''}>
+                                            <td className="govt-bores__td govt-bores__td--sticky-sno">
+                                                {rec.sNo || (currentPage - 1) * ITEMS_PER_PAGE + idx + 1}
+                                            </td>
+                                            <td className="govt-bores__td" style={{ minWidth: '140px', width: '140px' }}>{rec.mandal?.name || '-'}</td>
+                                            {combinedColumns.map((col) => (
+                                                <td key={col.key} className="govt-bores__td" style={{ minWidth: col.width, width: col.width, textAlign: col.align || 'left' }}>
+                                                    {col.key === 'status' ? (
+                                                        <span className={getStatusBadgeClass(rec.status)}>
+                                                            {rec.status || '-'}
+                                                        </span>
+                                                    ) : formatValue(col, getValue(rec, col.key))}
+                                                </td>
+                                            ))}
+                                            <td className="govt-bores__td govt-bores__td--actions-right" style={{ minWidth: '110px', width: '110px' }}>
+                                                <div className="govt-bores__action-btns">
+                                                    {!isOperationalAdmin ? (
                                                         <button
                                                             className="govt-bores__action-btn govt-bores__action-btn--view"
                                                             onClick={() => handleView(rec)}
@@ -546,89 +542,99 @@ export default function GovtBoresPage() {
                                                         </button>
                                                     ) : (
                                                         <>
-                                                            <button
-                                                                className="govt-bores__action-btn govt-bores__action-btn--edit"
-                                                                onClick={() => handleEdit(rec)}
-                                                                title="Edit"
-                                                            >
-                                                                <Edit2 size={18} />
-                                                            </button>
-                                                            <button
-                                                                className="govt-bores__action-btn govt-bores__action-btn--delete"
-                                                                onClick={() => handleDelete(rec)}
-                                                                title="Delete"
-                                                            >
-                                                                <Trash2 size={18} />
-                                                            </button>
+                                                            {rec.status === 'Completed' ? (
+                                                                <button
+                                                                    className="govt-bores__action-btn govt-bores__action-btn--view"
+                                                                    onClick={() => handleView(rec)}
+                                                                    title="View Details"
+                                                                >
+                                                                    <Eye size={18} />
+                                                                </button>
+                                                            ) : (
+                                                                <>
+                                                                    <button
+                                                                        className="govt-bores__action-btn govt-bores__action-btn--edit"
+                                                                        onClick={() => handleEdit(rec)}
+                                                                        title="Edit"
+                                                                    >
+                                                                        <Edit2 size={18} />
+                                                                    </button>
+                                                                    <button
+                                                                        className="govt-bores__action-btn govt-bores__action-btn--delete"
+                                                                        onClick={() => handleDelete(rec)}
+                                                                        title="Delete"
+                                                                    >
+                                                                        <Trash2 size={18} />
+                                                                    </button>
+                                                                </>
+                                                            )}
                                                         </>
                                                     )}
-                                                </>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <div className="govt-bores__pagination">
-                    <span className="govt-bores__pagination-info">
-                        Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–
-                        {Math.min(currentPage * ITEMS_PER_PAGE, filteredRecords.length)} of{' '}
-                        {filteredRecords.length} records
-                    </span>
-                    <div className="govt-bores__pagination-controls">
-                        <button
-                            className="govt-bores__page-btn"
-                            disabled={currentPage === 1}
-                            onClick={() => setCurrentPage((p) => p - 1)}
-                        >
-                            <ChevronLeft size={16} />
-                        </button>
-                        {Array.from({ length: totalPages }, (_, i) => i + 1)
-                            .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                            .map((page, idx, arr) => (
-                                <>
-                                    {idx > 0 && arr[idx - 1] !== page - 1 && (
-                                        <span key={`ellipsis-${page}`} className="govt-bores__page-ellipsis">...</span>
-                                    )}
-                                    <button
-                                        key={page}
-                                        className={`govt-bores__page-btn ${page === currentPage ? 'govt-bores__page-btn--active' : ''}`}
-                                        onClick={() => setCurrentPage(page)}
-                                    >
-                                        {page}
-                                    </button>
-                                </>
-                            ))}
-                        <button
-                            className="govt-bores__page-btn"
-                            disabled={currentPage === totalPages}
-                            onClick={() => setCurrentPage((p) => p + 1)}
-                        >
-                            <ChevronRight size={16} />
-                        </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-            )}
 
-            {/* Modals */}
-            {isModalOpen && (
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="govt-bores__pagination">
+                            <span className="govt-bores__pagination-info">
+                                Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–
+                                {Math.min(currentPage * ITEMS_PER_PAGE, filteredRecords.length)} of{' '}
+                                {filteredRecords.length} records
+                            </span>
+                            <div className="govt-bores__pagination-controls">
+                                <button
+                                    className="govt-bores__page-btn"
+                                    disabled={currentPage === 1}
+                                    onClick={() => setCurrentPage((p) => p - 1)}
+                                >
+                                    <ChevronLeft size={16} />
+                                </button>
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                                    .map((page, idx, arr) => (
+                                        <>
+                                            {idx > 0 && arr[idx - 1] !== page - 1 && (
+                                                <span key={`ellipsis-${page}`} className="govt-bores__page-ellipsis">...</span>
+                                            )}
+                                            <button
+                                                key={page}
+                                                className={`govt-bores__page-btn ${page === currentPage ? 'govt-bores__page-btn--active' : ''}`}
+                                                onClick={() => setCurrentPage(page)}
+                                            >
+                                                {page}
+                                            </button>
+                                        </>
+                                    ))}
+                                <button
+                                    className="govt-bores__page-btn"
+                                    disabled={currentPage === totalPages}
+                                    onClick={() => setCurrentPage((p) => p + 1)}
+                                >
+                                    <ChevronRight size={16} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </>
+            ) : (
                 <BorewellForm
                     key={selectedRecord ? selectedRecord.id : 'new'}
                     record={selectedRecord}
                     onClose={() => {
                         setSaveError('');
-                        setIsModalOpen(false);
+                        setEditorMode('list');
                     }}
                     onSave={handleSave}
                     saving={saving}
                     saveError={saveError}
                     viewMode={viewMode}
+                    isInline={true}
                 />
             )}
         </div>

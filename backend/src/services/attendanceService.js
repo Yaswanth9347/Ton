@@ -60,7 +60,7 @@ export const getTodayAttendance = async (userId) => {
     const result = await db.query(
         `SELECT ${ATTENDANCE_SELECT_COLUMNS}
      FROM attendance
-     WHERE user_id = $1 AND attendance_date = $2`,
+     WHERE user_id = $1 AND attendance_date = CAST($2 AS DATE)`,
         [userId, today]
     );
 
@@ -114,7 +114,7 @@ export const checkIn = async (userId, location = null) => {
 
     const result = await db.query(
         `INSERT INTO attendance (user_id, attendance_date, check_in, check_in_latitude, check_in_longitude, check_in_address, status, is_complete)
-     VALUES ($1, $2, $3, $4, $5, $6, 'present', false)
+     VALUES ($1, CAST($2 AS DATE), $3, $4, $5, $6, 'present', false)
      RETURNING id, user_id,
                TO_CHAR(attendance_date, 'YYYY-MM-DD') AS attendance_date,
                CASE
@@ -257,12 +257,12 @@ export const getAttendanceHistory = async (userId, startDate, endDate) => {
     let paramCount = 2;
 
     if (startDate) {
-        query += ` AND attendance_date >= $${paramCount++}`;
+        query += ` AND attendance_date >= CAST($${paramCount++} AS DATE)`;
         params.push(startDate);
     }
 
     if (endDate) {
-        query += ` AND attendance_date <= $${paramCount++}`;
+        query += ` AND attendance_date <= CAST($${paramCount++} AS DATE)`;
         params.push(endDate);
     }
 
@@ -327,12 +327,12 @@ export const getAllAttendance = async ({ userId, startDate, endDate }) => {
     }
 
     if (startDate) {
-        query += ` AND a.attendance_date >= $${paramCount++}`;
+        query += ` AND a.attendance_date >= CAST($${paramCount++} AS DATE)`;
         params.push(startDate);
     }
 
     if (endDate) {
-        query += ` AND a.attendance_date <= $${paramCount++}`;
+        query += ` AND a.attendance_date <= CAST($${paramCount++} AS DATE)`;
         params.push(endDate);
     }
 
@@ -469,14 +469,14 @@ export const getDashboardStats = async () => {
     // Present today
     const presentResult = await db.query(
         `SELECT COUNT(*) as count FROM attendance
-     WHERE attendance_date = $1 AND status = 'present'`,
+     WHERE attendance_date = CAST($1 AS DATE) AND status = 'present'`,
         [today]
     );
 
     // Incomplete (checked in but not out)
     const incompleteResult = await db.query(
         `SELECT COUNT(*) as count FROM attendance
-     WHERE attendance_date = $1 AND is_complete = false`,
+     WHERE attendance_date = CAST($1 AS DATE) AND is_complete = false`,
         [today]
     );
 

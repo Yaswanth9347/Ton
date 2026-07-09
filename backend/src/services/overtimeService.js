@@ -101,7 +101,7 @@ export const isHoliday = async (date) => {
     // Check one-time holidays
     const oneTimeResult = await db.query(
         `SELECT id FROM holidays 
-         WHERE holiday_date = $1 AND (recurrence_type IS NULL OR recurrence_type = 'none')`,
+         WHERE holiday_date = CAST($1 AS DATE) AND (recurrence_type IS NULL OR recurrence_type = 'none')`,
         [dateStr]
     );
     if (oneTimeResult.rows.length > 0) return true;
@@ -204,7 +204,7 @@ export const getOvertimeSummary = async (userId, startDate, endDate) => {
             COUNT(*) as days_worked
          FROM attendance 
          WHERE user_id = $1 
-         AND attendance_date BETWEEN $2 AND $3 
+         AND attendance_date BETWEEN CAST($2 AS DATE) AND CAST($3 AS DATE) 
          AND status = 'present'`,
         [userId, startDate, endDate]
     );
@@ -229,7 +229,7 @@ export const calculateOvertimePay = async (userId, month, year, hourlyRate) => {
             a.overtime_hours
          FROM attendance a
          WHERE a.user_id = $1 
-         AND a.attendance_date BETWEEN $2 AND $3 
+         AND a.attendance_date BETWEEN CAST($2 AS DATE) AND CAST($3 AS DATE) 
          AND a.overtime_hours > 0`,
         [userId, startDate, endDate]
     );
