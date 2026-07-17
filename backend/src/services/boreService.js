@@ -191,6 +191,21 @@ export const deleteRecord = async (id, userId) => {
       remarks: `Auto-returned to store after deleting private bore #${id}`
     });
 
+    // Delete associated allocations first to avoid SET NULL violating check constraints
+    await tx.pipe_bore_allocations.deleteMany({
+      where: {
+        bore_type: 'private',
+        private_bore_id: id
+      }
+    });
+
+    await tx.spare_bore_allocations.deleteMany({
+      where: {
+        bore_type: 'private',
+        private_bore_id: id
+      }
+    });
+
     const result = await tx.$queryRawUnsafe('DELETE FROM borewell_data WHERE id = CAST($1 AS INTEGER) RETURNING *', id);
     return result[0] || null;
   });

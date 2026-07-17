@@ -724,6 +724,21 @@ export const deleteRecord = async (id, userId = null) => {
       remarks: `Auto-restored diesel stock after deleting govt bore #${workId}`
     });
 
+    // Delete associated allocations first to avoid SET NULL violating check constraints
+    await tx.pipe_bore_allocations.deleteMany({
+      where: {
+        bore_type: 'govt',
+        govt_bore_id: workId
+      }
+    });
+
+    await tx.spare_bore_allocations.deleteMany({
+      where: {
+        bore_type: 'govt',
+        govt_bore_id: workId
+      }
+    });
+
     // Delete related bill if exists
     await tx.borewellBill.deleteMany({ where: { workId } });
 
