@@ -1,6 +1,7 @@
 import db from '../models/db.js';
 import prisma from '../config/prisma.js';
 import { releaseBorePipeAllocations, syncPrivateBorePipeInventory } from './pipeAllocationService.js';
+import { ensurePrivateBoreSchema } from '../utils/ensurePrivateBoreSchema.js';
 
 const asNumber = (value, fallback = 0) => {
   if (value === null || value === undefined || value === '') {
@@ -59,6 +60,8 @@ export const getRecordById = async (id) => {
  * Create a new borewell record
  */
 export const createRecord = async (data, userId) => {
+  await ensurePrivateBoreSchema();
+
   const pipeDetails = data.pipe_details ? (typeof data.pipe_details === 'string' ? data.pipe_details : JSON.stringify(data.pipe_details)) : '{}';
   const customData = data.custom_data ? (typeof data.custom_data === 'string' ? data.custom_data : JSON.stringify(data.custom_data)) : '{}';
   const result = await prisma.$transaction(async (tx) => {
@@ -123,6 +126,8 @@ export const createRecord = async (data, userId) => {
  */
 export const updateRecord = async (id, data, userId) => {
   const previousRecord = await getRecordById(id);
+  await ensurePrivateBoreSchema();
+
   const pipeDetails = data.pipe_details ? (typeof data.pipe_details === 'string' ? data.pipe_details : JSON.stringify(data.pipe_details)) : '{}';
   const customData = data.custom_data ? (typeof data.custom_data === 'string' ? data.custom_data : JSON.stringify(data.custom_data)) : '{}';
   const result = await prisma.$transaction(async (tx) => {
