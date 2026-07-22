@@ -188,6 +188,11 @@ export const updateRecord = async (id, data, userId) => {
  */
 export const deleteRecord = async (id, userId) => {
   return await prisma.$transaction(async (tx) => {
+    const [previousRecord] = await tx.$queryRawUnsafe('SELECT * FROM borewell_data WHERE id = CAST($1 AS INTEGER)', id);
+    if (previousRecord) {
+        await syncPrivateBorePipeInventory({ tx, currentRecord: null, previousRecord, createdBy: userId });
+    }
+
     await releaseBorePipeAllocations({
       tx,
       boreType: 'private',
@@ -391,11 +396,12 @@ export const generateBoreReceipt = (record) => {
             <td>
               ${p.source === 'Borrowed' ? `Borrowed From: ${p.borrowed_from || 'N/A'} <br/>` : ''}
               ${p.company_name || 'N/A'} ${p.pipe_size ? '(' + p.pipe_size + ')' : ''}
+              ${p.remarks ? `<br/><span style="font-size: 11px; color: #64748b;">Remarks: ${p.remarks}</span>` : ''}
             </td>
-            <td class="text-right">Nos: ${p.on_vehicle || 0} <br/> Pcs: ${p.on_vehicle_pieces || 0}</td>
-            <td class="text-right">Nos: ${p.used_nos || 0} <br/> Pcs: ${p.used_pieces || 0}</td>
+            <td class="text-right">${p.on_vehicle || 0}</td>
+            <td class="text-right">${p.used_nos || 0}</td>
             <td class="text-right">${p.used_ft || 0}</td>
-            <td class="text-right">Nos: ${p.left_auto || 0} <br/> Pcs: ${p.left_auto_pieces || 0}</td>
+            <td class="text-right">${p.left_auto || 0}</td>
           </tr>
           `).join('')}
         </tbody>

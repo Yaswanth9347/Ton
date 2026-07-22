@@ -574,6 +574,23 @@ export const updatePipeSettings = async (pipeId, data) => {
 // =============================================
 
 export const getAllPipeCompanies = async () => {
+    const inventoryCompanies = await prisma.pipes_master.findMany({
+        where: { is_active: true },
+        distinct: ['pipe_type_name'],
+        select: { pipe_type_name: true }
+    });
+
+    for (const pipe of inventoryCompanies) {
+        const companyName = (pipe.pipe_type_name || '').trim();
+        if (!companyName) continue;
+
+        await prisma.pipes_company_master.upsert({
+            where: { company_name: companyName },
+            update: { is_active: true },
+            create: { company_name: companyName, is_active: true }
+        });
+    }
+
     return await prisma.pipes_company_master.findMany({
         where: { is_active: true },
         orderBy: { company_name: 'asc' }

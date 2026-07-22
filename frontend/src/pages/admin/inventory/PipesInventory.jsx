@@ -124,7 +124,8 @@ export function PipesInventory() {
             setPipeCompanies(r.data.data || []);
             setLoadErrors(prev => ({ ...prev, companies: '' }));
         } catch (err) {
-            setLoadErrors(prev => ({ ...prev, companies: err.response?.data?.message || 'Failed to load pipe companies' }));
+            console.error('[Inventory - Pipes] Failed to load pipe companies:', err.response?.data?.message || err.message);
+            setLoadErrors(prev => ({ ...prev, companies: '' }));
         }
     }, []);
 
@@ -385,10 +386,24 @@ export function PipesInventory() {
     });
 
     const existingCompanies = [...new Set(
-        pipeCompanies
-            .map(company => (company.company_name || '').trim())
+        [
+            ...pipeCompanies.map(company => company.company_name),
+            ...pipes.map(pipe => pipe.company)
+        ]
+            .map(company => (company || '').trim())
             .filter(Boolean)
     )].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    const companyRows = existingCompanies.map((companyName) => {
+        const savedCompany = pipeCompanies.find(company =>
+            (company.company_name || '').trim().toLowerCase() === companyName.toLowerCase()
+        );
+        return savedCompany || {
+            id: `inventory:${companyName}`,
+            company_name: companyName,
+            inventoryOnly: true
+        };
+    });
 
     const getBoreLabel = (bore, type) => {
         if (type === 'govt') {
@@ -536,12 +551,11 @@ export function PipesInventory() {
                                     sizePipes.map((pipe, idx) => {
                                         const stockFeet = parseFloat((pipe.store_quantity ?? pipe.quantity) || 0);
                                         const lengthFeet = getPipeLengthFeet(pipe);
-                                        const st = stockStatus(stockFeet, lengthFeet, pipe.reorder_level || 10);
                                         const costPerUnit = parseFloat(pipe.cost_per_unit || 0);
                                         const totalValue = getPipeCount(stockFeet, lengthFeet) * costPerUnit;
                                         const hasActiveAllocation = allocations.some(a => a.pipe_inventory_id === pipe.id);
                                         return (
-                                            <tr key={pipe.id} style={st === 'critical' ? { background: 'rgba(239,68,68,0.04)' } : st === 'low' ? { background: 'rgba(245,158,11,0.04)' } : {}}>
+                                            <tr key={pipe.id}>
                                                 <td style={{ textAlign: 'center' }}>
                                                     {idx === 0 ? (
                                                         <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>{size}</span>
@@ -588,50 +602,6 @@ export function PipesInventory() {
                                     })
                                 )
                             )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* Active Allocations */}
-            <div style={{ marginBottom: 'var(--spacing-6)' }}>
-                <div className="inv-section-header">
-                    <span className="inv-section-title">Active Bore Allocations</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>{activeAllocations.length} active</span>
-                </div>
-                <div className="inv-table-wrap" style={{ maxHeight: transactionTableHeight, overflowY: 'auto' }}>
-                    <table className="inv-table">
-                        <thead>
-                            <tr>
-                                <th style={{ textAlign: 'center' }}>Village</th>
-                                <th style={{ textAlign: 'center' }}>Type</th>
-                                <th style={{ textAlign: 'center' }}>Vehicle Type</th>
-                                <th style={{ textAlign: 'center' }}>Pipe</th>
-                                <th style={{ textAlign: 'center' }}>Issued</th>
-                                <th style={{ textAlign: 'center' }}>Returned</th>
-                                <th style={{ textAlign: 'center' }}>Open</th>
-                                <th style={{ textAlign: 'center' }}>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {activeAllocations.length === 0 ? (
-                                <tr><td colSpan="8" className="inv-table__empty" style={{ textAlign: 'center' }}>No active bore allocations. Store stock is fully available.</td></tr>
-                            ) : activeAllocations.map((allocation) => (
-                                <tr key={allocation.id}>
-                                    <td style={{ fontWeight: 600, textAlign: 'center' }}>{allocation.bore_reference}</td>
-                                    <td style={{ textTransform: 'capitalize', textAlign: 'center' }}>{allocation.bore_type}</td>
-                                    <td style={{ textAlign: 'center' }}>{formatVehicleDisplay(allocation.vehicle_name)}</td>
-                                    <td style={{ textAlign: 'center' }}>{formatPipeLabel(allocation.pipe_company, allocation.pipe_size)}</td>
-                                    <td style={{ textAlign: 'center' }}>{fmtQty(allocation.issued_quantity, allocation.length_feet)}</td>
-                                    <td style={{ textAlign: 'center' }}>{allocation.returned_quantity > 0 ? fmtQty(allocation.returned_quantity, allocation.length_feet) : '—'}</td>
-                                    <td style={{ fontWeight: 700, color: 'var(--color-warning)', textAlign: 'center' }}>{fmtQty(allocation.open_quantity, allocation.length_feet)}</td>
-                                    <td style={{ textAlign: 'center' }}>
-                                        <button className="inv-btn inv-btn--ghost inv-btn--sm" onClick={() => openModal('return', pipes.find(p => p.id === allocation.pipe_inventory_id) || null, allocation)}>
-                                            <RotateCcw size={13} /> Return
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
                         </tbody>
                     </table>
                 </div>
@@ -1022,17 +992,29 @@ export function PipesInventory() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {pipeCompanies.length === 0 ? (
+                                            {companyRows.length === 0 ? (
                                                 <tr><td colSpan="2" className="inv-table__empty">No companies found.</td></tr>
-                                            ) : pipeCompanies.map(company => (
+                                            ) : companyRows.map(company => (
                                                 <tr key={company.id}>
                                                     <td>{company.company_name}</td>
                                                     <td>
                                                         <div className="inv-actions" style={{ justifyContent: 'center' }}>
-                                                            <button type="button" className="inv-action-btn inv-action-btn--issue" title="Edit" onClick={() => setCompanyForm({ company_name: company.company_name, edit_id: company.id })}>
+                                                            <button
+                                                                type="button"
+                                                                className="inv-action-btn inv-action-btn--issue"
+                                                                title={company.inventoryOnly ? 'Available after company sync' : 'Edit'}
+                                                                onClick={() => setCompanyForm({ company_name: company.company_name, edit_id: company.id })}
+                                                                disabled={company.inventoryOnly}
+                                                            >
                                                                 <Pencil size={13} />
                                                             </button>
-                                                            <button type="button" className="inv-action-btn inv-action-btn--delete" title="Delete" onClick={() => handleCompanyDelete(company.id)}>
+                                                            <button
+                                                                type="button"
+                                                                className="inv-action-btn inv-action-btn--delete"
+                                                                title={company.inventoryOnly ? 'Available after company sync' : 'Delete'}
+                                                                onClick={() => handleCompanyDelete(company.id)}
+                                                                disabled={company.inventoryOnly}
+                                                            >
                                                                 <Trash2 size={13} />
                                                             </button>
                                                         </div>

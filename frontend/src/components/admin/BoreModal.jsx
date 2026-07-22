@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { X, Save, Plus, Calendar, Trash2 } from 'lucide-react';
 import { inventoryApi } from '../../services/api';
 import { getCurrentISTDate, toISTDate } from '../../utils/dateTime';
@@ -93,14 +92,16 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                     pipe_inventory_id: data.pipe_inventory_id || '',
                     company_name: data.pipe_details?.company || '',
                     pipe_size: '',
+                    material_type: '',
+                    quality_grade: '',
+                    length_feet: 20,
+                    cost_per_unit: 0,
                     on_vehicle: data.pipes_on_vehicle_before || 0,
-                    on_vehicle_pieces: data.pipes_on_vehicle_pieces || 0,
                     used_nos: data.pipes_used_qty || 0,
-                    used_pieces: data.pipes_used_pieces || 0,
                     used_ft: data.pipes_used_pieces_ft || 0,
                     left_auto: data.pipes_left_on_vehicle || 0,
-                    left_auto_pieces: 0,
-                    borrowed_from: ''
+                    borrowed_from: '',
+                    remarks: ''
                 }]);
             } else {
                 setPipesList([]);
@@ -171,14 +172,16 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
             pipe_inventory_id: '',
             company_name: '',
             pipe_size: '',
+            material_type: '',
+            quality_grade: '',
+            length_feet: 20,
+            cost_per_unit: 0,
             on_vehicle: 0,
-            on_vehicle_pieces: 0,
             used_nos: 0,
-            used_pieces: 0,
             used_ft: 0,
             left_auto: 0,
-            left_auto_pieces: 0,
-            borrowed_from: ''
+            borrowed_from: '',
+            remarks: ''
         }]);
     };
 
@@ -201,6 +204,10 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                 if (selectedPipe) {
                     updated.company_name = selectedPipe.company || '';
                     updated.pipe_size = selectedPipe.size || '';
+                    updated.material_type = selectedPipe.material_type || '';
+                    updated.quality_grade = selectedPipe.quality_grade || '';
+                    updated.length_feet = selectedPipe.length_feet || 20;
+                    updated.cost_per_unit = selectedPipe.cost_per_unit || 0;
                 }
                 if (updated.source === 'Home Stock' && formData.vehicle_name) {
                     const targetLoc = `VEHICLE:${formData.vehicle_name}`;
@@ -215,15 +222,23 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                 }
             }
 
-            // Recalculate left_auto
-            if (['on_vehicle', 'used_nos', 'on_vehicle_pieces', 'used_pieces', 'pipe_inventory_id'].includes(field)) {
+            // Recalculate left_auto and used_ft
+            if (['on_vehicle', 'used_nos', 'pipe_inventory_id', 'length_feet'].includes(field)) {
                 const onV = parseFloat(field === 'on_vehicle' ? value : updated.on_vehicle) || 0;
                 const used = parseFloat(field === 'used_nos' ? value : updated.used_nos) || 0;
                 updated.left_auto = onV - used;
-                
-                const onVPc = parseFloat(field === 'on_vehicle_pieces' ? value : updated.on_vehicle_pieces) || 0;
-                const usedPc = parseFloat(field === 'used_pieces' ? value : updated.used_pieces) || 0;
-                updated.left_auto_pieces = onVPc - usedPc;
+
+                // Auto-calculate used_ft based on used_nos (using length_feet of the pipe option, defaulting to 20)
+                let len = 20;
+                if (updated.source === 'Home Stock' && updated.pipe_inventory_id) {
+                    const selectedPipe = pipeOptions.find(opt => String(opt.id) === String(updated.pipe_inventory_id));
+                    if (selectedPipe && selectedPipe.length_feet) {
+                        len = parseFloat(selectedPipe.length_feet) || 20;
+                    }
+                } else if (updated.length_feet) {
+                    len = parseFloat(updated.length_feet) || 20;
+                }
+                updated.used_ft = used * len;
             }
 
             return updated;
@@ -323,14 +338,8 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
         for (const p of pipesList) {
             const onV = parseFloat(p.on_vehicle) || 0;
             const used = parseFloat(p.used_nos) || 0;
-            const onVPc = parseFloat(p.on_vehicle_pieces) || 0;
-            const usedPc = parseFloat(p.used_pieces) || 0;
             if (used > onV) {
                 alert(`Error: Used pipes (${used}) cannot exceed On Vehicle pipes (${onV}) for Pipe. Please fix to save.`);
-                return;
-            }
-            if (usedPc > onVPc) {
-                alert(`Error: Used pieces (${usedPc}) cannot exceed On Vehicle pieces (${onVPc}) for Pipe. Please fix to save.`);
                 return;
             }
         }
@@ -338,20 +347,15 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
         onSave({ ...formData, custom_data: { drilling: customDrilling, pipes_tracking: pipesList } });
     };
 
-    if (!isOpen) return null;
+    return (
+        <div className="govt-bore-editor">
+            <div className="govt-bore-editor__header">
+                <h2 className="govt-bore-editor__title">
+                    {viewMode ? 'View Private Bore Details' : (record ? 'Edit Private Bore Entry' : 'Add New Private Bore Entry')}
+                </h2>
+            </div>
 
-    return createPortal(
-        <div className="govt-bore-modal-overlay" onClick={onClose}>
-            <div className="govt-bore-modal govt-bore-modal--wide" onClick={(e) => e.stopPropagation()}>
-                <div className="govt-bore-modal__header">
-                    <h2 className="govt-bore-modal__title">
-                        {viewMode ? 'View Private Bore Details' : (record ? 'Edit Private Bore Entry' : 'Add New Private Bore Entry')}
-                    </h2>
-                    <button onClick={onClose} className="govt-bore-modal__close"><X size={20} /></button>
-                </div>
-
-                <form onSubmit={handleSubmit} className="govt-bore-modal__form">
-                    <div className="govt-bore-modal__scroll">
+            <form onSubmit={handleSubmit} className="govt-bore-editor__form">
 
                         {/* ── 1. Project Information ─────────────────────── */}
                         <div className="govt-bore-modal__section">
@@ -524,20 +528,22 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                 <h3 className="govt-bore-modal__section-title" style={{ marginBottom: 0 }}>Pipes Tracking</h3>
                                 {!viewMode && (
-                                    <button type="button" onClick={addPipeTracker} className="btn-add-row" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
-                                        <Plus size={16} /> Add Pipe
+                                    <button 
+                                        type="button" 
+                                        onClick={addPipeTracker} 
+                                        className="btn btn-secondary btn-sm" 
+                                        style={{ fontSize: '11px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                                    >
+                                        <Plus size={12} /> Add Pipe
                                     </button>
                                 )}
                             </div>
                             
                             {pipesList.map((pipe, index) => (
-                                <div key={pipe.id} style={{ 
-                                    background: 'var(--bg-tertiary)', 
-                                    padding: '16px', 
-                                    borderRadius: '8px', 
-                                    marginBottom: '16px',
-                                    border: '1px solid var(--border-color)',
-                                    position: 'relative'
+                                <div key={pipe.id} className="govt-bore-modal__subsection" style={{ 
+                                    position: 'relative',
+                                    marginTop: index === 0 ? 0 : '16px',
+                                    marginBottom: '16px'
                                 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                         <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Pipe #{index + 1}</h4>
@@ -592,7 +598,29 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                                         )}
                                     </div>
 
-                                    <div className="govt-bore-modal__grid govt-bore-modal__grid--4" style={{ marginBottom: '16px' }}>
+                                    {pipe.source !== 'Home Stock' && (
+                                        <div className="govt-bore-modal__grid govt-bore-modal__grid--4" style={{ marginBottom: '16px' }}>
+                                            <InputField label="Material" value={pipe.material_type} onChange={(e) => handlePipeTrackerChange(pipe.id, 'material_type', e.target.value)} viewMode={viewMode} placeholder="e.g. PVC" />
+                                            <div className="form-field">
+                                                <label className="form-field__label">Quality Grade</label>
+                                                <select
+                                                    value={pipe.quality_grade || ''}
+                                                    onChange={(e) => handlePipeTrackerChange(pipe.id, 'quality_grade', e.target.value)}
+                                                    disabled={viewMode}
+                                                    className="form-field__input"
+                                                >
+                                                    <option value="">Select quality</option>
+                                                    <option value="Gold">Gold</option>
+                                                    <option value="Special">Special</option>
+                                                    <option value="Standard">Standard</option>
+                                                </select>
+                                            </div>
+                                            <InputField label="Length / Pipe (Ft)" type="number" value={pipe.length_feet} onChange={(e) => handlePipeTrackerChange(pipe.id, 'length_feet', e.target.value)} viewMode={viewMode} />
+                                            <InputField label="Cost / Unit" type="number" value={pipe.cost_per_unit} onChange={(e) => handlePipeTrackerChange(pipe.id, 'cost_per_unit', e.target.value)} viewMode={viewMode} />
+                                        </div>
+                                    )}
+
+                                    <div className="govt-bore-modal__grid govt-bore-modal__grid--4" style={{ marginBottom: pipe.source !== 'Home Stock' ? '16px' : '0' }}>
                                         <InputField label="On Vehicle (Nos)" type="number" value={pipe.on_vehicle} onChange={(e) => handlePipeTrackerChange(pipe.id, 'on_vehicle', e.target.value)} viewMode={viewMode || pipe.source === 'Home Stock'} />
                                         <InputField label="Used (Nos)" type="number" value={pipe.used_nos} onChange={(e) => handlePipeTrackerChange(pipe.id, 'used_nos', e.target.value)} viewMode={viewMode} />
                                         <InputField label="Used (Ft)" type="number" value={pipe.used_ft} onChange={(e) => handlePipeTrackerChange(pipe.id, 'used_ft', e.target.value)} viewMode={viewMode} />
@@ -602,16 +630,11 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                                         </div>
                                     </div>
 
-                                    <div className="govt-bore-modal__grid govt-bore-modal__grid--4">
-                                        <InputField label="Pieces On Vehicle" type="number" value={pipe.on_vehicle_pieces} onChange={(e) => handlePipeTrackerChange(pipe.id, 'on_vehicle_pieces', e.target.value)} viewMode={viewMode} />
-                                        <InputField label="Pieces Used" type="number" value={pipe.used_pieces} onChange={(e) => handlePipeTrackerChange(pipe.id, 'used_pieces', e.target.value)} viewMode={viewMode} />
-                                        <div className="form-field">
-                                            <label className="form-field__label">Pieces Left</label>
-                                            <input type="number" value={pipe.left_auto_pieces} readOnly className="form-field__input qty-rate-row__input--readonly" style={{ color: pipe.left_auto_pieces < 0 ? 'var(--color-danger)' : 'inherit' }} />
-                                        </div>
-                                    </div>
+                                    {pipe.source !== 'Home Stock' && (
+                                        <InputField label="Remarks" value={pipe.remarks} onChange={(e) => handlePipeTrackerChange(pipe.id, 'remarks', e.target.value)} viewMode={viewMode} placeholder="Enter remarks" />
+                                    )}
                                     
-                                    {(parseFloat(pipe.used_nos) > parseFloat(pipe.on_vehicle) || parseFloat(pipe.used_pieces) > parseFloat(pipe.on_vehicle_pieces)) && (
+                                    {(parseFloat(pipe.used_nos) > parseFloat(pipe.on_vehicle)) && (
                                         <div style={{ color: 'var(--color-danger)', fontSize: '0.85rem', marginTop: '8px', fontWeight: 'bold' }}>
                                             Error: Used amount cannot exceed On Vehicle amount.
                                         </div>
@@ -620,7 +643,7 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                             ))}
                             
                             {pipesList.length === 0 && (
-                                <div style={{ textAlign: 'center', padding: '2rem', background: 'var(--bg-tertiary)', borderRadius: '8px', color: 'var(--text-secondary)' }}>
+                                <div className="govt-bore-modal__subsection" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', marginTop: 0 }}>
                                     No pipes tracked. Click "Add Pipe" to begin.
                                 </div>
                             )}
@@ -665,19 +688,15 @@ export default function BoreModal({ isOpen, onClose, record, onSave, saving, vie
                             </div>
                         </div>
 
-                    </div>
-
-                    <div className="govt-bore-modal__actions">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-                        {!viewMode && (
-                            <button type="submit" className="btn btn-primary" disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                {saving ? 'Saving...' : <><Save size={18} /> {record ? 'Update Record' : 'Save Record'}</>}
-                            </button>
-                        )}
-                    </div>
-                </form>
-            </div>
-        </div>,
-        document.body
+                <div className="govt-bore-editor__actions">
+                    <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                    {!viewMode && (
+                        <button type="submit" className="btn btn-primary" disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {saving ? 'Saving...' : <><Save size={18} /> {record ? 'Update Record' : 'Save Record'}</>}
+                        </button>
+                    )}
+                </div>
+            </form>
+        </div>
     );
 }

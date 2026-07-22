@@ -9,6 +9,11 @@ const parseDecimal = (value, fallback = 0) => {
     return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const optionalText = (value) => {
+    const text = typeof value === 'string' ? value.trim() : '';
+    return text || null;
+};
+
 const getPipeLengthFeet = (pipeMaster) => parseDecimal(pipeMaster?.length_feet, 20);
 
 const resolveBoreWhere = (boreType, boreId) => {
@@ -642,62 +647,178 @@ export const syncPrivateBorePipeInventory = async ({ tx, currentRecord, previous
         }
     }
     
-    // --- Handle Borrowed Pipes ---
-    const borrowedPipes = parseCustomDataPipes(currentRecord).filter(p => p.source === 'Borrowed' && p.borrowed_from && p.pipe_size);
-    for (const pipe of borrowedPipes) {
-        const companyName = `Borrowed: ${pipe.borrowed_from}`;
-        const pipeSize = pipe.pipe_size;
-        
+    // --- Handle Direct Purchase & Borrowed Pipes ---
+    const getNonHomeStockPipes = (record) => {
+        return parseCustomDataPipes(record).filter(
+            p => (p.source === 'Direct Purchase' && p.company_name && p.pipe_size) ||
+                 (p.source === 'Borrowed' && p.borrowed_from && p.pipe_size)
+        );
+    };
+
+    const currentNonHome = getNonHomeStockPipes(currentRecord);
+    const previousNonHome = getNonHomeStockPipes(previousRecord);
+
+    const getPipeKey = (p) => {
+        const name = p.source === 'Direct Purchase' ? p.company_name : p.borrowed_from;
+        return `${p.source}:${name.trim().toLowerCase()}:${p.pipe_size.trim().toLowerCase()}`;
+    };
+
+    const pipeKeys = new Set([
+        ...currentNonHome.map(getPipeKey),
+        ...previousNonHome.map(getPipeKey)
+    ]);
+
+    let finalCreatedBy = createdBy;
+    if (!finalCreatedBy) {
+        const firstUser = await dbTx.users.findFirst({ select: { id: true } });
+        finalCreatedBy = firstUser?.id || 1;
+    }
+
+    for (const key of pipeKeys) {
+        const curr = currentNonHome.find(p => getPipeKey(p) === key);
+        const prev = previousNonHome.find(p => getPipeKey(p) === key);
+
+        const source = curr?.source || prev?.source;
+        const name = source === 'Direct Purchase' 
+            ? (curr?.company_name || prev?.company_name) 
+            : (curr?.borrowed_from || prev?.borrowed_from);
+        const pipeSize = curr?.pipe_size || prev?.pipe_size;
+
+        const dbTypeName = source === 'Borrowed' ? `Borrowed: ${name}` : name;
+        const pipeMeta = curr || prev || {};
+        const lengthFeetFromForm = parseDecimal(pipeMeta.length_feet, 20) || 20;
+        const costPerUnitFromForm = parseDecimal(pipeMeta.cost_per_unit, 0);
+        const materialTypeFromForm = optionalText(pipeMeta.material_type);
+        const qualityGradeFromForm = optionalText(pipeMeta.quality_grade);
+
+        await dbTx.pipes_company_master.upsert({
+            where: { company_name: dbTypeName },
+            update: { is_active: true },
+            create: { company_name: dbTypeName, is_active: true }
+        });
+
+        // Find or create pipe master
         let pipeMaster = await dbTx.pipes_master.findFirst({
             where: {
-                pipe_type_name: { equals: companyName, mode: 'insensitive' },
+                pipe_type_name: { equals: dbTypeName, mode: 'insensitive' },
                 pipe_size: { equals: pipeSize, mode: 'insensitive' }
             },
             include: { stock: true }
         });
-        
+
         if (!pipeMaster) {
             pipeMaster = await dbTx.pipes_master.create({
                 data: {
-                    pipe_type_name: companyName,
+                    pipe_type_name: dbTypeName,
                     pipe_size: pipeSize,
                     unit: 'pieces',
-                    length_feet: 20,
-                    cost_per_unit: 0,
+                    material_type: materialTypeFromForm,
+                    quality_grade: qualityGradeFromForm,
+                    length_feet: lengthFeetFromForm,
+                    cost_per_unit: costPerUnitFromForm,
                     stock: { create: { available_quantity: 0 } }
                 },
                 include: { stock: true }
             });
+        } else if (curr) {
+            const metadataUpdate = {};
+            if (materialTypeFromForm && materialTypeFromForm !== pipeMaster.material_type) {
+                metadataUpdate.material_type = materialTypeFromForm;
+            }
+            if (qualityGradeFromForm && qualityGradeFromForm !== pipeMaster.quality_grade) {
+                metadataUpdate.quality_grade = qualityGradeFromForm;
+            }
+            if (lengthFeetFromForm > 0 && lengthFeetFromForm !== parseDecimal(pipeMaster.length_feet, 20)) {
+                metadataUpdate.length_feet = lengthFeetFromForm;
+            }
+            if (costPerUnitFromForm !== parseDecimal(pipeMaster.cost_per_unit, 0)) {
+                metadataUpdate.cost_per_unit = costPerUnitFromForm;
+            }
+
+            if (Object.keys(metadataUpdate).length > 0) {
+                pipeMaster = await dbTx.pipes_master.update({
+                    where: { id: pipeMaster.id },
+                    data: metadataUpdate,
+                    include: { stock: true }
+                });
+            }
         }
-        
-        const existingTx = await dbTx.pipes_stock_transactions.findFirst({
+
+        const lengthFeet = getPipeLengthFeet(pipeMaster);
+
+        // Calculate current and previous net quantities in feet
+        const currOnVehicle = parseDecimal(curr?.on_vehicle);
+        const currUsedFt = parseDecimal(curr?.used_ft, parseDecimal(curr?.used_nos) * lengthFeet);
+        const currNet = curr ? (currOnVehicle * lengthFeet - currUsedFt) : 0;
+
+        const prevOnVehicle = parseDecimal(prev?.on_vehicle);
+        const prevUsedFt = parseDecimal(prev?.used_ft, parseDecimal(prev?.used_nos) * lengthFeet);
+        const prevNet = prev ? (prevOnVehicle * lengthFeet - prevUsedFt) : 0;
+
+        const delta = currNet - prevNet;
+
+        // Update pipes_stock available quantity
+        if (Math.abs(delta) > 0.0001) {
+            await dbTx.pipes_stock.upsert({
+                where: { pipe_master_id: pipeMaster.id },
+                create: { pipe_master_id: pipeMaster.id, available_quantity: delta },
+                update: { available_quantity: { increment: delta } }
+            });
+        }
+
+        // Recreate transactions
+        // 1. Delete previous transactions for this bore and pipe
+        await dbTx.pipes_stock_transactions.deleteMany({
             where: {
                 pipe_master_id: pipeMaster.id,
-                transaction_type: 'BORROW',
                 reference_type: 'PRIVATE_BORE',
-                reference_id: boreId
+                reference_id: parseInt(boreId),
+                transaction_type: { in: ['PURCHASE', 'BORROW', 'CONSUME'] }
             }
         });
-        
-        if (!existingTx && (parseInt(pipe.on_vehicle) > 0 || parseInt(pipe.on_vehicle_pieces) > 0)) {
-            const onV = parseFloat(pipe.on_vehicle) || 0;
-            const onVPc = parseFloat(pipe.on_vehicle_pieces) || 0;
-            const qtyFeet = (onV * 20) + (onVPc * 6.67); // roughly 20ft per pipe, 6.67ft per piece
-            
-            await dbTx.pipes_stock_transactions.create({
-                data: {
-                    pipe_master_id: pipeMaster.id,
-                    transaction_type: 'BORROW',
-                    quantity: qtyFeet,
-                    reference_type: 'PRIVATE_BORE',
-                    reference_id: boreId,
-                    created_by: createdBy,
-                    source_location: pipe.borrowed_from,
-                    destination_location: `VEHICLE:${currentRecord.vehicle_name || 'Unknown'}`,
-                    supplier_name: pipe.borrowed_from,
-                    remarks: `Borrowed pipe logged during private bore #${boreId}`
-                }
-            });
+
+        // 2. Create current transactions if there is a current record
+        if (curr) {
+            const onVehicleFeet = currOnVehicle * lengthFeet;
+            const vehicleName = currentRecord?.vehicle_name || 'Unknown';
+            const supervisorName = currentRecord?.supervisor_name || 'Unknown';
+
+            if (onVehicleFeet > 0) {
+                await dbTx.pipes_stock_transactions.create({
+                    data: {
+                        pipe_master_id: pipeMaster.id,
+                        transaction_type: source === 'Direct Purchase' ? 'PURCHASE' : 'BORROW',
+                        quantity: onVehicleFeet,
+                        reference_type: 'PRIVATE_BORE',
+                        reference_id: parseInt(boreId),
+                        created_by: finalCreatedBy,
+                        remarks: curr.remarks || `${source} logged in private bore #${boreId}`,
+                        vehicle_name: vehicleName,
+                        supervisor_name: supervisorName,
+                        source_location: source === 'Direct Purchase' ? name : 'MAIN_STORE',
+                        destination_location: toVehicleLocation(vehicleName),
+                        supplier_name: name
+                    }
+                });
+            }
+
+            if (currUsedFt > 0) {
+                await dbTx.pipes_stock_transactions.create({
+                    data: {
+                        pipe_master_id: pipeMaster.id,
+                        transaction_type: 'CONSUME',
+                        quantity: currUsedFt,
+                        reference_type: 'PRIVATE_BORE',
+                        reference_id: parseInt(boreId),
+                        created_by: finalCreatedBy,
+                        remarks: curr.remarks || `Used in private bore #${boreId}`,
+                        vehicle_name: vehicleName,
+                        supervisor_name: supervisorName,
+                        source_location: toVehicleLocation(vehicleName),
+                        destination_location: `BORE:${boreId}`
+                    }
+                });
+            }
         }
     }
 
